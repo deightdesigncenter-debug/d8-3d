@@ -11,7 +11,7 @@
 //   /stl         exocad HTML -> STL converter (static; runs fully in the browser)
 //   /v/<id>      viewer page sent to the doctor (branded header + 3D view)
 //   /raw/<id>    the exocad HTML itself (sandboxed, opened inside /v/<id>)
-//   /api/*       JSON API used by /admin
+//   /api/*       JSON API used by /admin (and /api/contact, the public contact form)
 
 const ID_RE = /^[A-Za-z0-9]{12}$/;
 const ID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"; // no 0/O/1/l/I
@@ -20,7 +20,10 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-18.3"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-18.4"; // bump with brand.css changes
+const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
+const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
+const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
 
 const PRIVATE_HEADERS = {
   "X-Robots-Tag": "noindex, nofollow, noarchive",
@@ -57,18 +60,28 @@ async function handleApi(request, env, url) {
   if (!env.CASES) return json({ error: "Chưa gắn KV namespace với tên biến CASES trong Settings > Bindings của dự án Pages." }, 500);
   if (!env.UPLOAD_PASSWORD) return json({ error: "Chưa đặt mật khẩu UPLOAD_PASSWORD trong Settings > Variables and Secrets của dự án Pages." }, 500);
 
+  const path = url.pathname;
+  // Public: contact form on the home page (no password).
+  if (path === "/api/contact") {
+    if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
+    return submitContact(request, env);
+  }
+
   if (!(await isAuthorized(request, env))) {
     await sleep(400); // slow down password guessing
     return json({ error: "Sai mật khẩu." }, 401);
   }
 
-  const path = url.pathname;
   if (path === "/api/ping" && request.method === "GET") return json({ ok: true }); // password check only, no KV use
   if (path === "/api/list" && request.method === "GET") return listCases(env);
   if (path === "/api/upload" && request.method === "POST") return uploadCase(request, env, url);
 
   const del = path.match(/^\/api\/cases\/([^/]+)$/);
   if (del && request.method === "DELETE") return deleteCase(env, del[1]);
+
+  if (path === "/api/messages" && request.method === "GET") return listMessages(env);
+  const delMsg = path.match(/^\/api\/messages\/([^/]+)$/);
+  if (delMsg && request.method === "DELETE") return deleteMessage(env, delMsg[1]);
 
   return json({ error: "Không tìm thấy." }, 404);
 }
@@ -163,6 +176,73 @@ function publicMeta(meta) {
   };
 }
 
+/* ------------------------------------------------------ Contact messages */
+
+async function submitContact(request, env) {
+  const len = parseInt(request.headers.get("Content-Length") || "0", 10);
+  if (len > 16384) return json({ error: "Your message is too long." }, 413);
+  let body;
+  try { body = JSON.parse(await request.text()); } catch { return json({ error: "Please check the form and try again." }, 400); }
+  if (!body || typeof body !== "object") return json({ error: "Please check the form and try again." }, 400);
+
+  // Bots: hidden field filled in, or the form sent within 3 seconds of loading. Pretend it worked.
+  if (String(body.website || "").trim() || !(Number(body.elapsed) >= 3000)) return json({ ok: true });
+
+  const field = (k, max) => String(body[k] == null ? "" : body[k]).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max);
+  const msg = {
+    name: field("name", 100).replace(/\s+/g, " "),
+    email: field("email", 160).replace(/\s+/g, ""),
+    practice: field("practice", 120).replace(/\s+/g, " "),
+    country: field("country", 60).replace(/\s+/g, " "),
+    service: field("service", 60).replace(/\s+/g, " "),
+    message: field("message", 4000),
+  };
+  if (!msg.name) return json({ error: "Please add your name." }, 400);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(msg.email)) return json({ error: "Please add a valid email address." }, 400);
+  if (msg.message.length < 10) return json({ error: "Please write a little more in your message." }, 400);
+
+  const now = Date.now();
+  const day = new Date(now).toISOString().slice(0, 10);
+  const countKey = "msgcount:" + day;
+  const count = parseInt((await env.CASES.get(countKey)) || "0", 10) || 0;
+  if (count >= MSG_DAILY_CAP) {
+    return json({ error: "We've received a lot of messages today. Please email us at d.eightdesigncenter@gmail.com." }, 429);
+  }
+
+  const id = String(now) + newId().slice(0, 6);
+  msg.created = now;
+  msg.country_hint = request.headers.get("CF-IPCountry") || "";
+  const expiration = Math.floor(now / 1000) + MSG_KEEP_DAYS * 86400;
+  const meta = { n: msg.name.slice(0, 60), s: msg.service.slice(0, 40), c: now };
+  await env.CASES.put("msg:" + id, JSON.stringify(msg), { expiration, metadata: meta });
+  await env.CASES.put(countKey, String(count + 1), { expiration: Math.floor(now / 1000) + 2 * 86400 });
+  return json({ ok: true }, 201);
+}
+
+async function listMessages(env) {
+  const keys = [];
+  let cursor;
+  do {
+    const page = await env.CASES.list({ prefix: "msg:", cursor });
+    keys.push(...page.keys);
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor && keys.length < 300);
+
+  keys.sort((a, b) => (b.metadata?.c || 0) - (a.metadata?.c || 0));
+  const recent = keys.slice(0, 100);
+  const items = (await Promise.all(recent.map(async (k) => {
+    const m = await env.CASES.get(k.name, "json");
+    return m ? { id: k.name.slice(4), ...m } : null;
+  }))).filter(Boolean);
+  return json({ items, total: keys.length });
+}
+
+async function deleteMessage(env, id) {
+  if (!MSG_ID_RE.test(id)) return json({ error: "Mã tin nhắn không hợp lệ." }, 400);
+  await env.CASES.delete("msg:" + id);
+  return json({ ok: true });
+}
+
 /* --------------------------------------------------------- Doctor views */
 
 async function viewerPage(env, id) {
@@ -241,7 +321,7 @@ async function viewerPage(env, id) {
 </head>
 <body>
 <header>
-  <a class="logo" href="https://d8designcenter.com" target="_blank" rel="noopener" aria-label="D.EIGHT DESIGN CENTER">
+  <a class="logo" href="/" target="_blank" rel="noopener" aria-label="D.EIGHT DESIGN CENTER">
     <img class="full" src="/brand/logo-horizontal.svg" alt="D.EIGHT DESIGN CENTER" width="120" height="34">
     <img class="sym" src="/brand/symbol.svg" alt="" width="31" height="28">
   </a>
@@ -327,7 +407,7 @@ function unavailablePage() {
 <body>
 <header class="d8-header">
   <div class="wrap d8-header-in">
-    <a class="d8-logo" href="https://d8designcenter.com" aria-label="D.EIGHT DESIGN CENTER">
+    <a class="d8-logo" href="/" aria-label="D.EIGHT DESIGN CENTER">
       <img class="full" src="/brand/logo-horizontal.svg" alt="D.EIGHT DESIGN CENTER" width="127" height="36">
       <img class="sym" src="/brand/symbol.svg" alt="" width="33" height="30">
     </a>
@@ -342,7 +422,7 @@ function unavailablePage() {
       <p>Design previews stay online for a limited time, and this one has expired or been removed.</p>
       <p>To see the design again, ask D.EIGHT DESIGN CENTER for a new link.</p>
       <div class="btns">
-        <a class="btn btn-primary" href="https://d8designcenter.com">Visit our website</a>
+        <a class="btn btn-primary" href="/">Visit our website</a>
         <a class="btn" href="mailto:d.eightdesigncenter@gmail.com">Email us</a>
       </div>
     </section>

@@ -15,6 +15,13 @@ Công cụ biến file HTML xuất từ exocad thành một đường link để
 
 Bảo mật: link không chứa tên file hay tên bệnh nhân; trang không cho Google lập chỉ mục; file 3D chạy trong môi trường cô lập (sandbox) nên không đọc được mật khẩu hay gọi được chức năng quản lý.
 
+## Trang giới thiệu và tin nhắn liên hệ
+
+- Trang chủ `/` là trang giới thiệu D.EIGHT cho khách (bác sĩ, lab), bằng tiếng Anh. Vẫn để `noindex` (chưa cho Google lập chỉ mục) cho tới khi gắn tên miền chính thức.
+- Form Contact gửi tới `/api/contact` (không cần mật khẩu). Tin nhắn lưu trong KV với khóa `msg:<thời điểm><mã>`, tự xóa sau 180 ngày.
+- Chống spam: ô ẩn (honeypot), bỏ qua form gửi trong vòng 3 giây sau khi mở trang, tối đa 30 tin mỗi ngày (giữ lượt ghi KV cho việc tạo link 3D).
+- Xem tin nhắn ở `/admin`, mục **Tin nhắn từ khách** (biểu tượng phong bì có số tin mới trên thanh menu). Trạng thái "đã đọc" lưu trên trình duyệt đang dùng.
+
 ## Chuyển HTML sang STL (`/stl`)
 
 Trang `https://3d.d8designcenter.com/stl` (đăng nhập bằng cùng mật khẩu với `/admin`) tách các lớp lưới 3D trong file HTML của exocad thành file STL.
@@ -34,7 +41,8 @@ Trang `https://3d.d8designcenter.com/stl` (đăng nhập bằng cùng mật kh�
 | `public/_worker.js` | Phần máy chủ (Cloudflare Pages, chế độ advanced): API tải lên, danh sách, xóa; trang xem cho bác sĩ; trả file 3D |
 | `public/admin.html` | Trang tạo link và quản lý link (tiếng Việt) |
 | `public/stl.html` | Trang chuyển HTML exocad sang STL (chạy trong trình duyệt) |
-| `public/index.html` | Trang chủ ngắn (tiếng Anh) |
+| `public/index.html` | Trang giới thiệu D.EIGHT (tiếng Anh): dịch vụ, quy trình, xem 3D, ảnh case, giới thiệu, FAQ, form liên hệ |
+| `public/site/` | Ảnh dùng cho trang giới thiệu (cắt từ ảnh portfolio trong bộ nhận diện) và ảnh chia sẻ `og.jpg` |
 | `public/brand.css` | Kiểu giao diện dùng chung theo bộ nhận diện D.EIGHT (màu, nút bo tròn, chữ in hoa giãn cách, header kem, hero navy, footer navy) |
 | `public/brand/` | Logo SVG lấy từ DEIGHT-Brand-Kit: lockup ngang (thường và đảo màu), biểu tượng, tagline "Design to fit" (đã outline) |
 | `public/favicon.ico`, `public/favicon.svg`, `public/icons/`, `public/site.webmanifest` | Biểu tượng tab, icon điện thoại, manifest (mở `/admin` khi thêm ra màn hình chính) |

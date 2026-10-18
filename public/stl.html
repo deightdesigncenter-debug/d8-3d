@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta name="d8-version" content="2026-10-18.3">
+<meta name="d8-version" content="2026-10-18.4">
 <title>Chuyển HTML sang STL | D.EIGHT</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-18.3">
+<link rel="stylesheet" href="/brand.css?v=2026-10-18.4">
 <style>
   :root { --wrap: 1180px; }
   .login { max-width: 460px; }
@@ -64,6 +64,13 @@
   .note { font-size: 12px; color: var(--muted); margin: 16px 0 0; line-height: 1.55; }
   .skipped { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
 
+  .logout svg { display: none; }
+  @media (max-width: 640px) {
+    .logout { width: 36px; padding: 0; }
+    .logout .lbl { display: none; }
+    .logout svg { display: block; }
+    .d8-nav .short svg { display: block; }
+  }
   @media (max-width: 960px) {
     .work { grid-template-columns: 1fr; }
     .panel { position: static; }
@@ -81,8 +88,9 @@
     <nav class="d8-nav" aria-label="Công cụ">
       <a href="/admin"><span class="long">Tạo link 3D</span><span class="short">Link 3D</span></a>
       <a href="/stl" aria-current="page"><span class="long">HTML sang STL</span><span class="short">STL</span></a>
+      <a href="/admin#messages" id="msgTab" hidden><span class="long">Tin nhắn</span><span class="short" aria-label="Tin nhắn"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2.5 5l6.5 5 6.5-5"/></svg></span></a>
     </nav>
-    <button class="btn small" id="logout" hidden>Đăng xuất</button>
+    <button class="btn small logout" id="logout" hidden aria-label="Đăng xuất"><span class="lbl">Đăng xuất</span><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 5.5 15 9l-4 3.5M15 9H7"/></svg></button>
   </div>
 </header>
 
@@ -190,9 +198,10 @@
   <div class="wrap d8-footer-in">
     <img class="logo-rev" src="/brand/logo-horizontal-reversed.svg" alt="D.EIGHT DESIGN CENTER" width="106" height="30">
     <div class="d8-footer-meta">
+      <a class="caps" href="/" target="_blank" rel="noopener">Trang giới thiệu</a>
       <a class="caps" href="https://d8designcenter.com" target="_blank" rel="noopener">d8designcenter.com</a>
       <span class="caps">© 2026 D.EIGHT DESIGN CENTER</span>
-      <span class="caps">Phiên bản 18/10/2026.3</span>
+      <span class="caps">Phiên bản 18/10/2026.4</span>
     </div>
   </div>
 </footer>
@@ -208,7 +217,7 @@
   function loadKey() { try { return localStorage.getItem(KEY_NAME) || sessionStorage.getItem(KEY_NAME); } catch { return null; } }
   function saveKey(k, remember) { try { (remember ? localStorage : sessionStorage).setItem(KEY_NAME, k); } catch {} }
   function clearKey() { try { localStorage.removeItem(KEY_NAME); } catch {} try { sessionStorage.removeItem(KEY_NAME); } catch {} }
-  function showApp(on) { $("login").hidden = on; $("app").hidden = !on; $("logout").hidden = !on; }
+  function showApp(on) { $("login").hidden = on; $("app").hidden = !on; $("logout").hidden = !on; $("msgTab").hidden = !on; }
 
   async function tryLogin(k, remember, silent) {
     let res;

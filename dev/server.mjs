@@ -61,7 +61,7 @@ const KV = {
 
 // ---- ASSETS mock (Pages static asset behaviour incl. .html stripping)
 const TYPES = { ".html": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".js": "text/javascript",
-  ".css": "text/css; charset=utf-8", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json" };
+  ".css": "text/css; charset=utf-8", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".webp": "image/webp", ".jpg": "image/jpeg" };
 const ASSETS = {
   async fetch(req) {
     const u = new URL(req.url);
