@@ -35,8 +35,18 @@ Trang `https://3d.d8designcenter.com/stl` (đăng nhập bằng cùng mật kh�
 | `public/admin.html` | Trang tạo link và quản lý link (tiếng Việt) |
 | `public/stl.html` | Trang chuyển HTML exocad sang STL (chạy trong trình duyệt) |
 | `public/index.html` | Trang chủ ngắn (tiếng Anh) |
-| `public/robots.txt`, `public/favicon.svg` | Chặn công cụ tìm kiếm; biểu tượng tab |
+| `public/brand.css` | Kiểu giao diện dùng chung theo bộ nhận diện D.EIGHT (màu, nút bo tròn, chữ in hoa giãn cách, header kem, hero navy, footer navy) |
+| `public/brand/` | Logo SVG lấy từ DEIGHT-Brand-Kit: lockup ngang (thường và đảo màu), biểu tượng, tagline "Design to fit" (đã outline) |
+| `public/favicon.ico`, `public/favicon.svg`, `public/icons/`, `public/site.webmanifest` | Biểu tượng tab, icon điện thoại, manifest (mở `/admin` khi thêm ra màn hình chính) |
+| `public/robots.txt` | Chặn công cụ tìm kiếm |
 | `dev/server.mjs` | Bộ giả lập Cloudflare Pages + KV để chạy thử trên máy (không được triển khai) |
+
+## Giao diện thương hiệu
+
+- Màu: navy `#05316E`, steel `#8FACCB`, kem `#FCFDF6`, ink `#0B1B33` (theo `03-COLOR/tokens.css` của bộ nhận diện).
+- Logo và tagline dùng file SVG đã outline từ bộ nhận diện, không phụ thuộc font.
+- Font gốc TF Phodest và TF The Gold Bachelor là bản quyền in ấn, không nhúng lên web. Trên web dùng font Google thay thế, đều có đủ dấu tiếng Việt: **Lexend Exa** (tiêu đề, nút, chữ in hoa) thay TF Phodest, **Noto Serif Display** dạng hẹp (dòng phụ kiểu serif) thay TF The Gold Bachelor, **Be Vietnam Pro** cho nội dung.
+- Sửa `brand.css` thì tăng số phiên bản `?v=` trong các trang và `ASSET_VERSION` trong `_worker.js` để trình duyệt tải bản mới.
 
 ## Cài đặt trên Cloudflare (dự án Pages `d8-3d`)
 
