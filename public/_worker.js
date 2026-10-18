@@ -8,6 +8,7 @@
 // Routes:
 //   /            landing page (static)
 //   /admin       upload & manage page (static, password protected API)
+//   /stl         exocad HTML -> STL converter (static; runs fully in the browser)
 //   /v/<id>      viewer page sent to the doctor (branded header + 3D view)
 //   /raw/<id>    the exocad HTML itself (sandboxed, opened inside /v/<id>)
 //   /api/*       JSON API used by /admin
@@ -61,6 +62,7 @@ async function handleApi(request, env, url) {
   }
 
   const path = url.pathname;
+  if (path === "/api/ping" && request.method === "GET") return json({ ok: true }); // password check only, no KV use
   if (path === "/api/list" && request.method === "GET") return listCases(env);
   if (path === "/api/upload" && request.method === "POST") return uploadCase(request, env, url);
 

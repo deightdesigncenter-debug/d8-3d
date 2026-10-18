@@ -15,12 +15,25 @@ Công cụ biến file HTML xuất từ exocad thành một đường link để
 
 Bảo mật: link không chứa tên file hay tên bệnh nhân; trang không cho Google lập chỉ mục; file 3D chạy trong môi trường cô lập (sandbox) nên không đọc được mật khẩu hay gọi được chức năng quản lý.
 
+## Chuyển HTML sang STL (`/stl`)
+
+Trang `https://3d.d8designcenter.com/stl` (đăng nhập bằng cùng mật khẩu với `/admin`) tách các lớp lưới 3D trong file HTML của exocad thành file STL.
+
+- Xử lý hoàn toàn trong trình duyệt: file không được tải lên máy chủ, không tốn dung lượng KV.
+- File exocad được mở trong khung cô lập (sandbox) kèm một đoạn mã nhỏ chờ exocad dựng xong mô hình, rồi gửi dữ liệu lưới (`DentalWebGL.m_SceneManager.m_MeshSort.m_SortedMeshs`) ra trang chính.
+- Mỗi lớp (ví dụ *Merged parts*, *Antagonist*, *Jaw scans*) xuất thành STL nhị phân; lớp ảnh 2D được bỏ qua.
+- Tọa độ giữ nguyên hệ tọa độ exocad (mm), các file khớp vị trí với nhau.
+- Tải từng lớp, tải nhiều lớp dạng `.zip` (nén deflate), hoặc gộp các lớp đã chọn thành 1 file STL.
+
+Đã kiểm tra với file mẫu: khung bao của từng lớp khớp tuyệt đối với số liệu exocad, lớp thiết kế là khối kín, mặt hướng ra ngoài.
+
 ## Cấu trúc thư mục
 
 | Đường dẫn | Vai trò |
 |---|---|
 | `public/_worker.js` | Phần máy chủ (Cloudflare Pages, chế độ advanced): API tải lên, danh sách, xóa; trang xem cho bác sĩ; trả file 3D |
 | `public/admin.html` | Trang tạo link và quản lý link (tiếng Việt) |
+| `public/stl.html` | Trang chuyển HTML exocad sang STL (chạy trong trình duyệt) |
 | `public/index.html` | Trang chủ ngắn (tiếng Anh) |
 | `public/robots.txt`, `public/favicon.svg` | Chặn công cụ tìm kiếm; biểu tượng tab |
 | `dev/server.mjs` | Bộ giả lập Cloudflare Pages + KV để chạy thử trên máy (không được triển khai) |
