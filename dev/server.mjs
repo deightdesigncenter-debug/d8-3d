@@ -101,9 +101,17 @@ const AI = {
   async run(model, input) {
     ops.ai = (ops.ai || 0) + 1;
     if (model.includes("m2m100")) return { translated_text: "[" + input.target_lang + "] " + input.text };
-    const sys = input.messages[0].content, text = input.messages[1].content;
+    const sys = input.messages[0].content, user = input.messages[1].content;
+    const text = Array.isArray(user) ? user.map((c) => c.text || (c.image_url ? "[image " + c.image_url.url.length + " chars]" : "")).join(" ") : user;
+    const say = (content) => ({ choices: [{ message: { role: "assistant", content } }] });
+    if (/"en": "the reply/.test(sys)) return say(JSON.stringify({ en: "Thanks for your message. We'll confirm shortly.", vi: "Cảm ơn bạn đã nhắn. Chúng tôi sẽ xác nhận sớm." }));
+    if (/"patient"/.test(sys)) { const m = text.match(/\b(Mr|Mrs|Ms)\.? [A-Z][a-z]+/); return say(JSON.stringify({ patient: !!m, found: m ? m[0] : "" })); }
+    if (/turn them into form fields/.test(sys)) return say("```json\n" + JSON.stringify({ service: /implant/i.test(text) ? "Implant restorations" : "Crown & bridge",
+      teeth: (text.match(/\b\d{2}(?:\s*,\s*\d{2})*/) || [""])[0], numbering: "FDI", material: /e\.?max/i.test(text) ? "e.max" : "", shade: (text.match(/\b[A-D][1-4]\b/) || [""])[0],
+      neededBy: "", notes: "Cement gap 0.05 mm.", rx: { retention: "Screw-retained crown", restoration: "Full contour", implant_system: "Brand Z RP" } }) + "\n```");
+    if (/Tóm tắt|TÓM TẮT/.test(sys)) return say("TÓM TẮT:\n- Ca mẫu\nYÊU CẦU THIẾT KẾ:\n- " + text.split("\n")[0] + "\nCẦN HỎI LẠI:\n- Không có");
     const to = /into Vietnamese/.test(sys) ? "vi" : "en";
-    return { choices: [{ message: { role: "assistant", content: "[" + to + "] " + text } }] };
+    return say("[" + to + "] " + text);
   },
 };
 // ---- R2 mock (case files): set R2=1 to store case files in a bucket instead of KV

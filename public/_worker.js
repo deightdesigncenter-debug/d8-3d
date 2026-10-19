@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-19.2"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-19.3"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -113,6 +113,47 @@ async function handleApi(request, env, url) {
   const isAdmin = keyOk || !!(session && session.role === "admin");
 
   /* ---- signed-in customers (and admin) ---- */
+  if (path === "/api/ai/rx" && method === "POST") {
+    if (!session && !keyOk) return json({ error: "Please sign in." }, 401);
+    if (parseInt(request.headers.get("Content-Length") || "0", 10) > 3 * 1024 * 1024) return json({ error: "The photo is too large." }, 413);
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const text = clip(b.text, 4000), image = typeof b.image === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(b.image) ? b.image : "";
+    if (!text && !image) return json({ error: "Add a photo or some text first." }, 400);
+    const schema = Object.entries(RX_FIELDS).map(([s, f]) => "- " + s + ": " + Object.entries(f).map(([k, o]) => o ? k + " (one of: " + o.join(" | ") + ")" : k + " (free text)").join(", ")).join("\n");
+    const system = "You read dental lab prescriptions (Rx) for D.EIGHT, a remote dental CAD design team, and turn them into form fields. " +
+      "Return ONLY a JSON object with these keys: service (one of: " + SERVICE_NAMES.join(" | ") + ", or \"\"), teeth (tooth numbers as written, e.g. \"11, 21\" or \"14-24\"), " +
+      "numbering (\"FDI\" or \"UNS\" for Universal 1-32; guess from the numbers), material, shade, neededBy (YYYY-MM-DD or \"\"), " +
+      "notes (the remaining design instructions in clear English, concise), rx (object with the extra fields for the chosen service; use the listed option values exactly). " +
+      "Extra fields per service:\n" + schema + "\nUse \"\" for anything not stated. Do not invent values. Do not include any patient name, date of birth or other patient identifier anywhere.";
+    const content = image ? [{ type: "text", text: text || "Read this prescription." }, { type: "image_url", image_url: { url: image } }] : text;
+    let out;
+    try { out = parseJsonLoose(await aiChat(env, [{ role: "system", content: system }, { role: "user", content }], { maxTokens: 1200, vision: !!image })); }
+    catch (err) { return json({ error: err.message, code: err.code || "" }, err.status || 502); }
+    if (!out) return json({ error: "Couldn't read that. Try a clearer photo or paste the text." }, 422);
+    const service = SERVICE_NAMES.includes(out.service) ? out.service : "";
+    const rx = {};
+    for (const [k, opts] of Object.entries(RX_FIELDS[service] || {})) {
+      const v = clip(out.rx && out.rx[k], 160);
+      if (v && (!opts || opts.includes(v))) rx[k] = v;
+    }
+    return json({ fields: { service, teeth: clip(out.teeth, 120), numbering: out.numbering === "UNS" ? "UNS" : out.numbering === "FDI" ? "FDI" : "",
+      material: clip(out.material, 120), shade: clip(out.shade, 40), neededBy: /^\d{4}-\d{2}-\d{2}$/.test(out.neededBy || "") ? out.neededBy : "",
+      notes: clip(out.notes, 4000), rx } });
+  }
+
+  if (path === "/api/ai/check" && method === "POST") {
+    if (!session && !keyOk) return json({ error: "Please sign in." }, 401);
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const text = ["Case reference: " + clip(b.title, 80), "Instructions: " + clip(b.notes, 3000), "File names: " + clip((Array.isArray(b.files) ? b.files : []).join(", "), 1000)].join("\n");
+    const system = "You check a dental case before it is sent to a design team. Patient privacy: the case reference, instructions and file names must not contain a patient's name, " +
+      "date of birth, phone number or other personal identifier. Doctor names, lab names, tooth numbers, materials and brand names are fine. " +
+      "Return ONLY JSON: {\"patient\": true|false, \"found\": \"the identifying text, or empty\"}.";
+    try {
+      const out = parseJsonLoose(await aiChat(env, [{ role: "system", content: system }, { role: "user", content: text }], { maxTokens: 200 }));
+      return json({ patient: !!(out && out.patient === true), found: clip(out && out.found, 120) });
+    } catch (err) { return json({ error: err.message, code: err.code || "" }, err.status || 502); }
+  }
+
   if (path === "/api/translate" && method === "POST") {
     if (!session && !keyOk) return json({ error: "Please sign in." }, 401);
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
@@ -392,6 +433,62 @@ function cleanRx(rx) {
   return out;
 }
 
+/* ---------------------------------------------------------- AI helpers (Workers AI, binding "AI") */
+const noAi = (vi) => Object.assign(new Error(vi ? "Chưa bật AI (Workers AI)." : "AI features are not switched on yet."), { status: 503, code: "no_ai" });
+const aiText = (out) => String((out && out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content) || (out && out.response) || "")
+  .replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+// Chat completion: tries each model in turn. With an image, only the vision model (the first) is used.
+async function aiChat(env, messages, { maxTokens = 1500, vi = false, vision = false } = {}) {
+  if (!env.AI) throw noAi(vi);
+  const models = vision ? AI_MODELS.slice(0, 1) : AI_MODELS;
+  for (const model of models) {
+    try {
+      const t = aiText(await env.AI.run(model, { messages, temperature: 0.2, max_completion_tokens: maxTokens, chat_template_kwargs: { enable_thinking: false } }));
+      if (t) return t;
+    } catch (err) { console.error("ai", model, err && err.message); }
+  }
+  throw Object.assign(new Error(vi ? "AI đang bận, thử lại sau ít phút." : "The AI assistant is busy. Please try again in a minute."), { status: 502 });
+}
+function parseJsonLoose(t) {
+  const s = String(t || "").replace(/```(?:json)?/gi, "");
+  const a = s.indexOf("{"), b = s.lastIndexOf("}");
+  if (a < 0 || b <= a) return null;
+  try { return JSON.parse(s.slice(a, b + 1)); } catch { return null; }
+}
+const RX_FIELDS = {
+  "Implant restorations": { retention: ["Screw-retained crown", "Cement-retained crown", "Custom abutment + crown", "Ti-base crown", "Implant bridge"], implant_system: 0, scan_body: 0 },
+  "All-on-X & bars": { arch: ["Upper", "Lower", "Both"], prosthesis: ["Hybrid bridge", "Bar", "Bar + overlay", "Provisional (PMMA)"], implant_system: 0, mua: 0 },
+  "Surgical guides": { support: ["Tooth-supported", "Tissue-supported", "Bone-supported"], implant_system: 0, sleeve: 0, sites: 0 },
+  "Crown & bridge": { restoration: ["Full contour", "Cutback", "Coping / framework", "Veneer", "Inlay / onlay", "Post and core"], cement_gap: 0 },
+  "Wax-up & smile design": { arch: ["Upper", "Lower", "Both"], photo: ["Photo attached", "No photo"] },
+  "Dentures & partials": { arch: ["Upper", "Lower", "Both"], base: ["Hard acrylic", "Flexible", "Metal framework"], teeth_library: 0 },
+  "Splints & trays": { appliance: ["Night guard", "Michigan splint", "Kois deprogrammer", "Sleep appliance", "Retainer", "Bleach tray", "Custom impression tray"], arch: ["Upper", "Lower", "Both"], thickness: 0 },
+  "Aligner & ortho": { arch: ["Upper", "Lower", "Both"], goals: 0 },
+  "Digital models": { model: ["Dies", "Articulated model", "Ortho model", "Implant model with gingiva"], arch: ["Upper", "Lower", "Both"] },
+};
+const SERVICE_NAMES = [...Object.keys(RX_FIELDS), "Trial case", "Something else"];
+// The case as plain text for the AI (no file contents, only names).
+function caseContext(job, maxMsgs = 30) {
+  const lines = [
+    "Case " + job.id + ": " + job.title, "Service: " + (job.service || "-"),
+    "Teeth: " + (job.teeth || "-") + " (" + (job.numbering === "UNS" ? "Universal" : "FDI") + " numbering)",
+    "Material: " + (job.material || "-"), "Shade: " + (job.shade || "-"), "Needed by: " + (job.neededBy || "-"), "Status: " + job.status,
+  ];
+  for (const [k, v] of Object.entries(job.rx || {})) lines.push(k.replace(/_/g, " ") + ": " + v);
+  if (job.notes) lines.push("Customer instructions: " + job.notes.slice(0, 3000));
+  const files = (job.files || []).filter((f) => f.kind !== "output").map((f) => f.name);
+  lines.push("Files from customer: " + (files.join(", ") || "none") + ((job.links || []).length ? " + " + job.links.length + " file link(s)" : ""));
+  const outs = (job.files || []).filter((f) => f.kind === "output").map((f) => f.name);
+  if (outs.length) lines.push("Files delivered: " + outs.join(", "));
+  if ((job.previews || []).length) lines.push("3D previews shared: " + job.previews.length);
+  const msgs = (job.thread || []).filter((m) => m.by !== "system").slice(-maxMsgs);
+  if (msgs.length) {
+    lines.push("", "Messages (oldest first):");
+    for (const m of msgs) lines.push((m.by === "admin" ? "D.EIGHT" : "Customer") + ": " + String(m.text).slice(0, 1200));
+  }
+  return lines.join("\n");
+}
+
 // Chat translation with Workers AI (binding "AI"). Returns the translated text.
 async function translateText(env, text, to) {
   if (!env.AI) throw Object.assign(new Error(to === "vi" ? "Chưa bật dịch tự động (Workers AI)." : "Translation is not switched on yet."), { status: 503, code: "no_ai" });
@@ -401,17 +498,8 @@ async function translateText(env, text, to) {
     "emergence profile, multi-unit abutment (MUA), screw channel, scan body, occlusion, surgical guide, sleeve). Keep tooth numbers, " +
     "measurements, units, file names, links and people's names exactly as written. Reply with the translation only, without notes or quotes. " +
     "If the message is already in " + target + ", return it unchanged.";
-  for (const model of AI_MODELS) {
-    try {
-      const out = await env.AI.run(model, {
-        messages: [{ role: "system", content: system }, { role: "user", content: text }],
-        temperature: 0.2, max_completion_tokens: 2048, chat_template_kwargs: { enable_thinking: false },
-      });
-      let t = (out && out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content) || (out && out.response) || "";
-      t = String(t).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-      if (t) return t.slice(0, 8000);
-    } catch (err) { console.error("translate", model, err && err.message); }
-  }
+  try { return (await aiChat(env, [{ role: "system", content: system }, { role: "user", content: text }], { maxTokens: 2048, vi: to === "vi" })).slice(0, 8000); }
+  catch (err) { if (err.code === "no_ai") throw err; }
   const out = await env.AI.run("@cf/meta/m2m100-1.2b", { text, source_lang: to === "vi" ? "en" : "vi", target_lang: to });
   const t = String((out && (out.translated_text || (out.result && out.result.translated_text))) || "").trim();
   if (!t) throw Object.assign(new Error(to === "vi" ? "Dịch không thành công, thử lại sau." : "Translation failed. Please try again."), { status: 502 });
@@ -507,13 +595,15 @@ async function listJobs(env, owner) {
   return json({ items });
 }
 
-async function jobView(env, job) {
+// The case as sent to the browser. Internal AI notes (job.ai) go only to D.EIGHT.
+async function jobView(env, job, forAdmin = false) {
   const previews = [];
   for (const pid of job.previews || []) {
     const m = await env.CASES.get("meta:" + pid, "json");
     if (m && m.e > Date.now()) previews.push({ id: pid, label: m.l || "", expires: m.e, url: "/v/" + pid });
   }
-  return { ...job, previews };
+  const { ai, ...rest } = job;
+  return forAdmin ? { ...rest, ai: ai || null, previews } : { ...rest, previews };
 }
 
 async function handleJobs(request, env, url, who) {
@@ -569,7 +659,7 @@ async function handleJobs(request, env, url, who) {
   // Requests from the admin tools (password header) always act as D.EIGHT.
   const by = !who.viaKey && who.email && job.owner === who.email ? "client" : "admin";
 
-  if (sub === "" && method === "GET") return json({ job: await jobView(env, job) });
+  if (sub === "" && method === "GET") return json({ job: await jobView(env, job, by === "admin") });
 
   if (sub === "/messages" && method === "POST") {
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
@@ -585,7 +675,38 @@ async function handleJobs(request, env, url, who) {
     if (job.thread.length > THREAD_MAX) job.thread = job.thread.slice(-THREAD_MAX);
     job.updated = Date.now(); job.lastBy = by;
     await saveJob(env, job);
-    return json({ job: await jobView(env, job) });
+    return json({ job: await jobView(env, job, by === "admin") });
+  }
+
+  // AI: Vietnamese work summary for the designer (kept on the case until regenerated)
+  if (sub === "/summary" && method === "POST") {
+    if (!who.admin) return json({ error: "Not allowed." }, 403);
+    const system = "Bạn là trưởng nhóm thiết kế CAD nha khoa của D.EIGHT. Đọc thông tin ca và tin nhắn (thường bằng tiếng Anh) rồi viết bản tóm tắt bằng tiếng Việt cho kỹ thuật viên. " +
+      "Trình bày đúng 3 phần, mỗi ý một dòng bắt đầu bằng \"- \":\nTÓM TẮT: loại ca, răng, vật liệu, hạn giao.\nYÊU CẦU THIẾT KẾ: mọi yêu cầu cụ thể của bác sĩ (thông số, hệ implant, kênh vít, tiếp xúc, khớp cắn, thẩm mỹ), kể cả yêu cầu chỉnh sửa trong tin nhắn; ghi rõ yêu cầu mới nhất nếu có thay đổi.\n" +
+      "CẦN HỎI LẠI: thông tin còn thiếu hoặc mâu thuẫn (ghi \"- Không có\" nếu đủ).\nGiữ nguyên số răng, số đo, tên hãng. Không bịa thông tin không có trong ca. Viết ngắn gọn.";
+    let text;
+    try { text = await aiChat(env, [{ role: "system", content: system }, { role: "user", content: caseContext(job) }], { maxTokens: 1200, vi: true }); }
+    catch (err) { return json({ error: err.message, code: err.code || "" }, err.status || 502); }
+    job.ai = { ...(job.ai || {}), sum: text.slice(0, 6000), sumAt: Date.now(), sumUpd: job.updated };
+    await saveJob(env, job);
+    return json({ summary: job.ai.sum, at: job.ai.sumAt });
+  }
+
+  // AI: draft a reply to the customer in English with a Vietnamese copy (nothing is sent)
+  if (sub === "/suggest" && method === "POST") {
+    if (!who.admin) return json({ error: "Not allowed." }, 403);
+    let b; try { b = await request.json(); } catch { b = {}; }
+    const hint = clip(b.hint, 600);
+    const system = "You write replies from D.EIGHT, a remote dental CAD design team, to a dental lab or clinic about one case. Read the case and the conversation, " +
+      "then draft a short, warm and professional reply to the customer's latest message in English (2 to 5 sentences). Answer only from the case information; " +
+      "never promise dates, prices or design results that are not stated, and never mention AI. If something must be checked, say we will confirm. " +
+      (hint ? "The designer wants the reply to say: " + hint + ". " : "") +
+      "Return ONLY JSON: {\"en\": \"the reply in English\", \"vi\": \"a faithful Vietnamese translation of the reply\"}.";
+    let out;
+    try { out = parseJsonLoose(await aiChat(env, [{ role: "system", content: system }, { role: "user", content: caseContext(job, 16) }], { maxTokens: 900, vi: true })); }
+    catch (err) { return json({ error: err.message, code: err.code || "" }, err.status || 502); }
+    if (!out || !out.en) return json({ error: "AI không soạn được câu trả lời, thử lại." }, 502);
+    return json({ en: clip(out.en, 3000), vi: clip(out.vi, 3000) });
   }
 
   // translate one message for the person viewing it; the result is kept on the message for everyone
@@ -611,7 +732,7 @@ async function handleJobs(request, env, url, who) {
     job.price = price; job.pay = b.pay; job.trial = !!b.trial;
     job.updated = Date.now(); job.lastBy = "admin";
     await saveJob(env, job);
-    return json({ job: await jobView(env, job) });
+    return json({ job: await jobView(env, job, by === "admin") });
   }
 
   if (sub === "/approve" && method === "POST") {
@@ -621,7 +742,7 @@ async function handleJobs(request, env, url, who) {
     job.status = "approved"; job.approvedAt = now; job.updated = now; job.lastBy = "client";
     job.thread.push({ by: "system", name: "", text: "status:approved", at: now });
     await saveJob(env, job);
-    return json({ job: await jobView(env, job) });
+    return json({ job: await jobView(env, job, by === "admin") });
   }
 
   if (sub === "/status" && method === "POST") {
@@ -635,7 +756,7 @@ async function handleJobs(request, env, url, who) {
       job.thread.push({ by: "system", name: "", text: "status:" + b.status, at: now });
       await saveJob(env, job);
     }
-    return json({ job: await jobView(env, job) });
+    return json({ job: await jobView(env, job, by === "admin") });
   }
 
   if (sub === "/previews" && method === "POST") {
@@ -655,7 +776,7 @@ async function handleJobs(request, env, url, who) {
     }
     job.updated = Date.now();
     await saveJob(env, job);
-    return json({ job: await jobView(env, job) });
+    return json({ job: await jobView(env, job, by === "admin") });
   }
 
   // file chunk upload: PUT /api/jobs/<id>/files/<fid>/<n>
@@ -697,7 +818,7 @@ async function handleJobs(request, env, url, who) {
       }
       await saveJob(env, job);
     }
-    return json({ job: await jobView(env, job), added });
+    return json({ job: await jobView(env, job, by === "admin"), added });
   }
 
   // download: GET /api/jobs/<id>/files/<fid>
@@ -740,7 +861,7 @@ async function handleJobs(request, env, url, who) {
     job.files = job.files.filter((x) => x.fid !== file.fid);
     job.updated = Date.now();
     await saveJob(env, job);
-    return json({ job: await jobView(env, job) });
+    return json({ job: await jobView(env, job, by === "admin") });
   }
 
   return json({ error: "Not found." }, 404);

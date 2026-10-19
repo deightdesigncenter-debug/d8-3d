@@ -17,6 +17,7 @@
     up: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>',
     x: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
     warn: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M10 2.5 18 17H2L10 2.5Z"/><path d="M10 8v4M10 14.5v.5"/></svg>',
+    spark: '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="vertical-align:-2px"><path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4L4 8.5l4.4-1.6L10 2.5Z"/><path d="M15.5 13.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>',
     out: '<svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 5.5 15 9l-4 3.5M15 9H7"/></svg>',
   };
   const stChip = (s) => `<span class="st st-${esc(s)}">${esc(D8.statusLabel(s))}</span>`;
@@ -48,6 +49,7 @@
   let users = [];
   let current = null;         // job open in the detail panel
   let busy = false;
+  const aiTried = new Set(); // cases whose summary was requested automatically in this visit
 
   /* ------------------------------------------------------------ band + panels */
   const BANDS = {
@@ -277,7 +279,7 @@
               <div style="margin-top:12px"><button class="btn btn-primary small" type="button" id="outBtn" disabled>Tải lên &amp; giao</button></div></div>
           </section>
           <section class="card"><h2 class="h-caps">Tin nhắn với khách</h2><p class="sub">Khách thấy tin nhắn trong cổng khách hàng. Bấm <b>Dịch</b> dưới tin của khách để xem tiếng Việt; viết tiếng Việt rồi bấm <b>Dịch sang tiếng Anh</b> trước khi gửi.</p>
-            <div class="thread-tools"><button type="button" data-tr-all hidden>Dịch tất cả</button></div>
+            <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> Luôn dịch tin của khách</label><button type="button" data-tr-all hidden>Dịch tất cả</button></div>
             <div class="thread" id="thread">${thread || '<p class="muted" style="margin:0">Chưa có tin nhắn.</p>'}</div>
             <form class="compose" id="composeForm">
               <div class="tpl">${TEMPLATES.map((t, i) => `<button type="button" data-tpl="${i}">${esc(t[0])}</button>`).join("")}</div>
@@ -285,12 +287,15 @@
               <textarea class="input" id="composer" maxlength="4000" placeholder="Viết tin nhắn cho khách (tiếng Việt hoặc tiếng Anh)…"></textarea>
               <p class="compose-orig" id="composeOrig" hidden></p>
               <div class="compose-foot"><p class="hint">Ctrl + Enter để gửi.</p>
-                <div class="compose-tr"><button class="btn small" type="button" id="toEn">Dịch sang tiếng Anh</button><button class="btn btn-primary small" type="submit" id="sendMsg">Gửi</button></div></div>
+                <div class="compose-tr"><button class="btn small" type="button" id="aiSuggest" hidden title="Gõ vài ý tiếng Việt (không bắt buộc) rồi bấm để AI soạn câu trả lời tiếng Anh">${ICON.spark}Gợi ý trả lời</button><button class="btn small" type="button" id="toEn">Dịch sang tiếng Anh</button><button class="btn btn-primary small" type="submit" id="sendMsg">Gửi</button></div></div>
               <p class="error" id="msgErr" hidden></p>
             </form>
           </section>
         </div>
-        <aside><section class="card"><h2 class="h-caps" style="margin-bottom:16px">Thông tin ca</h2><dl class="dl">${det}</dl>
+        <aside><section class="card" id="aiSumCard" hidden><div class="card-head-row"><h2 class="h-caps" style="display:flex;align-items:center;gap:8px">Tóm tắt cho KTV <span class="ai-tag">AI</span></h2>
+            <button class="btn small" type="button" id="aiSumBtn">${j.ai && j.ai.sum ? "Làm mới" : "Tạo tóm tắt"}</button></div>
+          <div id="aiSumBody">${j.ai && j.ai.sum ? `<p class="ai-sum">${esc(j.ai.sum)}</p><p class="ai-meta">Tạo lúc ${esc(D8.fmtDate(j.ai.sumAt, true))}${j.ai.sumUpd < j.updated ? " · <b>ca đã có cập nhật sau bản tóm tắt này</b>" : ""}. AI có thể sai, đối chiếu lại phiếu gốc.</p>` : '<p class="muted" style="margin:0">AI đọc phiếu chỉ định và tin nhắn của khách rồi tóm tắt bằng tiếng Việt.</p>'}</div></section>
+          <section class="card"><h2 class="h-caps" style="margin-bottom:16px">Thông tin ca</h2><dl class="dl">${det}</dl>
           ${j.notes ? `<p class="grp" style="margin-top:20px">Yêu cầu của khách</p><p class="notes">${esc(j.notes)}</p>` : ""}</section>
           ${billing}</aside>
       </div>`;
@@ -373,8 +378,8 @@
     let outs = [];
     const list = $("outList"), btn = $("outBtn");
     const drawPicked = () => {
-      list.innerHTML = outs.map((f, i) => `<li><span title="${esc(f.name)}">${esc(f.name)}</span><small>${esc(D8.size(f.size))}</small><button type="button" data-rm="${i}" aria-label="Bỏ ${esc(f.name)}">✕</button></li>`).join("");
-      list.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { outs.splice(+b.dataset.rm, 1); drawPicked(); }));
+      // design = true: finished restorations should be closed meshes
+      D8.renderPicked(list, outs, (i) => { outs.splice(i, 1); drawPicked(); }, { design: true, removeLabel: "Bỏ" });
       btn.disabled = !outs.length && !$("outDeliver").checked;
       btn.textContent = outs.length ? `Tải lên ${outs.length} file${$("outDeliver").checked ? " & giao" : ""}` : ($("outDeliver").checked ? "Chuyển sang Đã giao" : "Tải lên & giao");
     };
@@ -402,10 +407,29 @@
       } catch (ex) { busy = false; btn.disabled = false; prog.hidden = true; err.textContent = ex.message; err.hidden = false; }
     });
 
+    // AI summary for the designer (made automatically the first time the case is opened)
+    const sumCard = $("aiSumCard"), sumBtn = $("aiSumBtn"), sugBtn = $("aiSuggest");
+    const runSummary = async () => {
+      sumBtn.disabled = true; sumBtn.textContent = "Đang tóm tắt…";
+      try {
+        const r = await api(`/api/jobs/${j.id}/summary`, { method: "POST" });
+        j.ai = { ...(j.ai || {}), sum: r.summary, sumAt: r.at, sumUpd: j.updated };
+        $("aiSumBody").innerHTML = `<p class="ai-sum">${esc(r.summary)}</p><p class="ai-meta">Tạo lúc ${esc(D8.fmtDate(r.at, true))}. AI có thể sai, đối chiếu lại phiếu gốc.</p>`;
+        sumBtn.textContent = "Làm mới";
+      } catch (err) { D8.toast(err.message); sumBtn.textContent = j.ai && j.ai.sum ? "Làm mới" : "Tạo tóm tắt"; }
+      sumBtn.disabled = false;
+    };
+    const aiReady = () => {
+      sumCard.hidden = !D8.aiOn; sugBtn.hidden = !D8.aiOn;
+      if (D8.aiOn && !(j.ai && j.ai.sum) && !aiTried.has(j.id)) { aiTried.add(j.id); runSummary(); }
+    };
+    aiReady(); if (!D8.aiOn) document.addEventListener("d8:config", aiReady, { once: true });
+    sumBtn.addEventListener("click", runSummary);
+
     // messages (write in Vietnamese, translate to English, send English with the Vietnamese kept as the original)
     const form = $("composeForm"), box = $("composer");
     let orig = "";
-    const showOrig = () => { const o = $("composeOrig"); o.hidden = !orig; o.innerHTML = orig ? "<b>Bản gốc</b>" + esc(orig) : ""; };
+    const showOrig = () => { const o = $("composeOrig"); o.hidden = !orig; o.innerHTML = orig ? "<b>Bản tiếng Việt</b>" + esc(orig) : ""; };
     $("toEn").addEventListener("click", async () => {
       const text = box.value.trim(); if (!text) return box.focus();
       const b = $("toEn"); b.disabled = true; b.textContent = "Đang dịch…";
@@ -415,6 +439,15 @@
         else if (r.text) { orig = text; box.value = r.text; showOrig(); }
       } catch (err) { D8.toast(err.message); }
       b.disabled = false; b.textContent = "Dịch sang tiếng Anh";
+    });
+    sugBtn.addEventListener("click", async () => {
+      const hint = orig || box.value.trim(); // Vietnamese ideas typed by the designer guide the reply
+      sugBtn.disabled = true; sugBtn.textContent = "Đang soạn…";
+      try {
+        const r = await api(`/api/jobs/${j.id}/suggest`, { method: "POST", body: { hint } });
+        box.value = r.en; orig = r.vi || ""; showOrig(); box.focus();
+      } catch (err) { D8.toast(err.message); }
+      sugBtn.disabled = false; sugBtn.innerHTML = ICON.spark + "Gợi ý trả lời";
     });
     document.querySelectorAll("#p-case [data-tpl]").forEach((b) => b.addEventListener("click", () => { box.value = TEMPLATES[+b.dataset.tpl][1]; orig = ""; showOrig(); box.focus(); }));
     box.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); form.requestSubmit(); } });

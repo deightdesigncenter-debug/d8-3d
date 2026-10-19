@@ -18,6 +18,8 @@
     trash: '<svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 5h12M7 5V3.5h4V5M5 5l.8 10h6.4L13 5"/></svg>',
     up: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>',
     warn: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M10 2.5 18 17H2L10 2.5Z"/><path d="M10 8v4M10 14.5v.5"/></svg>',
+    spark: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4L4 8.5l4.4-1.6L10 2.5Z"/><path d="M15.5 13.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>',
+    cam: '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6.5h3l1.5-2h5l1.5 2h3v9.5H3z"/><circle cx="10" cy="11" r="3"/></svg>',
     info: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M10 9v5M10 6v.5"/></svg>',
   };
   const store = {
@@ -252,7 +254,7 @@
           <section class="card" aria-labelledby="msH" id="messages">
             <h2 class="h-caps" id="msH">${esc(T("p.ms.h"))}</h2>
             <p class="sub">${esc(T("p.ms.sub"))} <a href="${esc(D8.waLink(T("p.ms.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">${esc(T("p.ms.wa"))}</a></p>
-            <div class="thread-tools"><button type="button" data-tr-all hidden>${esc(T("tr.all"))}</button></div>
+            <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> ${esc(T("tr.auto"))}</label><button type="button" data-tr-all hidden>${esc(T("tr.all"))}</button></div>
             <div class="thread" id="thread">${thread || `<p class="muted" style="margin:0">${esc(T("p.ms.none"))}</p>`}</div>
             <form class="compose" id="composeForm">
               <label class="sr-only" for="composer">${esc(T("p.ms.ph"))}</label>
@@ -291,9 +293,7 @@
     zone.addEventListener("drop", (e) => onFiles([...(e.dataTransfer.files || [])]));
   }
   function pickedList(el, files, onRemove) {
-    el.innerHTML = files.map((f, i) => `<li><span title="${esc(f.name)}">${esc(f.name)}</span><small>${esc(D8.size(f.size))}</small>
-      <button type="button" data-rm="${i}" aria-label="${esc(T("p.fl.del"))} ${esc(f.name)}">✕</button></li>`).join("");
-    el.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => onRemove(+b.dataset.rm)));
+    return D8.renderPicked(el, files, onRemove, { removeLabel: T("p.fl.del") });
   }
   const sameFile = (a, b) => a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
 
@@ -380,6 +380,22 @@
       <div id="trialSlot">${caseCount !== null && caseCount < 2 ? trialBanner() : ""}</div>
       <form class="form-grid" id="newForm" novalidate>
         <div class="card">
+          <details class="ai-box" id="aiBox" hidden${d.aiOpen ? " open" : ""}>
+            <summary>${ICON.spark}<span>${esc(T("ai.rx.h"))}</span><span class="tag">AI</span></summary>
+            <div class="in">
+              <p class="hint" style="margin:0">${esc(T("ai.rx.p"))}</p>
+              <label class="sr-only" for="aiText">${esc(T("ai.rx.h"))}</label>
+              <textarea class="input" id="aiText" maxlength="4000" placeholder="${esc(T("ai.rx.ph"))}">${esc(d.aiText || "")}</textarea>
+              <div class="ai-row">
+                <label class="btn small" for="aiPhoto">${ICON.cam}${esc(T("ai.rx.photo"))}</label>
+                <input type="file" id="aiPhoto" accept="image/*" capture="environment" hidden>
+                <span class="nm" id="aiPhotoName">${esc(d.aiPhoto ? d.aiPhoto.name : "")}</span>
+                <button class="btn btn-primary small" type="button" id="aiRead">${esc(T("ai.rx.read"))}</button>
+              </div>
+              ${d.aiDone ? `<p class="ai-ok">${esc(T("ai.rx.done").replace("{n}", d.aiDone))}</p>` : ""}
+              <p class="error" id="aiErr" hidden></p>
+            </div>
+          </details>
           <fieldset class="fs"><legend><span class="n">1</span><span class="h-caps">${T("p.nf.s1")}</span></legend>
             <div class="row2">
               <div class="full"><label class="field-label" for="nTitle"><span>${esc(T("p.nf.ref"))}</span><span class="req">*</span></label>
@@ -414,6 +430,7 @@
           </fieldset>
           <div class="progress block" id="nProg" hidden><div class="progress-bar"><i></i></div><p></p></div>
           <p class="error" id="nErr" role="alert" hidden></p>
+          <div class="warnbox" id="nWarn" hidden></div>
           <div class="submit-row"><p class="hint" style="margin:0;max-width:420px">${esc(T("p.nf.agree"))}</p>
             <button class="btn btn-primary" type="submit" id="nSubmit">${esc(T("p.nf.submit"))}</button></div>
         </div>
@@ -422,7 +439,33 @@
       </form>`);
 
     const form = document.getElementById("newForm");
-    form.querySelectorAll("[data-k]").forEach((el) => el.addEventListener("input", () => { d[el.dataset.k] = el.value; }));
+    form.querySelectorAll("[data-k]").forEach((el) => el.addEventListener("input", () => { d[el.dataset.k] = el.value; el.classList.remove("ai-filled"); }));
+    // AI: fill the form from a photo or text of the prescription
+    const aiBox = document.getElementById("aiBox");
+    const showAi = () => { aiBox.hidden = !D8.aiOn; };
+    showAi(); document.addEventListener("d8:config", showAi, { once: true });
+    aiBox.addEventListener("toggle", () => { d.aiOpen = aiBox.open; });
+    document.getElementById("aiText").addEventListener("input", (e) => { d.aiText = e.target.value; });
+    document.getElementById("aiPhoto").addEventListener("change", (e) => { d.aiPhoto = e.target.files[0] || null; document.getElementById("aiPhotoName").textContent = d.aiPhoto ? d.aiPhoto.name : ""; });
+    document.getElementById("aiRead").addEventListener("click", async () => {
+      const b = document.getElementById("aiRead"), er = document.getElementById("aiErr");
+      er.hidden = true;
+      if (!(d.aiText || "").trim() && !d.aiPhoto) { er.textContent = T("ai.rx.need"); er.hidden = false; return; }
+      b.disabled = true; b.textContent = T("ai.rx.busy");
+      try {
+        const image = d.aiPhoto ? await shrinkImage(d.aiPhoto) : "";
+        const f = (await D8.api("/api/ai/rx", { method: "POST", body: { text: (d.aiText || "").trim(), image } })).fields;
+        const filled = [];
+        for (const k of ["service", "teeth", "material", "shade", "neededBy"]) if (f[k]) { d[k] = f[k]; filled.push(k); }
+        if (f.numbering) d.numbering = f.numbering;
+        if (f.notes) { d.notes = d.notes && !d.notes.includes(f.notes) ? d.notes.trim() + "\n" + f.notes : f.notes; filled.push("notes"); }
+        for (const [k, v] of Object.entries(f.rx || {})) { d.rx[k] = v; filled.push("rx_" + k); }
+        d.aiFilled = filled; d.aiDone = filled.length; d.aiOpen = true;
+        renderNew();
+        return;
+      } catch (ex) { er.textContent = ex.message; er.hidden = false; }
+      b.disabled = false; b.textContent = T("ai.rx.read");
+    });
     const rxBox = document.getElementById("rxBox");
     const drawRx = () => {
       rxBox.innerHTML = D8.rxFields(d.service, d.rx);
@@ -431,6 +474,8 @@
     };
     document.getElementById("nService").addEventListener("change", drawRx);
     drawRx();
+    const KEY_ID = { service: "nService", teeth: "nTeeth", material: "nMat", shade: "nShade", neededBy: "nNeed", notes: "nNotes" };
+    (d.aiFilled || []).forEach((k) => { const el = document.getElementById(KEY_ID[k] || k); if (el) el.classList.add("ai-filled"); });
     if (caseCount === null) D8.api("/api/my/jobs").then((r) => {
       caseCount = (r.items || []).length;
       const slot = document.getElementById("trialSlot");
@@ -461,6 +506,13 @@
       if (!d.title) return fail(T("p.nf.need"), document.getElementById("nTitle"));
       if (linkList.some((l) => !/^https?:\/\/\S+$/i.test(l))) return fail(T("p.nf.badlink"));
       if (!d.files.length && !linkList.length) return fail(T("p.nf.needfile"));
+      if (!d.checked) {
+        btn.disabled = true; btn.textContent = T("chk.checking");
+        const warns = await preCheck(d, linkList);
+        btn.disabled = false; btn.textContent = T("p.nf.submit");
+        if (warns.length) return showWarns(warns);
+      }
+      document.getElementById("nWarn").hidden = true;
       btn.disabled = true; busy = true; prog.hidden = false;
       const bar = prog.querySelector("i"), txt = prog.querySelector("p");
       bar.style.width = "2%"; txt.textContent = T("p.nf.creating");
@@ -480,9 +532,58 @@
       busy = false;
       draft = freshDraft();
       current = job;
+      d.checked = false;
       if (upErr) D8.toast(T("p.nf.partial").replace("{e}", upErr)); else D8.toast(T("p.nf.done"));
       location.hash = "#/case/" + job.id;
     });
+  }
+
+  // Things worth a second look before a case is sent: missing details for the service, possible patient names, damaged files.
+  async function preCheck(d, linkList) {
+    const w = [], rx = d.rx || {}, svc = d.service;
+    const names = d.files.map((f) => f.name.toLowerCase());
+    const scans = names.filter((n) => /\.(stl|ply|obj|dcm)$/.test(n)).length;
+    const implant = svc === "Implant restorations" || svc === "All-on-X & bars";
+    if (implant && !(rx.implant_system || "").trim()) w.push(T("chk.implant_system"));
+    if (svc === "Implant restorations" && !(rx.scan_body || "").trim()) w.push(T("chk.scan_body"));
+    if (svc === "Surgical guides") {
+      if (!names.some((n) => /\.(zip|dcm|7z|rar)$/.test(n)) && !linkList.length) w.push(T("chk.dicom"));
+      if (!(rx.implant_system || "").trim() || !(rx.sleeve || "").trim()) w.push(T("chk.sleeve"));
+    }
+    if (["Crown & bridge", "Implant restorations", "All-on-X & bars", "Wax-up & smile design"].includes(svc) && scans < 2 && !linkList.length && !names.some((n) => n.endsWith(".zip"))) w.push(T("chk.bite"));
+    if (["Crown & bridge", "Implant restorations"].includes(svc) && !d.teeth.trim()) w.push(T("chk.teeth"));
+    if (["Crown & bridge", "Implant restorations", "All-on-X & bars"].includes(svc) && !d.material.trim()) w.push(T("chk.material"));
+    if (svc === "Wax-up & smile design" && !names.some((n) => /\.(jpe?g|png|heic|webp)$/.test(n))) w.push(T("chk.photo"));
+    for (const f of d.files) {
+      const r = await D8.meshResult(f, false);
+      if (r && r.level !== "ok") w.push(f.name + ": " + r.warn.join(" "));
+    }
+    if (D8.aiOn) {
+      try {
+        const r = await Promise.race([D8.api("/api/ai/check", { method: "POST", body: { title: d.title, notes: d.notes, files: d.files.map((f) => f.name) } }),
+          new Promise((res) => setTimeout(() => res(null), 8000))]);
+        if (r && r.patient) w.push(T("chk.patient").replace("{found}", r.found || ""));
+      } catch {}
+    }
+    return w;
+  }
+  function showWarns(warns) {
+    const box = document.getElementById("nWarn");
+    box.innerHTML = `<h3 class="h-caps">${esc(T("chk.title"))}</h3><ul>${warns.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+      <div class="btns"><button class="btn small" type="button" id="wFix">${esc(T("chk.fix"))}</button><button class="btn btn-primary small" type="button" id="wSend">${esc(T("chk.send"))}</button></div>`;
+    box.hidden = false;
+    box.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("wFix").onclick = () => { box.hidden = true; window.scrollTo({ top: 0, behavior: "smooth" }); };
+    document.getElementById("wSend").onclick = () => { draft.checked = true; document.getElementById("newForm").requestSubmit(); };
+  }
+  // Downscale a photo to keep the upload small (max 1400 px, JPEG).
+  async function shrinkImage(file) {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 1400 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.82);
   }
 
   /* ------------------------------------------------------------ profile */

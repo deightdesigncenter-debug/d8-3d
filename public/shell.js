@@ -197,7 +197,7 @@
     "rxo.Sleep appliance": ["Sleep appliance", "Khí cụ ngủ ngáy"], "rxo.Retainer": ["Retainer", "Hàm duy trì"], "rxo.Bleach tray": ["Bleach tray", "Máng tẩy trắng"],
     "rxo.Custom impression tray": ["Custom impression tray", "Khay lấy dấu cá nhân"], "rxo.Dies": ["Dies", "Die"], "rxo.Articulated model": ["Articulated model", "Mẫu lên càng"],
     "rxo.Ortho model": ["Ortho model", "Mẫu chỉnh nha"], "rxo.Implant model with gingiva": ["Implant model with gingiva", "Mẫu implant có nướu"],
-    "tr.orig": ["Original", "Bản gốc"], "tr.all": ["Translate all", "Dịch tất cả"],
+    "tr.orig": ["Original", "Bản gốc"], "tr.in.vi": ["Vietnamese version", "Bản tiếng Việt"], "tr.in.en": ["English version", "Bản tiếng Anh"], "tr.all": ["Translate all", "Dịch tất cả"], "tr.auto": ["Always translate", "Luôn dịch"],
     "bill.price": ["Price", "Giá"], "bill.trial": ["Free trial", "Dùng thử miễn phí"], "bill.due": ["Awaiting payment", "Chờ thanh toán"], "bill.paid": ["Paid", "Đã thanh toán"],
   });
   // [label, value] rows for a case's extra prescription fields, in the current language
@@ -215,7 +215,7 @@
     if (m.by === "system") { const s = String(m.text).replace(/^status:/, ""); return `<div class="sys">${D8.esc(D8.fmtDate(m.at, true))} · <span class="st st-${D8.esc(s)}">${D8.esc(D8.statusLabel(s))}</span></div>`; }
     const mine = m.by === me, tr = m.tr && m.tr[to];
     const name = mine ? "" : `<b>${D8.esc(m.name || (m.by === "admin" ? "D.EIGHT" : ""))}</b>`;
-    const trBlock = tr && tr !== m.text ? `<div class="bub-tr"><span>${D8.esc(D8.t(mine ? "tr.orig" : "tr.label"))}</span>${D8.esc(tr)}</div>` : "";
+    const trBlock = tr && tr !== m.text ? `<div class="bub-tr"><span>${D8.esc(D8.t(mine ? "tr.in." + to : "tr.label"))}</span>${D8.esc(tr)}</div>` : "";
     const canTr = !mine && !tr && m.lang !== to;
     return `<div class="bub ${mine ? "me" : "them"}">${name}<div class="bub-text">${D8.esc(m.text)}</div>${trBlock}<small>${D8.esc(D8.fmtDate(m.at, true))}${canTr
       ? `<span class="tr-wrap"> · <button type="button" class="tr-btn" data-tr="${m.at}">${D8.esc(D8.t("tr.btn"))}</button></span>` : ""}</small></div>`;
@@ -239,10 +239,135 @@
     root.querySelectorAll("[data-tr]").forEach((b) => b.addEventListener("click", () => one(b)));
     const all = root.parentElement && root.parentElement.querySelector("[data-tr-all]");
     const btns = root.querySelectorAll("[data-tr]");
+    const runAll = async () => { for (const b of root.querySelectorAll("[data-tr]")) { if ((await one(b)) === false) break; } if (all) all.hidden = true; };
     if (all) {
       all.hidden = btns.length < 2;
-      all.onclick = async () => { all.disabled = true; for (const b of root.querySelectorAll("[data-tr]")) { if ((await one(b)) === false) break; } all.hidden = true; };
+      all.onclick = () => { all.disabled = true; runAll(); };
     }
+    // "Always translate" (only when server translation is on, so nothing opens new tabs)
+    const auto = root.parentElement && root.parentElement.querySelector("[data-tr-auto]");
+    if (auto) {
+      const key = "d8-autotr-" + (isAdminPage ? "admin" : "portal");
+      let on = false; try { on = localStorage.getItem(key) === "1"; } catch {}
+      auto.closest("label").hidden = !D8.aiOn;
+      auto.checked = on;
+      auto.onchange = () => { try { localStorage.setItem(key, auto.checked ? "1" : "0"); } catch {} if (auto.checked) runAll(); };
+      if (on && D8.aiOn && btns.length) runAll();
+    }
+  };
+
+  // List of files picked for upload, each with its quick health check. design = finished restorations.
+  const meshCache = new WeakMap();
+  D8.meshResult = async (file, design) => {
+    const k = meshCache.get(file);
+    if (k && k.design === design) return k.r;
+    const r = await D8.checkMesh(file, design);
+    meshCache.set(file, { design, r });
+    return r;
+  };
+  D8.renderPicked = (el, files, onRemove, opts = {}) => {
+    el.innerHTML = files.map((f, i) => `<li><div class="pk"><span class="pk-n" title="${D8.esc(f.name)}">${D8.esc(f.name)}</span><span class="pk-c" data-pk="${i}"></span></div>
+      <small>${D8.esc(D8.size(f.size))}</small><button type="button" data-rm="${i}" aria-label="${D8.esc(opts.removeLabel || "Remove")} ${D8.esc(f.name)}">✕</button></li>`).join("");
+    el.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => onRemove(+b.dataset.rm)));
+    files.forEach(async (f, i) => {
+      const r = await D8.meshResult(f, !!opts.design);
+      const c = el.querySelector(`[data-pk="${i}"]`);
+      if (!c || !r) return;
+      c.className = "pk-c " + r.level;
+      c.textContent = (r.level === "ok" ? "✓ " : "⚠ ") + [r.text, ...r.warn].filter(Boolean).join(" · ");
+    });
+  };
+
+  // Quick health check of a scan or design file in the browser (no upload). design = finished restoration (should be closed).
+  D8.addDict({
+    "mc.stl": ["STL · {tris} triangles · {x} × {y} × {z} mm", "STL · {tris} tam giác · {x} × {y} × {z} mm"],
+    "mc.closed": ["closed mesh", "lưới kín"],
+    "mc.ply": ["PLY · {v} points · {f} faces", "PLY · {v} điểm · {f} mặt"],
+    "mc.zip": ["ZIP archive", "File nén ZIP"],
+    "mc.empty": ["The file is empty.", "File rỗng."],
+    "mc.corrupt": ["The file looks damaged (its size doesn't match the STL header). Please export it again.", "File có vẻ bị hỏng (kích thước không khớp phần đầu STL). Vui lòng xuất lại."],
+    "mc.badzip": ["This doesn't look like a valid ZIP file.", "File này không giống file ZIP hợp lệ."],
+    "mc.badply": ["This doesn't look like a valid PLY file.", "File này không giống file PLY hợp lệ."],
+    "mc.nan": ["The file contains invalid coordinates.", "File có tọa độ không hợp lệ."],
+    "mc.tiny": ["Very small ({d} mm across). Check the export units (inches or cm instead of mm?).", "Rất nhỏ ({d} mm). Kiểm tra đơn vị khi xuất (inch hoặc cm thay vì mm?)."],
+    "mc.huge": ["Very large ({d} mm across). Check the export units.", "Rất lớn ({d} mm). Kiểm tra đơn vị khi xuất."],
+    "mc.open": ["The mesh is not closed ({n} open edges).", "Lưới chưa kín ({n} cạnh hở)."],
+    "mc.quick": ["large file, quick check only", "file lớn, chỉ kiểm tra nhanh"],
+  });
+  const fmtN = (n) => Number(n).toLocaleString(D8.locale());
+  D8.checkMesh = async function (file, design) {
+    const name = file.name.toLowerCase(), r = { level: "ok", text: "", warn: [] };
+    const warn = (k, vars) => { let t = D8.t(k); for (const [a, b] of Object.entries(vars || {})) t = t.replace("{" + a + "}", b); r.warn.push(t); if (r.level === "ok") r.level = "warn"; };
+    const bad = (k) => { r.level = "bad"; r.warn.push(D8.t(k)); return r; };
+    try {
+      if (/\.zip$/.test(name)) {
+        const h = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+        if (!(h[0] === 0x50 && h[1] === 0x4b)) return bad("mc.badzip");
+        r.text = D8.t("mc.zip"); return r;
+      }
+      if (/\.ply$/.test(name)) {
+        const head = await file.slice(0, 65536).text();
+        if (!/^ply\s/.test(head)) return bad("mc.badply");
+        const end = head.indexOf("end_header");
+        if (end < 0) { r.text = "PLY"; return r; } // very long header: don't guess
+        const hdr = head.slice(0, end);
+        const v = +(hdr.match(/element vertex (\d+)/) || [])[1] || 0, f = +(hdr.match(/element face (\d+)/) || [])[1] || 0;
+        if (!/element vertex/.test(hdr)) return bad("mc.badply");
+        if (!v) return bad("mc.empty");
+        r.text = D8.t("mc.ply").replace("{v}", fmtN(v)).replace("{f}", fmtN(f)); return r;
+      }
+      if (!/\.stl$/.test(name)) return null;
+      if (file.size < 84) return bad("mc.empty");
+      const dv0 = new DataView(await file.slice(0, 84).arrayBuffer());
+      const n = dv0.getUint32(80, true);
+      let min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity], nan = false, tris = 0, quick = false, openEdges = -1;
+      const grow = (x, y, z) => {
+        if (!isFinite(x) || !isFinite(y) || !isFinite(z)) { nan = true; return; }
+        if (x < min[0]) min[0] = x; if (y < min[1]) min[1] = y; if (z < min[2]) min[2] = z;
+        if (x > max[0]) max[0] = x; if (y > max[1]) max[1] = y; if (z > max[2]) max[2] = z;
+      };
+      if (84 + n * 50 === file.size) {
+        if (!n) return bad("mc.empty");
+        tris = n;
+        if (file.size > 250 * 1048576) quick = true;
+        else {
+          const dv = new DataView(await file.arrayBuffer());
+          const doEdges = design && n <= 3000000;
+          const ids = doEdges ? new Map() : null, edges = doEdges ? new Map() : null;
+          const vid = (x, y, z) => { const k = Math.round(x * 1e4) + "," + Math.round(y * 1e4) + "," + Math.round(z * 1e4); let i = ids.get(k); if (i === undefined) { i = ids.size; ids.set(k, i); } return i; };
+          const edge = (a, b) => { if (a === b) return; const k = a < b ? a * 8388608 + b : b * 8388608 + a; edges.set(k, (edges.get(k) || 0) + 1); };
+          for (let i = 0, o = 84; i < n; i++, o += 50) {
+            const v = [];
+            for (let j = 0; j < 3; j++) {
+              const x = dv.getFloat32(o + 12 + j * 12, true), y = dv.getFloat32(o + 16 + j * 12, true), z = dv.getFloat32(o + 20 + j * 12, true);
+              grow(x, y, z); if (doEdges) v.push(vid(x, y, z));
+            }
+            if (doEdges) { edge(v[0], v[1]); edge(v[1], v[2]); edge(v[2], v[0]); }
+          }
+          if (doEdges) { openEdges = 0; for (const c of edges.values()) if (c === 1) openEdges++; }
+        }
+      } else {
+        const start = new TextDecoder().decode(new Uint8Array(dv0.buffer, 0, 5)).toLowerCase();
+        if (start !== "solid") return bad("mc.corrupt");
+        if (file.size > 150 * 1048576) { quick = true; }
+        else {
+          const text = await file.text();
+          const re = /vertex\s+(\S+)\s+(\S+)\s+(\S+)/g; let m, c = 0;
+          while ((m = re.exec(text))) { grow(+m[1], +m[2], +m[3]); c++; }
+          tris = Math.floor(c / 3);
+          if (!tris) return bad("mc.empty");
+        }
+      }
+      if (nan) return bad("mc.nan");
+      if (quick) { r.text = "STL · " + fmtN(tris || 0) + " · " + D8.t("mc.quick"); return r; }
+      const d = max.map((v, i) => v - min[i]), big = Math.max(...d);
+      r.text = D8.t("mc.stl").replace("{tris}", fmtN(tris)).replace("{x}", d[0].toFixed(1)).replace("{y}", d[1].toFixed(1)).replace("{z}", d[2].toFixed(1));
+      if (openEdges === 0) r.text += " · " + D8.t("mc.closed");
+      if (big < 3) warn("mc.tiny", { d: big.toFixed(2) });
+      else if (big > 250) warn("mc.huge", { d: big.toFixed(0) });
+      if (openEdges > 0) warn("mc.open", { n: fmtN(openEdges) });
+      return r;
+    } catch { return null; }
   };
 
   // Translate a case message (kept on the message for both sides) or a draft. Falls back to the browser's
@@ -392,6 +517,8 @@
 
   let configP = null;
   D8.config = () => (configP = configP || fetch("/api/config").then((r) => r.json()).catch(() => ({})));
+  D8.aiOn = false;
+  D8.config().then((c) => { D8.aiOn = !!(c && c.translate); document.dispatchEvent(new CustomEvent("d8:config", { detail: c })); });
 
   let gisP = null;
   function loadGis() {

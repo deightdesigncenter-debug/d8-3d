@@ -40,6 +40,19 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - Dùng **Cloudflare Workers AI** (binding tên `AI` trong Settings → Bindings của dự án Pages). Mô hình: `@cf/google/gemma-4-26b-a4b-it`, dự phòng `@cf/meta/llama-3.1-8b-instruct-fp8`, cuối cùng `@cf/meta/m2m100-1.2b`. Gói miễn phí 10.000 neuron/ngày (khoảng hơn 1.000 lượt dịch tin ngắn).
 - Chưa gắn binding `AI` thì nút Dịch dùng trình dịch có sẵn của Chrome (nếu có), nếu không thì mở Google Dịch ở thẻ mới.
 
+## Công cụ AI (cần binding `AI`)
+
+- **Tóm tắt cho KTV** (trang quản trị, trong từng ca): AI đọc phiếu chỉ định và tin nhắn rồi tóm tắt bằng tiếng Việt thành 3 phần: Tóm tắt, Yêu cầu thiết kế, Cần hỏi lại. Tự tạo lần đầu mở ca, lưu trong ca (`job.ai`, khách không thấy), bấm Làm mới khi có tin mới.
+- **Gợi ý trả lời** (quản trị): gõ vài ý tiếng Việt (hoặc để trống) rồi bấm, AI soạn câu trả lời tiếng Anh kèm bản tiếng Việt; bạn sửa rồi mới gửi.
+- **Luôn dịch**: công tắc trên khung chat (lưu theo trình duyệt) để tự dịch tin của bên kia.
+- **Điền phiếu tự động từ Rx** (cổng khách hàng): khách dán chữ hoặc chụp ảnh phiếu, AI điền các ô và tô sáng để khách kiểm tra. Bỏ qua thông tin bệnh nhân.
+- **Kiểm tra trước khi gửi** (cổng khách hàng): báo thiếu thông tin theo loại ca (hệ implant, scan body, DICOM, file khớp cắn…), file hỏng, và tên bệnh nhân lỡ ghi (AI).
+- Chưa bật binding `AI` thì các nút AI tự ẩn, phần kiểm tra trước khi gửi vẫn chạy (trừ bước tìm tên bệnh nhân).
+
+## Kiểm tra file trong trình duyệt
+
+Khi chọn file, trang đọc nhanh file ngay trên máy (không tải lên): STL nhị phân/ASCII, số tam giác, kích thước (mm), cảnh báo đơn vị nghi sai (quá nhỏ hoặc quá lớn), file hỏng hoặc rỗng; PLY và ZIP kiểm tra phần đầu file. Với file giao cho khách (trang quản trị) còn kiểm tra lưới có kín không.
+
 ## Liên hệ WhatsApp
 
 Số WhatsApp của Danny Do (`D8.WA` trong `shell.js`): +84 70 323 3263, link `https://wa.me/84703233263` kèm lời chào theo ngôn ngữ trang. Có ở thanh trên cùng, nút nổi trên trang chủ, mục Liên hệ, chân trang, trang đăng nhập và tin nhắn trong ca.
