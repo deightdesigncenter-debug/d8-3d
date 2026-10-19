@@ -15,6 +15,39 @@
     del(k) { try { localStorage.removeItem(k); } catch {} },
   };
 
+  /* ------------------------------------------------------------ theme */
+  // The page's inline head script already set html[data-theme] before first paint.
+  const THEME_KEY = "d8-theme";
+  const darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  D8.themePref = () => { const t = store.get(THEME_KEY); return t === "dark" || t === "light" ? t : "auto"; };
+  D8.theme = () => { const p = D8.themePref(); return p === "auto" ? (darkMq && darkMq.matches ? "dark" : "light") : p; };
+  function applyTheme(animate) {
+    const root = document.documentElement, t = D8.theme();
+    if (animate) { root.classList.add("theme-anim"); clearTimeout(applyTheme.tm); applyTheme.tm = setTimeout(() => root.classList.remove("theme-anim"), 400); }
+    root.setAttribute("data-theme", t);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", t === "dark" ? "#0F2A52" : "#05316E");
+    document.querySelectorAll(".sh-theme").forEach(paintThemeBtn);
+  }
+  D8.setTheme = (t) => {
+    if (t === "dark" || t === "light") store.set(THEME_KEY, t); else store.del(THEME_KEY);
+    applyTheme(true);
+    document.dispatchEvent(new CustomEvent("d8:theme", { detail: D8.theme() }));
+  };
+  D8.toggleTheme = () => D8.setTheme(D8.theme() === "dark" ? "light" : "dark");
+  if (darkMq) {
+    const onSys = () => { if (D8.themePref() === "auto") { applyTheme(true); document.dispatchEvent(new CustomEvent("d8:theme", { detail: D8.theme() })); } };
+    if (darkMq.addEventListener) darkMq.addEventListener("change", onSys); else if (darkMq.addListener) darkMq.addListener(onSys);
+  }
+  window.addEventListener("storage", (e) => { if (e.key === THEME_KEY) applyTheme(true); });
+  function paintThemeBtn(b) {
+    const dark = D8.theme() === "dark";
+    const label = D8.t(dark ? "sh.theme.toLight" : "sh.theme.toDark");
+    b.innerHTML = (dark ? ICON.sun : ICON.moon) + "<span>" + esc(D8.t(dark ? "sh.theme.light" : "sh.theme.dark")) + "</span>";
+    b.setAttribute("aria-label", label); b.title = label;
+  }
+  applyTheme(false);
+
   /* ------------------------------------------------------------ language */
   D8.lang = isAdminPage ? "vi" : (store.get(LANG_KEY) === "vi" ? "vi" : "en");
   const dict = {}; // key -> [en, vi]
@@ -79,6 +112,12 @@
     "sh.privacy": ["Privacy policy", "Chính sách bảo mật"],
     "sh.terms": ["Terms of service", "Điều khoản dịch vụ"],
     "sh.menu": ["Menu", "Menu"],
+    "sh.loading": ["Loading", "Đang tải"],
+    "sh.done": ["Done", "Xong"],
+    "sh.theme.dark": ["Dark", "Tối"],
+    "sh.theme.light": ["Light", "Sáng"],
+    "sh.theme.toDark": ["Switch to dark mode", "Chuyển sang giao diện tối"],
+    "sh.theme.toLight": ["Switch to light mode", "Chuyển sang giao diện sáng"],
     "sh.promo": ["Free trial: your first 2 cases, up to US$50 in total", "Dùng thử: 2 ca đầu miễn phí, tổng đến 50 USD"],
     "sh.promo.s": ["2 free trial cases", "2 ca dùng thử miễn phí"],
     "sh.wa": ["WhatsApp · Danny Do", "WhatsApp · Danny Do"],
@@ -556,6 +595,54 @@
   }
   D8.toast = alertBox;
 
+  /* ------------------------------------------------------------ motion helpers */
+  // Busy: spinner replaces the label (CSS keeps the width). Done: a tick draws in, then the label returns.
+  D8.busy = (btn, on) => {
+    if (!btn) return;
+    if (on) { btn.setAttribute("aria-busy", "true"); btn.disabled = true; }
+    else { btn.removeAttribute("aria-busy"); btn.disabled = false; }
+  };
+  const TICK = '<svg class="tick" width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 9.5l3.6 3.6L14.5 5"/></svg>';
+  D8.done = (btn, label, ms) => {
+    if (!btn || !btn.isConnected) return;
+    D8.busy(btn, false);
+    if (btn.dataset.idle == null) btn.dataset.idle = btn.innerHTML;
+    clearTimeout(btn._doneT);
+    btn.classList.add("is-done");
+    btn.innerHTML = TICK + "<span>" + esc(label || D8.t("sh.done")) + "</span>";
+    btn._doneT = setTimeout(() => {
+      btn.classList.remove("is-done");
+      if (btn.dataset.idle != null) { btn.innerHTML = btn.dataset.idle; delete btn.dataset.idle; }
+    }, ms || 1600);
+  };
+  // Restart the short fade/slide-in on content the router just swapped in.
+  D8.animIn = (el) => { if (!el) return; el.classList.remove("view-in"); void el.offsetWidth; el.classList.add("view-in"); };
+  // Skeleton placeholders so a loading screen is never blank.
+  const line = (w, h) => `<span class="sk sk-line w${w}${h ? " h" + h : ""}"></span>`;
+  D8.skel = {
+    rows(n) {
+      let out = "";
+      for (let i = 0; i < (n || 3); i++) out += `<div class="sk-row"><div>${line(20)}${line(i % 2 ? 40 : 60, 18)}${line(30)}</div><span class="sk sk-pill"></span></div>`;
+      return `<div class="sk-list" role="status" aria-label="${esc(D8.t("sh.loading"))}">${out}</div>`;
+    },
+    card(lines) {
+      let out = line(30, 18);
+      for (let i = 0; i < (lines || 3); i++) out += line([100, 80, 60][i % 3]);
+      return `<div class="sk-card">${out}</div>`;
+    },
+    page() {
+      return `<div role="status" aria-label="${esc(D8.t("sh.loading"))}"><span class="sk sk-steps"></span><div class="sk-grid"><div>${D8.skel.card(3)}${D8.skel.card(4)}</div><div>${D8.skel.card(5)}</div></div></div>`;
+    },
+    form() {
+      return `<div class="sk-grid" role="status" aria-label="${esc(D8.t("sh.loading"))}"><div class="sk-card">${line(30, 18)}${line(20)}${line(100, 28)}${line(20)}${line(100, 28)}${line(40, 28)}</div><div>${D8.skel.card(4)}</div></div>`;
+    },
+    tableRows(cols, n) {
+      let out = "";
+      for (let i = 0; i < (n || 4); i++) out += "<tr>" + Array.from({ length: cols }, (_, c) => `<td>${line(c ? 60 : 80)}</td>`).join("") + "</tr>";
+      return out;
+    },
+  };
+
   let gisReady = null;
   async function initGis() {
     if (gisReady) return gisReady;
@@ -608,6 +695,8 @@
     globe: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="9" cy="9" r="7"/><path d="M2 9h14M9 2c2 2 3 4.3 3 7s-1 5-3 7c-2-2-3-4.3-3-7s1-5 3-7Z"/></svg>',
     mail: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2.5 5l6.5 5 6.5-5"/></svg>',
     chat: D8.ICON_CHAT,
+    moon: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 11.3A6.6 6.6 0 0 1 6.7 2.8a6.6 6.6 0 1 0 8.5 8.5Z"/></svg>',
+    sun: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M9 1.5v1.8M9 14.7v1.8M1.5 9h1.8M14.7 9h1.8M3.7 3.7l1.3 1.3M13 13l1.3 1.3M3.7 14.3 5 13M13 5l1.3-1.3"/></svg>',
     gift: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="7" width="13" height="8.5" rx="1"/><path d="M1.5 4.5h15V7h-15zM9 4.5v11M9 4.5C8 2 5.5 1.8 5.3 3.3 5.1 4.6 7.4 4.5 9 4.5Zm0 0c1-2.5 3.5-2.7 3.7-1.2.2 1.3-2.1 1.2-3.7 1.2Z"/></svg>',
   };
 
@@ -675,6 +764,7 @@
           ${isAdminPage ? "" : `<a href="${esc(D8.waLink())}" target="_blank" rel="noopener" class="sh-wa">${ICON.chat}<span>${L("sh.wa")}</span></a>`}
           <a href="mailto:d.eightdesigncenter@gmail.com">${ICON.mail}<span>d.eightdesigncenter@gmail.com</span></a>
           ${langSwitch()}
+          <button type="button" class="sh-theme"></button>
         </div>
       </div></div>
       <div class="sh-bar"><div class="wrap sh-bar-in">
@@ -712,7 +802,7 @@
             <a href="${home}#faq">${L("sh.faq")}</a>
             <a href="${home}#contact">${L("sh.contact")}</a>
           </nav>
-          <div class="sh-drawer-foot">${langSwitch()}${signedIn ? `<button type="button" class="btn small sh-out">${L("sh.signout")}</button>` : `<a class="btn btn-primary small" href="/portal">${L("sh.signin")}</a>`}</div>
+          <div class="sh-drawer-foot">${langSwitch()}<button type="button" class="sh-theme"></button>${signedIn ? `<button type="button" class="btn small sh-out">${L("sh.signout")}</button>` : `<a class="btn btn-primary small" href="/portal">${L("sh.signin")}</a>`}</div>
         </div>
       </div>`;
     wireHeader(host);
@@ -739,6 +829,7 @@
 
   function wireHeader(host) {
     host.querySelectorAll(".sh-lang button").forEach((b) => b.addEventListener("click", () => D8.setLang(b.dataset.lang)));
+    host.querySelectorAll(".sh-theme").forEach((b) => { paintThemeBtn(b); b.addEventListener("click", D8.toggleTheme); });
     host.querySelectorAll(".sh-out").forEach((b) => b.addEventListener("click", D8.signOut));
     host.querySelectorAll(".sh-keyout").forEach((b) => b.addEventListener("click", () => {
       try { localStorage.removeItem("d8-upload-key"); sessionStorage.removeItem("d8-upload-key"); } catch {}
@@ -756,14 +847,29 @@
     }
     const burger = host.querySelector(".sh-burger"), drawer = host.querySelector(".sh-drawer");
     if (burger && drawer) {
-      burger.addEventListener("click", () => {
-        const open = drawer.hidden;
-        drawer.hidden = !open;
+      // Slide/fade the menu in and out; a scrim behind it closes it on tap.
+      let scrim = document.querySelector(".sh-scrim");
+      if (!scrim) { scrim = document.createElement("div"); scrim.className = "sh-scrim"; document.body.appendChild(scrim); }
+      scrim.hidden = true; scrim.classList.remove("open"); // header re-rendered: start closed
+      let closeT = null;
+      const setOpen = (open) => {
+        clearTimeout(closeT);
         burger.setAttribute("aria-expanded", String(open));
         burger.innerHTML = open ? ICON.close : ICON.menu;
-        host.classList.toggle("sh-open", open);
-      });
-      drawer.addEventListener("click", (e) => { if (e.target.closest("a")) { drawer.hidden = true; burger.setAttribute("aria-expanded", "false"); burger.innerHTML = ICON.menu; host.classList.remove("sh-open"); } });
+        if (open) {
+          drawer.hidden = false; scrim.hidden = false;
+          host.classList.add("sh-open");
+          void drawer.offsetWidth;
+          drawer.classList.add("open"); scrim.classList.add("open");
+        } else {
+          drawer.classList.remove("open"); scrim.classList.remove("open");
+          closeT = setTimeout(() => { drawer.hidden = true; scrim.hidden = true; host.classList.remove("sh-open"); }, 260);
+        }
+      };
+      burger.addEventListener("click", () => setOpen(!drawer.classList.contains("open")));
+      scrim.onclick = () => setOpen(false);
+      drawer.addEventListener("click", (e) => { if (e.target.closest("a")) setOpen(false); });
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && drawer.classList.contains("open")) { setOpen(false); burger.focus(); } });
     }
   }
 

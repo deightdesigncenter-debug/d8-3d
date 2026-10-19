@@ -199,7 +199,7 @@
 
   function drawCase(j) {
     const seen = adminSeen(); seen[j.id] = j.updated; const ks = Object.keys(seen); if (ks.length > 500) delete seen[ks[0]]; store.set("d8-admin-seen", seen); updateJobCount();
-    setBand(j.title, j.id + " · gửi " + D8.fmtDate(j.created, true), { back: true, right: stChip(j.status) + (j.trial ? ' <span class="badge-trial" style="background:var(--cream);color:var(--navy)">Dùng thử</span>' : "") });
+    setBand(j.title, j.id + " · gửi " + D8.fmtDate(j.created, true), { back: true, right: stChip(j.status) + (j.trial ? ' <span class="badge-trial" style="background:var(--c-cream);color:var(--c-navy)">Dùng thử</span>' : "") });
     const st = j.status, idx = st === "needs_info" ? 0 : STEPS.indexOf(st);
     const steps = STEPS.map((s, i) => {
       const cls = st === "cancelled" ? "" : i < idx || (i === idx && s === "delivered") ? "done" : i === idx ? "cur" : "";

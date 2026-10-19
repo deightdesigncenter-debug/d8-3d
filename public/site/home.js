@@ -122,6 +122,32 @@
   window.addEventListener("scroll", onScroll, { passive: true });
   onScroll();
 
+  /* ---------------- parallax: background layers move slower than the page ---------------- */
+  // Only the hero artwork and the editorial photo move (transform via a CSS variable);
+  // nothing runs while they are off screen, and nothing at all with reduced motion.
+  const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const layers = [document.querySelector(".stage"), document.querySelector(".editorial")].filter(Boolean);
+  if (!still && layers.length && "IntersectionObserver" in window) {
+    const live = new Set();
+    let queued = false;
+    const paint = () => {
+      queued = false;
+      const vh = window.innerHeight;
+      live.forEach((el) => {
+        const r = el.getBoundingClientRect();
+        let y;
+        if (el.classList.contains("stage")) y = Math.max(0, -r.top) * 0.18;
+        else { const max = r.height * 0.11; y = Math.max(-max, Math.min(max, -(r.top + r.height / 2 - vh / 2) * 0.12)); }
+        el.style.setProperty("--py", y.toFixed(1) + "px");
+      });
+    };
+    const queue = () => { if (!queued && live.size) { queued = true; requestAnimationFrame(paint); } };
+    const seen = new IntersectionObserver((entries) => entries.forEach((en) => { if (en.isIntersecting) live.add(en.target); else live.delete(en.target); queue(); }));
+    layers.forEach((el) => seen.observe(el));
+    window.addEventListener("scroll", queue, { passive: true });
+    window.addEventListener("resize", queue);
+  }
+
   /* ---------------- contact form ---------------- */
   const form = $("contactForm");
   if (!form) return;
@@ -147,7 +173,7 @@
     data.elapsed = Date.now() - started;
     data.lang = (window.D8 && D8.lang) || "en";
     const send = $("cSend");
-    send.disabled = true; send.textContent = t("ct.sending", "Sending…");
+    D8.busy(send, true);
     try {
       const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
       let out = {}; try { out = await res.json(); } catch {}
@@ -159,7 +185,7 @@
     } catch (err) {
       showError(err.message === "Failed to fetch" ? t("ct.offline", "Couldn't reach the server. Check your connection, or email us directly.") : err.message);
     } finally {
-      send.disabled = false; send.textContent = t("ct.send", "Send message");
+      D8.busy(send, false);
     }
   });
 })();

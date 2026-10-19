@@ -228,7 +228,7 @@
           j.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span> ` : ""}${j.pay === "due" || j.pay === "paid" ? `<span class="pay pay-${j.pay}">${esc(T("bill." + j.pay))}</span>` : ""}</dd></div>` : "";
 
     page(band(`<div><a class="pt-back" href="#/">${ICON.back}${esc(T("p.back"))}</a>
-        <h1>${esc(j.title)}</h1><p class="muted" style="margin:8px 0 0;color:var(--steel-200)">${esc(j.id)} · ${esc(T("p.c.sent").replace("{d}", D8.fmtDate(j.created)))}</p></div>
+        <h1>${esc(j.title)}</h1><p class="muted" style="margin:8px 0 0;color:var(--on-brand-2)">${esc(j.id)} · ${esc(T("p.c.sent").replace("{d}", D8.fmtDate(j.created)))}</p></div>
         <div>${stChip(st)}</div>`), `
       <ol class="pt-steps" aria-label="Progress">${steps}</ol>
       ${alerts.join("")}

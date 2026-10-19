@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>try{var t=localStorage.getItem("d8-theme");if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <meta name="robots" content="noindex, nofollow">
 <meta name="d8-version" content="2026-10-19.2">
 <title>Chuyển HTML sang STL | D.EIGHT</title>
@@ -24,7 +25,7 @@
   .gate .gbtn { margin: 22px 0 0; min-height: 44px; }
   .gate .row-inline { display: flex; gap: 10px; }
   .gate .row-inline .input { flex: 1; min-width: 0; }
-  .gate .who { margin: 18px 0 0; padding: 14px 16px; border-radius: 12px; background: #FDECEA; color: #7A1E16; line-height: 1.6; }
+  .gate .who { margin: 18px 0 0; padding: 14px 16px; border-radius: 12px; background: var(--err-bg); color: var(--err-fg); line-height: 1.6; }
   .divider { display: flex; align-items: center; gap: 12px; margin: 26px 0 18px; color: var(--muted); font-size: 13px; }
   .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   .privacy { display: flex; gap: 10px; align-items: center; margin: 16px 0 0; color: var(--muted); font-size: 13px; }
@@ -39,7 +40,7 @@
   .filebar .spacer { flex: 1; }
   .work { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; margin-top: 24px; align-items: start; }
   .preview { position: relative; height: 64vh; min-height: 400px; border-radius: var(--radius); overflow: hidden;
-             background: var(--navy); box-shadow: var(--shadow); }
+             background: var(--brand); box-shadow: var(--shadow); }
   .preview iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
   .loader { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
             color: var(--steel); text-align: center; padding: 24px; }
@@ -50,10 +51,10 @@
   .panel { position: sticky; top: 176px; }
   .status { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--steel-100);
             color: var(--navy); font-size: 14px; margin-top: 16px; }
-  .status.err { background: #FBEDEC; color: var(--error); }
-  .status.ok { background: #EAF4EF; color: var(--success); }
+  .status.err { background: var(--err-bg2); color: var(--error); }
+  .status.ok { background: var(--ok-bg2); color: var(--success); }
   .status .spin { flex: 0 0 16px; width: 16px; height: 16px; margin: 2px 0 0; border-radius: 50%;
-          border: 2px solid rgba(5, 49, 110, .2); border-top-color: var(--navy); animation: spin .8s linear infinite; }
+          border: 2px solid rgba(5, 49, 110, .2); border-top-color: var(--navy); animation: spin .8s var(--ease-io) infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .layers { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid var(--line); }
