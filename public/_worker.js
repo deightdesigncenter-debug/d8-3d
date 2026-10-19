@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-19.4"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-19.5"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -40,7 +40,9 @@ const FILE_KEEP_DAYS = 60;                         // uploaded files expire afte
 const THREAD_MAX = 400;
 const TRIAL_CASES = 2;                             // a new customer's first cases are a free trial
 const TRIAL_CREDIT_USD = 50;                       // ...worth up to this much in total
-const PAY_STATES = ["", "trial", "due", "paid"];  // billing status set by D.EIGHT
+// "check": the customer paid (provider said so) or says they paid another way; D.EIGHT confirms it.
+const PAY_STATES = ["", "trial", "due", "check", "paid"];
+const JOB_STAGES = ["", "design", "qc", "fix", "ready", "done"]; // internal design workflow, never shown to customers
 const AI_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/meta/llama-3.1-8b-instruct-fp8"]; // chat translation, tried in order
 
 const PRIVATE_HEADERS = {
@@ -105,14 +107,17 @@ async function handleApi(request, env, url) {
   if (path === "/api/auth/logout" && method === "POST") return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(url) });
 
   const session = await readSession(request, env);
-  if (path === "/api/me" && method === "GET") return json({ user: session ? publicUser(session) : null });
+  const staff = session ? await staffFor(env, session.email) : null;
+  if (path === "/api/me" && method === "GET") return json({ user: session ? publicUser(session, staff) : null });
 
   // A request authenticated only by the session cookie must carry X-D8 (blocks form-based CSRF).
   const keyOk = await isAuthorized(request, env);
   if (!keyOk && session && method !== "GET" && request.headers.get("X-D8") !== "1") {
     return json({ error: "Missing request header." }, 403);
   }
-  const isAdmin = keyOk || !!(session && session.role === "admin");
+  // The admin password (X-Upload-Key) acts as an owner with every permission.
+  const isStaff = keyOk || !!staff;
+  const can = (p) => keyOk || !!(staff && staff.perms.has(p));
 
   /* ---- signed-in customers (and admin) ---- */
   if (path === "/api/ai/rx" && method === "POST") {
@@ -167,29 +172,34 @@ async function handleApi(request, env, url) {
 
   if (path.startsWith("/api/my/") || path.startsWith("/api/jobs/")) {
     if (!session && !keyOk) return json({ error: "Please sign in." }, 401);
-    const who = session ? { email: session.email, name: session.name, admin: isAdmin, viaKey: keyOk } : { email: "", name: "D.EIGHT", admin: true, viaKey: true };
+    const who = staffWho(session, staff, keyOk, can);
     return handleJobs(request, env, url, who);
   }
 
-  /* ---- admin ---- */
-  if (!isAdmin) {
+  /* ---- workspace (staff) ---- */
+  if (!isStaff) {
     if (!session) await sleep(400); // slow down password guessing
-    return json({ error: session ? "Tài khoản này không có quyền quản trị." : "Sai mật khẩu." }, session ? 403 : 401);
+    return json({ error: session ? "Tài khoản này chưa được cấp quyền vào khu làm việc." : "Sai mật khẩu." }, session ? 403 : 401);
   }
+  const who = staffWho(session, staff, keyOk, can);
+  const deny = () => json({ error: "Bạn không có quyền dùng mục này." }, 403);
 
-  if (path === "/api/ping" && method === "GET") return json({ ok: true }); // password check only, no KV use
-  if (path === "/api/list" && method === "GET") return listCases(env);
-  if (path === "/api/upload" && method === "POST") return uploadCase(request, env, url);
+  if (path === "/api/ping" && method === "GET") return json({ ok: true, perms: keyOk ? PERM_KEYS : [...staff.perms] }); // no KV use for the password
+  if (path === "/api/staff" || path.startsWith("/api/staff/") || path === "/api/roles") return handleStaff(request, env, url, who);
+  if (path.startsWith("/api/prices/")) return handlePrices(request, env, url, who);
+
+  if (path === "/api/list" && method === "GET") return can("links.manage") || can("cases.deliver") ? listCases(env) : deny();
+  if (path === "/api/upload" && method === "POST") return can("links.manage") || can("cases.deliver") ? uploadCase(request, env, url) : deny();
 
   const del = path.match(/^\/api\/cases\/([^/]+)$/);
-  if (del && method === "DELETE") return deleteCase(env, del[1]);
+  if (del && method === "DELETE") return can("links.manage") ? deleteCase(env, del[1]) : deny();
 
-  if (path === "/api/messages" && method === "GET") return listMessages(env);
+  if (path === "/api/messages" && method === "GET") return can("messages.view") ? listMessages(env) : deny();
   const delMsg = path.match(/^\/api\/messages\/([^/]+)$/);
-  if (delMsg && method === "DELETE") return deleteMessage(env, delMsg[1]);
+  if (delMsg && method === "DELETE") return can("messages.view") ? deleteMessage(env, delMsg[1]) : deny();
 
-  if (path === "/api/admin/jobs" && method === "GET") return listJobs(env, null);
-  if (path === "/api/admin/users" && method === "GET") return listUsers(env);
+  if (path === "/api/admin/jobs" && method === "GET") return listJobs(env, null, who);
+  if (path === "/api/admin/users" && method === "GET") return can("customers.view") ? listUsers(env) : deny();
 
   return json({ error: "Không tìm thấy." }, 404);
 }
@@ -355,8 +365,14 @@ async function sessionKey(env) {
   return SESSION_KEY.key;
 }
 
-function roleFor(env, email) { return conf(env).admins.includes(String(email).toLowerCase()) ? "admin" : "client"; }
-function publicUser(s) { return { email: s.email, name: s.name, picture: s.picture, role: s.role }; }
+function publicUser(s, staff) {
+  return { email: s.email, name: s.name, picture: s.picture, role: staff ? staff.role : "client", staff: !!staff,
+    roleLabel: staff ? staff.label : "", perms: staff ? [...staff.perms] : [] };
+}
+function staffWho(session, staff, keyOk, can) {
+  return session ? { email: session.email, name: session.name, staff: keyOk || !!staff, viaKey: keyOk, can }
+    : { email: "", name: "D.EIGHT", staff: true, viaKey: true, can };
+}
 
 async function makeSessionCookie(env, url, user) {
   const payload = { e: user.email, n: user.name || "", p: user.picture || "", x: Date.now() + SESSION_DAYS * DAY_MS };
@@ -379,7 +395,7 @@ async function readSession(request, env) {
     if (!ok) return null;
     const p = b64urlJson(m[1]);
     if (!p.e || !(p.x > Date.now())) return null;
-    return { email: p.e, name: p.n, picture: p.p, role: roleFor(env, p.e) };
+    return { email: String(p.e).toLowerCase(), name: p.n, picture: p.p };
   } catch { return null; }
 }
 
@@ -400,7 +416,7 @@ async function googleSignIn(request, env, url) {
     await env.CASES.put(key, JSON.stringify(user), { metadata: userMeta(user) });
   }
   const cookie = await makeSessionCookie(env, url, user);
-  return json({ user: { email, name: user.name, picture: user.picture, role: roleFor(env, email) } }, 200, { "Set-Cookie": cookie });
+  return json({ user: publicUser({ email, name: user.name, picture: user.picture }, await staffFor(env, email)) }, 200, { "Set-Cookie": cookie });
 }
 
 function userMeta(u) {
@@ -494,18 +510,36 @@ async function startPayment(env, job, via, origin, amount) {
   if (!r.ok || !r.data.id || !r.data.url) throw payError("Card payment could not start. Please try again.");
   return { id: r.data.id, url: r.data.url };
 }
-function markPaid(job, t, via, ref, amount) {
+// Payment reported (by PayPal / Stripe, or by the customer for a transfer): waits for D.EIGHT to confirm.
+function paySent(job, t, via, ref, amount, note) {
   const now = Date.now();
   if (t) t.state = "paid";
-  job.pay = "paid";
-  job.paid = { via, ref: String(ref || "").slice(0, 80), amount: Math.round(amount * 100) / 100, at: now };
+  job.pay = "check";
+  job.paid = { via, ref: String(ref || "").slice(0, 80), amount: Math.round(amount * 100) / 100, at: now, confirmed: false };
+  if (note) job.paid.note = clip(note, 300);
   job.updated = now;
-  job.thread.push({ by: "system", name: "", text: "pay:paid:" + via, at: now });
+  job.thread.push({ by: "system", name: "", text: "pay:sent:" + via, at: now });
+}
+// D.EIGHT has the money: confirm a reported payment, or record one received another way.
+function payConfirm(job, by, amount) {
+  const now = Date.now();
+  if (!job.paid) job.paid = { via: "manual", ref: "", amount: Math.round(amount * 100) / 100, at: now };
+  Object.assign(job.paid, { confirmed: true, confirmedAt: now, confirmedBy: String(by || "").slice(0, 160) });
+  job.pay = "paid"; job.updated = now;
+  job.thread.push({ by: "system", name: "", text: "pay:paid:" + job.paid.via, at: now });
+}
+// The money did not arrive: back to "due" (the attempt that reported it is not trusted again).
+function payReject(job) {
+  const now = Date.now();
+  (job.payTries || []).forEach((t) => { if (t.state === "paid") t.state = "dead"; });
+  delete job.paid;
+  job.pay = "due"; job.updated = now;
+  job.thread.push({ by: "system", name: "", text: "pay:rejected", at: now });
 }
 // Ask the providers about every recent attempt. Mutates the job; returns true if anything changed.
 async function syncPayment(env, job) {
   const tries = job.payTries || [];
-  if (job.pay === "paid" || !tries.some((t) => t.state === "open" || t.state === "held")) return false;
+  if (job.pay !== "due" || !tries.some((t) => t.state === "open" || t.state === "held")) return false;
   const cfg = payConf(env);
   let changed = false, token = null;
   for (const t of tries) {
@@ -527,7 +561,7 @@ async function syncPayment(env, job) {
         const cap = ((pu.payments || {}).captures || [])[0];
         const mine = cap && (pu.custom_id === job.id || pu.reference_id === job.id || cap.custom_id === job.id);
         if (!mine || !cap.amount || cap.amount.currency_code !== "USD" || Math.abs(Number(cap.amount.value) - t.amount) > 0.005) continue;
-        if (cap.status === "COMPLETED") { markPaid(job, t, "paypal", cap.id, Number(cap.amount.value)); return true; }
+        if (cap.status === "COMPLETED") { paySent(job, t, "paypal", cap.id, Number(cap.amount.value)); return true; }
         if (cap.status === "PENDING" && t.state !== "held") { t.state = "held"; changed = true; }
       } else if (t.via === "stripe" && cfg.stripe) {
         const s = await stripeCall(cfg.stripe, "GET", "/v1/checkout/sessions/" + encodeURIComponent(t.id));
@@ -535,13 +569,210 @@ async function syncPayment(env, job) {
         const d = s.data;
         if (d.status === "expired") { t.state = "dead"; changed = true; continue; }
         if (d.payment_status === "paid" && d.client_reference_id === job.id && d.currency === "usd" && d.amount_total === Math.round(t.amount * 100)) {
-          markPaid(job, t, "stripe", typeof d.payment_intent === "string" ? d.payment_intent : (d.payment_intent && d.payment_intent.id) || d.id, d.amount_total / 100);
+          paySent(job, t, "stripe", typeof d.payment_intent === "string" ? d.payment_intent : (d.payment_intent && d.payment_intent.id) || d.id, d.amount_total / 100);
           return true;
         }
       }
     } catch { /* provider unreachable: checked again next time the case is opened */ }
   }
   return changed;
+}
+
+/* ------------------------------------------- Staff, roles and permissions */
+// Everyone who signs in with Google is a customer unless D.EIGHT adds them as staff.
+// Emails in ADMIN_EMAILS are owners: always admin with every permission (cannot be locked out).
+// Roles (admin, designer, qc and any custom role) are permission sets kept in "cfg:roles";
+// a staff member can also have their own permission list that replaces the role's.
+const PERMS = [
+  ["cases.all", "Xem tất cả ca (không chỉ ca được giao)", "Ca hàng"],
+  ["cases.assign", "Giao ca cho KTV / QC", "Ca hàng"],
+  ["cases.status", "Đổi trạng thái ca", "Ca hàng"],
+  ["cases.customer", "Xem email và liên hệ của khách", "Ca hàng"],
+  ["cases.files", "Tải file của khách", "Ca hàng"],
+  ["cases.design", "Tải file thiết kế lên và gửi QC", "Thiết kế & QC"],
+  ["cases.qc", "Kiểm tra QC (đạt / không đạt)", "Thiết kế & QC"],
+  ["cases.notes", "Ghi chú nội bộ của đội", "Thiết kế & QC"],
+  ["cases.deliver", "Gửi bản 3D và giao file cho khách", "Thiết kế & QC"],
+  ["cases.delete", "Xóa file trong ca", "Thiết kế & QC"],
+  ["cases.chat_read", "Đọc tin nhắn với khách", "Tin nhắn"],
+  ["cases.chat", "Nhắn tin cho khách", "Tin nhắn"],
+  ["ai.use", "Công cụ AI (tóm tắt, gợi ý trả lời)", "Tin nhắn"],
+  ["billing.view", "Xem giá và thanh toán", "Tiền"],
+  ["billing.edit", "Báo giá, xác nhận thanh toán", "Tiền"],
+  ["pricing.manage", "Bảng giá theo khách", "Tiền"],
+  ["customers.view", "Danh sách và hồ sơ khách hàng", "Quản lý"],
+  ["messages.view", "Tin nhắn từ form liên hệ", "Quản lý"],
+  ["links.manage", "Link xem 3D và công cụ HTML sang STL", "Quản lý"],
+  ["export.csv", "Xuất CSV", "Quản lý"],
+  ["staff.manage", "Nhân sự và phân quyền", "Quản lý"],
+];
+const PERM_KEYS = PERMS.map((p) => p[0]);
+const DEFAULT_ROLES = {
+  admin: { label: "Quản trị", perms: PERM_KEYS },
+  designer: { label: "Kỹ thuật viên thiết kế", perms: ["cases.files", "cases.design", "cases.notes", "cases.chat_read", "ai.use", "links.manage"] },
+  qc: { label: "QC – kiểm tra chất lượng", perms: ["cases.files", "cases.qc", "cases.notes", "cases.chat_read", "ai.use", "links.manage"] },
+};
+const ROLE_KEY_RE = /^[a-z][a-z0-9_]{1,23}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const staffCache = new Map(); // per isolate, a few seconds: role changes apply almost at once
+const cacheGet = (k) => { const c = staffCache.get(k); return c && Date.now() - c.at < 15000 ? c : null; };
+async function loadRoles(env) {
+  const c = cacheGet("@roles");
+  if (c) return c.v;
+  const saved = (await env.CASES.get("cfg:roles", "json")) || {};
+  const roles = {};
+  for (const [k, r] of Object.entries({ ...DEFAULT_ROLES, ...saved })) {
+    if (!ROLE_KEY_RE.test(k) || !r) continue;
+    roles[k] = { label: clip(r.label, 60) || k, perms: (Array.isArray(r.perms) ? r.perms : []).filter((p) => PERM_KEYS.includes(p)) };
+  }
+  roles.admin = { label: (saved.admin && clip(saved.admin.label, 60)) || DEFAULT_ROLES.admin.label, perms: PERM_KEYS };
+  staffCache.set("@roles", { at: Date.now(), v: roles });
+  return roles;
+}
+async function staffFor(env, email) {
+  email = String(email || "").toLowerCase();
+  if (!email) return null;
+  const roles = await loadRoles(env);
+  if (conf(env).admins.includes(email)) return { email, role: "admin", label: roles.admin.label, perms: new Set(PERM_KEYS), owner: true };
+  const rec = (await loadStaffMap(env))[email];
+  if (!rec || rec.active === false || !roles[rec.role]) return null;
+  const perms = Array.isArray(rec.perms) ? rec.perms.filter((p) => PERM_KEYS.includes(p)) : roles[rec.role].perms;
+  return { email, role: rec.role, label: roles[rec.role].label, perms: new Set(perms), custom: Array.isArray(rec.perms) };
+}
+// Who may see a case in the workspace (the customer who owns it is handled separately).
+function staffSees(who, j) {
+  if (!who || !who.staff) return false;
+  if (who.viaKey || who.can("cases.all") || who.can("cases.assign")) return true;
+  if (j.designer && j.designer === who.email) return true;
+  if (j.qcBy && j.qcBy === who.email) return true;
+  return who.can("cases.qc") && j.stage === "qc" && !j.qcBy;
+}
+
+async function handleStaff(request, env, url, who) {
+  const path = url.pathname, method = request.method;
+  // names and roles of the team, for assignment lists (any staff member)
+  if (path === "/api/staff/team" && method === "GET") {
+    const roles = await loadRoles(env);
+    const team = [];
+    for (const email of conf(env).admins) team.push({ email, name: "", role: "admin", label: roles.admin.label, owner: true, design: true, qc: true });
+    for (const r of await listStaffRecords(env)) {
+      if (r.active === false || !roles[r.role] || team.some((t) => t.email === r.email)) continue;
+      const perms = Array.isArray(r.perms) ? r.perms : roles[r.role].perms;
+      team.push({ email: r.email, name: r.name || "", role: r.role, label: roles[r.role].label, design: perms.includes("cases.design"), qc: perms.includes("cases.qc") });
+    }
+    await fillNames(env, team);
+    return json({ team });
+  }
+  if (!who.can("staff.manage")) return json({ error: "Bạn không có quyền quản lý nhân sự." }, 403);
+
+  if (path === "/api/staff" && method === "GET") {
+    const roles = await loadRoles(env);
+    const staff = (await listStaffRecords(env)).filter((r) => !conf(env).admins.includes(r.email));
+    const owners = conf(env).admins.map((email) => ({ email, name: "", role: "admin", owner: true, active: true }));
+    const all = [...owners, ...staff];
+    await fillNames(env, all);
+    return json({ staff: all, roles, perms: PERMS.map(([key, label, group]) => ({ key, label, group })) });
+  }
+  if (path === "/api/staff" && method === "POST") {
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const email = String(b.email || "").trim().toLowerCase();
+    if (!EMAIL_RE.test(email) || email.length > 160) return json({ error: "Email không hợp lệ." }, 400);
+    if (conf(env).admins.includes(email)) return json({ error: "Tài khoản chủ (ADMIN_EMAILS) luôn là Quản trị, không sửa được." }, 400);
+    const roles = await loadRoles(env);
+    if (!roles[b.role]) return json({ error: "Vai trò không tồn tại." }, 400);
+    const perms = Array.isArray(b.perms) ? [...new Set(b.perms.filter((p) => PERM_KEYS.includes(p)))] : null;
+    if (email === who.email && !(perms || roles[b.role].perms).includes("staff.manage")) return json({ error: "Bạn không thể tự bỏ quyền quản lý nhân sự của chính mình." }, 400);
+    if (email === who.email && b.active === false) return json({ error: "Bạn không thể tự khóa tài khoản của mình." }, 400);
+    const map = await loadStaffMap(env, true);
+    const prev = map[email];
+    const rec = { email, role: b.role, perms, name: clip(b.name, 80) || (prev && prev.name) || "", active: b.active !== false,
+      added: (prev && prev.added) || Date.now(), by: (prev && prev.by) || who.email || "password", updated: Date.now() };
+    map[email] = rec;
+    await saveStaffMap(env, map);
+    return json({ staff: rec });
+  }
+  let m = path.match(/^\/api\/staff\/(.+)$/);
+  if (m && method === "DELETE") {
+    const email = decodeURIComponent(m[1]).toLowerCase();
+    if (conf(env).admins.includes(email)) return json({ error: "Không xóa được tài khoản chủ." }, 400);
+    if (email === who.email) return json({ error: "Bạn không thể tự xóa mình." }, 400);
+    const map = await loadStaffMap(env, true);
+    delete map[email];
+    await saveStaffMap(env, map);
+    return json({ ok: true });
+  }
+  if (path === "/api/roles" && method === "POST") {
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const input = b && typeof b.roles === "object" ? b.roles : null;
+    if (!input) return json({ error: "Bad request." }, 400);
+    const out = {};
+    for (const [k, r] of Object.entries(input)) {
+      if (!ROLE_KEY_RE.test(k) || !r) return json({ error: "Mã vai trò không hợp lệ: " + k }, 400);
+      out[k] = { label: clip(r.label, 60) || k, perms: k === "admin" ? PERM_KEYS : [...new Set((Array.isArray(r.perms) ? r.perms : []).filter((p) => PERM_KEYS.includes(p)))] };
+    }
+    if (!out.admin) out.admin = { label: DEFAULT_ROLES.admin.label, perms: PERM_KEYS };
+    const used = new Set((await listStaffRecords(env)).map((r) => r.role));
+    for (const k of Object.keys(await loadRoles(env))) {
+      if (!out[k] && used.has(k)) return json({ error: "Vai trò \"" + k + "\" đang có người dùng, chuyển họ sang vai trò khác trước khi xóa." }, 400);
+    }
+    // the person saving must keep staff.manage through their role
+    const me = await staffFor(env, who.email);
+    if (me && !me.owner && !me.custom && out[me.role] && !out[me.role].perms.includes("staff.manage")) return json({ error: "Bạn không thể bỏ quyền quản lý nhân sự khỏi vai trò của chính mình." }, 400);
+    await env.CASES.put("cfg:roles", JSON.stringify(out));
+    staffCache.delete("@roles");
+    return json({ roles: await loadRoles(env) });
+  }
+  return json({ error: "Không tìm thấy." }, 404);
+}
+// All staff records live in one KV value ("cfg:staff", email -> record): one read, no KV "list" requests.
+async function loadStaffMap(env, fresh) {
+  const c = !fresh && cacheGet("@staff");
+  if (c) return c.v;
+  const v = (await env.CASES.get("cfg:staff", "json")) || {};
+  staffCache.set("@staff", { at: Date.now(), v });
+  return v;
+}
+async function saveStaffMap(env, map) {
+  await env.CASES.put("cfg:staff", JSON.stringify(map));
+  staffCache.set("@staff", { at: Date.now(), v: map });
+}
+async function listStaffRecords(env) {
+  return Object.values(await loadStaffMap(env)).filter((r) => r && r.email);
+}
+async function fillNames(env, list) {
+  await Promise.all(list.map(async (t) => {
+    const u = await env.CASES.get("user:" + t.email, "json");
+    if (u) { t.name = t.name || u.name || ""; t.last = u.last || 0; t.picture = u.picture || ""; }
+  }));
+}
+
+/* ---------------------------------------------------- Price lists (staff) */
+// One list per customer ("price:<email>") and a default list ("price:default").
+// Units: unit (per tooth / implant / unit), arch, case. Never shown to customers.
+const PRICE_UNITS = ["unit", "arch", "case"];
+async function handlePrices(request, env, url, who) {
+  const m = url.pathname.match(/^\/api\/prices\/(.+)$/);
+  const key = m ? decodeURIComponent(m[1]).toLowerCase() : "";
+  if (!(key === "default" || EMAIL_RE.test(key))) return json({ error: "Không tìm thấy." }, 404);
+  if (request.method === "GET") {
+    if (!(who.can("pricing.manage") || who.can("billing.edit"))) return json({ error: "Không có quyền xem bảng giá." }, 403);
+    const own = await env.CASES.get("price:" + key, "json");
+    const def = key === "default" ? null : await env.CASES.get("price:default", "json");
+    return json({ list: own || { items: [], note: "" }, fallback: def || { items: [], note: "" }, custom: !!own });
+  }
+  if (request.method === "POST") {
+    if (!who.can("pricing.manage")) return json({ error: "Không có quyền sửa bảng giá." }, 403);
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    if (b.reset && key !== "default") { await env.CASES.delete("price:" + key); return json({ list: { items: [], note: "" }, custom: false }); }
+    const items = (Array.isArray(b.items) ? b.items : []).slice(0, 60).map((x) => ({
+      service: clip(x.service, 60), name: clip(x.name, 80), unit: PRICE_UNITS.includes(x.unit) ? x.unit : "unit",
+      price: Math.round(Math.max(0, Math.min(100000, Number(x.price) || 0)) * 100) / 100,
+    })).filter((x) => x.service || x.name);
+    const list = { items, note: clip(b.note, 600), updated: Date.now(), by: who.email || "password" };
+    await env.CASES.put("price:" + key, JSON.stringify(list));
+    return json({ list, custom: key !== "default" });
+  }
+  return json({ error: "Method not allowed." }, 405);
 }
 
 /* --------------------------------------------------------- Customer jobs */
@@ -663,7 +894,8 @@ function jobMeta(job) {
   return { o: job.owner.slice(0, 120), t: job.title.slice(0, 60), s: job.status, c: job.created, u: job.updated, lb: job.lastBy || "client",
     sz: Math.round((job.files || []).reduce((t, f) => t + (f.stored || 0), 0) / 1048576),
     sv: String(job.service || "").slice(0, 40), on: String(job.ownerName || "").slice(0, 40), tr: job.trial ? 1 : 0,
-    p: typeof job.price === "number" ? job.price : null, py: job.pay || "" };
+    p: typeof job.price === "number" ? job.price : null, py: job.pay || "",
+    d: String(job.designer || "").slice(0, 120), q: String(job.qcBy || "").slice(0, 120), g: job.stage || "" };
 }
 async function saveJob(env, job) {
   await env.CASES.put("job:" + job.id, JSON.stringify(job), { metadata: jobMeta(job) });
@@ -702,8 +934,8 @@ async function listOwnJobs(env, email) {
   return json({ items });
 }
 
-async function listJobs(env, owner) {
-  const items = [];
+async function listJobs(env, owner, who) {
+  let items = [];
   let cursor;
   do {
     const page = await env.CASES.list({ prefix: "job:", cursor });
@@ -711,27 +943,50 @@ async function listJobs(env, owner) {
       const m = k.metadata || {};
       if (owner && m.o !== owner) continue;
       items.push({ id: k.name.slice(4), owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
-      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "" });
+      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "",
+      designer: m.d || "", qcBy: m.q || "", stage: m.g || "" });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
+  if (who) {
+    // each staff member sees the cases their permissions allow, without fields they may not see
+    items = items.filter((j) => staffSees(who, j)).map((j) => {
+      if (!who.can("cases.customer")) j.owner = "";
+      if (!who.can("billing.view")) { j.price = null; j.pay = ""; }
+      return j;
+    });
+  }
   items.sort((a, b) => b.updated - a.updated);
   return json({ items });
 }
 
 // The case as sent to the browser. Internal AI notes (job.ai), the price and payment
 // attempts go only to D.EIGHT; the customer sees just the amount once it is due.
-async function jobView(env, job, forAdmin = false) {
+// who = the staff member looking (null for the customer who owns the case).
+async function jobView(env, job, who = null) {
   const previews = [];
   for (const pid of job.previews || []) {
     const m = await env.CASES.get("meta:" + pid, "json");
     if (m && m.e > Date.now()) previews.push({ id: pid, label: m.l || "", expires: m.e, url: "/v/" + pid });
   }
-  const { ai, payTries, price, due, ...rest } = job;
-  if (forAdmin) return { ...rest, price: typeof price === "number" ? price : null, due: typeof due === "number" ? due : null, payTries: payTries || [], ai: ai || null, previews };
-  const amount = job.pay === "paid" && job.paid ? job.paid.amount : job.pay === "due" ? amountDue(job) || null : null;
+  const { ai, payTries, price, due, team, designer, qcBy, stage, qc, ...rest } = job;
+  const num = (v) => (typeof v === "number" ? v : null);
+  if (who) {
+    const v = { ...rest, designer: designer || "", qcBy: qcBy || "", stage: stage || "", qc: qc || null, previews,
+      team: who.can("cases.notes") ? team || [] : [] };
+    if (who.can("billing.view")) Object.assign(v, { price: num(price), due: num(due), payTries: payTries || [] });
+    else { delete v.pay; delete v.paid; }
+    if (who.can("ai.use")) v.ai = ai || null;
+    if (!who.can("cases.customer")) v.owner = "";
+    if (!who.can("cases.chat_read")) v.thread = (v.thread || []).filter((m) => m.by === "system");
+    return v;
+  }
+  // the customer: no internal files, notes, workflow, price or payment attempts
+  rest.files = (rest.files || []).filter((f) => f.kind !== "design").map(({ by, ...f }) => f);
+  const amount = (job.pay === "paid" || job.pay === "check") && job.paid ? job.paid.amount : job.pay === "due" ? amountDue(job) || null : null;
   const payOpen = job.pay === "due" && (payTries || []).some((t) => t.state === "open" || t.state === "held");
   const held = payOpen && (payTries || []).some((t) => t.state === "held");
+  if (rest.paid) rest.paid = { via: rest.paid.via, amount: rest.paid.amount, at: rest.paid.at, confirmed: !!rest.paid.confirmed };
   return { ...rest, amount, payOpen, payHeld: held, previews };
 }
 
@@ -782,18 +1037,27 @@ async function handleJobs(request, env, url, who) {
   m = path.match(/^\/api\/jobs\/([^/]+)(\/.*)?$/);
   if (!m) return json({ error: "Not found." }, 404);
   const job = await loadJob(env, m[1]);
-  if (!job || !(who.admin || (who.email && job.owner === who.email))) return json({ error: "Case not found." }, 404);
-  const sub = m[2] || "";
-  // The owner always acts as the customer; an admin looking at someone else's case acts as D.EIGHT.
+  // The owner always acts as the customer; staff act as D.EIGHT on the cases their permissions show them.
   // Requests from the admin tools (password header) always act as D.EIGHT.
-  const by = !who.viaKey && who.email && job.owner === who.email ? "client" : "admin";
+  const isOwner = !!(job && !who.viaKey && who.email && job.owner === who.email);
+  if (!job || !(isOwner || staffSees(who, job))) return json({ error: "Case not found." }, 404);
+  const sub = m[2] || "";
+  const by = isOwner ? "client" : "admin";
+  const viewer = isOwner ? null : who;
+  const need = (p) => !isOwner && who.can(p);
+  const nope = () => json({ error: "Bạn không có quyền làm việc này." }, 403);
+  const actor = who.email || "D.EIGHT";
+  const teamNote = (text, kind) => {
+    job.team = [...(job.team || []), { by: actor, name: clip(who.name, 80) || actor, text: clip(text, 2000), at: Date.now(), kind: kind || "" }].slice(-300);
+  };
 
-  if (sub === "" && method === "GET") return json({ job: await jobView(env, job, by === "admin") });
+  if (sub === "" && method === "GET") return json({ job: await jobView(env, job, viewer) });
 
   if (sub === "/messages" && method === "POST") {
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     const text = clip(b.text, 4000);
     if (!text) return json({ error: "Empty message." }, 400);
+    if (!isOwner && !who.can("cases.chat")) return nope();
     const msg = { by, name: by === "admin" ? "D.EIGHT" : clip(who.name, 100), text, at: Date.now() };
     const original = clip(b.original, 4000);
     if (original && original !== text && (b.originalLang === "vi" || b.originalLang === "en")) {
@@ -804,12 +1068,12 @@ async function handleJobs(request, env, url, who) {
     if (job.thread.length > THREAD_MAX) job.thread = job.thread.slice(-THREAD_MAX);
     job.updated = Date.now(); job.lastBy = by;
     await saveJob(env, job);
-    return json({ job: await jobView(env, job, by === "admin") });
+    return json({ job: await jobView(env, job, viewer) });
   }
 
   // AI: Vietnamese work summary for the designer (kept on the case until regenerated)
   if (sub === "/summary" && method === "POST") {
-    if (!who.admin) return json({ error: "Not allowed." }, 403);
+    if (!need("ai.use")) return nope();
     const system = "Bạn là trưởng nhóm thiết kế CAD nha khoa của D.EIGHT. Đọc thông tin ca và tin nhắn (thường bằng tiếng Anh) rồi viết bản tóm tắt bằng tiếng Việt cho kỹ thuật viên. " +
       "Trình bày đúng 3 phần, mỗi ý một dòng bắt đầu bằng \"- \":\nTÓM TẮT: loại ca, răng, vật liệu, hạn giao.\nYÊU CẦU THIẾT KẾ: mọi yêu cầu cụ thể của bác sĩ (thông số, hệ implant, kênh vít, tiếp xúc, khớp cắn, thẩm mỹ), kể cả yêu cầu chỉnh sửa trong tin nhắn; ghi rõ yêu cầu mới nhất nếu có thay đổi.\n" +
       "CẦN HỎI LẠI: thông tin còn thiếu hoặc mâu thuẫn (ghi \"- Không có\" nếu đủ).\nGiữ nguyên số răng, số đo, tên hãng. Không bịa thông tin không có trong ca. Viết ngắn gọn.";
@@ -823,7 +1087,7 @@ async function handleJobs(request, env, url, who) {
 
   // AI: draft a reply to the customer in English with a Vietnamese copy (nothing is sent)
   if (sub === "/suggest" && method === "POST") {
-    if (!who.admin) return json({ error: "Not allowed." }, 403);
+    if (!need("ai.use")) return nope();
     let b; try { b = await request.json(); } catch { b = {}; }
     const hint = clip(b.hint, 600);
     const system = "You write replies from D.EIGHT, a remote dental CAD design team, to a dental lab or clinic about one case. Read the case and the conversation, " +
@@ -840,6 +1104,7 @@ async function handleJobs(request, env, url, who) {
 
   // translate one message for the person viewing it; the result is kept on the message for everyone
   if (sub === "/translate" && method === "POST") {
+    if (!isOwner && !who.can("cases.chat_read")) return nope();
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     const to = b.to === "vi" ? "vi" : "en";
     const msg = (job.thread || []).find((x) => x.at === b.at && x.by !== "system");
@@ -853,21 +1118,23 @@ async function handleJobs(request, env, url, who) {
   }
 
   if (sub === "/billing" && method === "POST") {
-    if (!who.admin) return json({ error: "Not allowed." }, 403);
+    if (!need("billing.edit")) return nope();
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     const price = b.price === null || b.price === "" || b.price === undefined ? null : Math.round(Number(b.price) * 100) / 100;
     if (price !== null && !(price >= 0 && price <= 100000)) return json({ error: "Giá không hợp lệ." }, 400);
-    if (!PAY_STATES.includes(b.pay)) return json({ error: "Trạng thái thanh toán không hợp lệ." }, 400);
+    if (!PAY_STATES.includes(b.pay) || (b.pay === "check" && job.pay !== "check")) return json({ error: "Trạng thái thanh toán không hợp lệ." }, 400);
     const due = b.due === null || b.due === "" || b.due === undefined ? null : Math.round(Number(b.due) * 100) / 100;
     if (due !== null && !(due >= 0 && due <= 100000)) return json({ error: "Số tiền cần thu không hợp lệ." }, 400);
     job.price = price; job.due = due; job.trial = !!b.trial;
     if (b.pay === "paid" && job.pay !== "paid") {
-      // marked paid by hand (bank transfer, Payoneer...): unless a provider confirms it first
-      if (!(await syncPayment(env, job)) || job.pay !== "paid") markPaid(job, null, "manual", "", amountDue(job));
-    } else if (b.pay !== "paid") { job.pay = b.pay; delete job.paid; }
+      // D.EIGHT has the money: confirms a reported payment, or records one received another way
+      await syncPayment(env, job);
+      payConfirm(job, actor, amountDue(job));
+    } else if (b.pay === "due" && job.pay === "check") payReject(job);
+    else if (b.pay !== "paid" && b.pay !== "check") { job.pay = b.pay; delete job.paid; }
     job.updated = Date.now(); job.lastBy = "admin";
     await saveJob(env, job);
-    return json({ job: await jobView(env, job, by === "admin") });
+    return json({ job: await jobView(env, job, viewer) });
   }
 
   // customer starts a payment: returns the PayPal / Stripe page to send them to
@@ -877,7 +1144,7 @@ async function handleJobs(request, env, url, who) {
     const via = b.via === "paypal" || b.via === "stripe" ? b.via : "";
     if (!via || !payConf(env)[via]) return json({ error: "This payment method is not available." }, 400);
     if (await syncPayment(env, job)) await saveJob(env, job);   // an earlier attempt may already have gone through
-    if (job.pay === "paid") return json({ paid: true, job: await jobView(env, job) });
+    if (job.pay === "paid" || job.pay === "check") return json({ paid: job.pay === "paid", sent: job.pay === "check", job: await jobView(env, job) });
     const amount = amountDue(job);
     if (job.pay !== "due" || !amount) return json({ error: "There is nothing to pay on this case yet." }, 409);
     const recent = (job.payTries || []).filter((t) => Date.now() - t.at < 10 * 60 * 1000).length;
@@ -892,8 +1159,111 @@ async function handleJobs(request, env, url, who) {
 
   // after the provider's page, or when the case is opened: ask the provider what happened
   if (sub === "/pay/check" && method === "POST") {
+    if (!isOwner && !who.can("billing.view")) return nope();
     if (await syncPayment(env, job)) await saveJob(env, job);
-    return json({ paid: job.pay === "paid", job: await jobView(env, job, by === "admin") });
+    return json({ paid: job.pay === "paid", sent: job.pay === "check", job: await jobView(env, job, viewer) });
+  }
+
+  // customer: "I paid another way" (bank transfer, Payoneer...) with a reference; D.EIGHT confirms it
+  if (sub === "/pay/claim" && method === "POST") {
+    if (!isOwner) return nope();
+    let b; try { b = await request.json(); } catch { b = {}; }
+    const note = clip(b.note, 300);
+    if (job.pay !== "due" || !amountDue(job)) return json({ error: "There is nothing to pay on this case." }, 409);
+    if (note.length < 3) return json({ error: "Please tell us how you paid (for example the transfer reference)." }, 400);
+    paySent(job, null, "claim", "", amountDue(job), note);
+    job.lastBy = "client";
+    await saveJob(env, job);
+    return json({ sent: true, job: await jobView(env, job) });
+  }
+
+  // D.EIGHT: the money arrived (or did not)
+  if (sub === "/pay/confirm" && method === "POST") {
+    if (!need("billing.edit")) return nope();
+    let b; try { b = await request.json(); } catch { b = {}; }
+    if (job.pay !== "check") return json({ error: "Ca này không có thanh toán chờ xác nhận." }, 409);
+    if (b.ok) payConfirm(job, actor, amountDue(job)); else payReject(job);
+    job.lastBy = "admin";
+    await saveJob(env, job);
+    return json({ job: await jobView(env, job, viewer) });
+  }
+
+  // assign a designer and a QC reviewer
+  if (sub === "/assign" && method === "POST") {
+    if (!need("cases.assign")) return nope();
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const pick = async (v) => {
+      const email = String(v || "").trim().toLowerCase();
+      if (!email) return "";
+      return (await staffFor(env, email)) ? email : null;
+    };
+    const d = await pick(b.designer), q = await pick(b.qcBy);
+    if (d === null || q === null) return json({ error: "Người được giao phải là nhân sự đang hoạt động." }, 400);
+    if (d === (job.designer || "") && q === (job.qcBy || "")) return json({ job: await jobView(env, job, viewer) });
+    const now = Date.now();
+    job.designer = d; job.qcBy = q;
+    if (d && !job.stage) job.stage = "design";
+    if (d && job.status === "received") { job.status = "in_design"; job.thread.push({ by: "system", name: "", text: "status:in_design", at: now }); }
+    teamNote("assign:" + (d || "-") + "|" + (q || "-"), "assign");
+    job.updated = now;
+    await saveJob(env, job);
+    return json({ job: await jobView(env, job, viewer) });
+  }
+
+  // internal design workflow: designer sends to QC, QC passes or returns it
+  if (sub === "/stage" && method === "POST") {
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const note = clip(b.note, 2000), mine = (e) => !!e && e === who.email;
+    if (isOwner) return nope();
+    if (b.action === "submit") {
+      if (!who.can("cases.design") || !(mine(job.designer) || who.can("cases.all") || who.viaKey)) return nope();
+      if (!(job.files || []).some((f) => f.kind === "design")) return json({ error: "Tải file thiết kế lên trước khi gửi QC." }, 409);
+      job.stage = "qc"; job.qc = { state: "pending", at: Date.now(), by: "" };
+      teamNote(note || "", "submit");
+    } else if (b.action === "pass" || b.action === "fail") {
+      if (!who.can("cases.qc") || !(mine(job.qcBy) || !job.qcBy || who.can("cases.all") || who.viaKey)) return nope();
+      if (job.stage !== "qc") return json({ error: "Ca này không ở bước chờ QC." }, 409);
+      if (b.action === "fail" && note.length < 3) return json({ error: "Ghi rõ lỗi cần sửa để KTV biết." }, 400);
+      if (!job.qcBy && who.email) job.qcBy = who.email;
+      job.stage = b.action === "pass" ? "ready" : "fix";
+      job.qc = { state: b.action === "pass" ? "passed" : "failed", at: Date.now(), by: actor };
+      teamNote(note, b.action === "pass" ? "qc_pass" : "qc_fail");
+    } else if (b.action === "reopen") {
+      if (!(who.can("cases.assign") || who.can("cases.qc"))) return nope();
+      job.stage = job.designer ? "fix" : ""; job.qc = null;
+      teamNote(note, "reopen");
+    } else return json({ error: "Bad request." }, 400);
+    job.updated = Date.now();
+    await saveJob(env, job);
+    return json({ job: await jobView(env, job, viewer) });
+  }
+
+  // internal team notes (never shown to the customer)
+  if (sub === "/team" && method === "POST") {
+    if (!need("cases.notes")) return nope();
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    if (!clip(b.text, 2000)) return json({ error: "Ghi chú trống." }, 400);
+    teamNote(b.text, "note");
+    job.updated = Date.now();
+    await saveJob(env, job);
+    return json({ job: await jobView(env, job, viewer) });
+  }
+
+  // design files approved by QC become files the customer can download
+  if (sub === "/promote" && method === "POST") {
+    if (!need("cases.deliver")) return nope();
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const fids = new Set(Array.isArray(b.fids) ? b.fids : []);
+    let moved = 0;
+    for (const f of job.files || []) if (f.kind === "design" && fids.has(f.fid)) { f.kind = "output"; moved++; }
+    if (!moved && !b.deliver) return json({ error: "Chọn ít nhất một file thiết kế." }, 400);
+    const now = Date.now();
+    if (b.deliver && job.status !== "delivered") { job.status = "delivered"; job.thread.push({ by: "system", name: "", text: "status:delivered", at: now }); }
+    if (b.deliver) job.stage = "done";
+    teamNote("deliver:" + moved, "deliver");
+    job.updated = now; job.lastBy = "admin";
+    await saveJob(env, job);
+    return json({ job: await jobView(env, job, viewer) });
   }
 
   if (sub === "/approve" && method === "POST") {
@@ -903,11 +1273,11 @@ async function handleJobs(request, env, url, who) {
     job.status = "approved"; job.approvedAt = now; job.updated = now; job.lastBy = "client";
     job.thread.push({ by: "system", name: "", text: "status:approved", at: now });
     await saveJob(env, job);
-    return json({ job: await jobView(env, job, by === "admin") });
+    return json({ job: await jobView(env, job, viewer) });
   }
 
   if (sub === "/status" && method === "POST") {
-    if (!who.admin) return json({ error: "Not allowed." }, 403);
+    if (!need("cases.status")) return nope();
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     if (!JOB_STATUSES.includes(b.status)) return json({ error: "Trạng thái không hợp lệ." }, 400);
     if (b.status !== job.status) {
@@ -917,11 +1287,11 @@ async function handleJobs(request, env, url, who) {
       job.thread.push({ by: "system", name: "", text: "status:" + b.status, at: now });
       await saveJob(env, job);
     }
-    return json({ job: await jobView(env, job, by === "admin") });
+    return json({ job: await jobView(env, job, viewer) });
   }
 
   if (sub === "/previews" && method === "POST") {
-    if (!who.admin) return json({ error: "Not allowed." }, 403);
+    if (!need("cases.deliver")) return nope();
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     if (!ID_RE.test(b.linkId || "")) return json({ error: "Mã link không hợp lệ." }, 400);
     job.previews = (job.previews || []).filter((p) => p !== b.linkId);
@@ -937,7 +1307,7 @@ async function handleJobs(request, env, url, who) {
     }
     job.updated = Date.now();
     await saveJob(env, job);
-    return json({ job: await jobView(env, job, by === "admin") });
+    return json({ job: await jobView(env, job, viewer) });
   }
 
   // file chunk upload: PUT /api/jobs/<id>/files/<fid>/<n>
@@ -949,6 +1319,7 @@ async function handleJobs(request, env, url, who) {
     if (!len) return json({ error: "Empty upload." }, 400);
     if (len > CHUNK_MAX + 1024) return json({ error: "Chunk too large." }, 413);
     if (by === "client" && !["received", "needs_info", "in_design", "review"].includes(job.status)) return json({ error: "This case is closed for new files." }, 409);
+    if (by === "admin" && !(who.can("cases.design") || who.can("cases.deliver"))) return nope();
     const used = (job.files || []).reduce((t, x) => t + (x.stored || 0), 0);
     if (used + len > JOB_FILES_MAX) return json({ error: "This case has reached its storage limit (300 MB)." }, 413);
     const data = await request.arrayBuffer();
@@ -960,6 +1331,10 @@ async function handleJobs(request, env, url, who) {
   if (sub === "/files" && method === "POST") {
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     const list = Array.isArray(b.files) ? b.files.slice(0, 30) : [];
+    // staff upload either internal design files (for QC) or final files for the customer
+    const kind = by === "client" ? "input" : b.kind === "design" ? "design" : "output";
+    if (kind === "design" && !who.can("cases.design")) return nope();
+    if (by === "admin" && (kind === "output" || b.deliver) && !who.can("cases.deliver")) return nope();
     const now = Date.now();
     let added = 0;
     for (const x of list) {
@@ -968,25 +1343,29 @@ async function handleJobs(request, env, url, who) {
       const st = activeStore(env);
       if (!(await partStore(env, st).exists(partKey(job.id, x.fid, parts - 1)))) continue;
       job.files.push({ fid: x.fid, name: clip(x.name, 160) || "file", size: Math.max(0, +x.size || 0), stored: Math.max(0, +x.stored || 0),
-        parts, gz: x.gz ? 1 : 0, st, kind: by === "admin" ? "output" : "input", at: now, exp: now + FILE_KEEP_DAYS * DAY_MS });
+        parts, gz: x.gz ? 1 : 0, st, kind, at: now, exp: now + FILE_KEEP_DAYS * DAY_MS, ...(by === "admin" ? { by: actor } : {}) });
       added++;
     }
     if (added || (by === "admin" && b.deliver)) {
       job.updated = now; job.lastBy = by;
+      if (kind === "design" && added) teamNote("upload:" + added, "upload");
       if (by === "admin" && b.deliver && job.status !== "delivered") {
+        job.stage = job.stage ? "done" : job.stage;
         job.status = "delivered";
         job.thread.push({ by: "system", name: "", text: "status:delivered", at: now });
       }
       await saveJob(env, job);
     }
-    return json({ job: await jobView(env, job, by === "admin"), added });
+    return json({ job: await jobView(env, job, viewer), added });
   }
 
   // download: GET /api/jobs/<id>/files/<fid>
   f = sub.match(/^\/files\/([A-Za-z0-9]{10})$/);
   if (f && method === "GET") {
     const file = (job.files || []).find((x) => x.fid === f[1]);
-    if (!file) return json({ error: "File not found." }, 404);
+    if (!file || (isOwner && file.kind === "design")) return json({ error: "File not found." }, 404);
+    if (!isOwner && file.kind === "input" && !who.can("cases.files")) return nope();
+    const inline = !isOwner && url.searchParams.get("view") === "1" && /\.html?$/i.test(file.name);
     const store = partStore(env, file.st || "kv");
     const first = await store.stream(partKey(job.id, file.fid, 0));
     if (!first) return json({ error: "This file has expired." }, 410);
@@ -1002,7 +1381,12 @@ async function handleJobs(request, env, url, who) {
         await writable.close();
       } catch (e) { try { await writable.abort(e); } catch {} }
     })();
-    const headers = new Headers({
+    const headers = new Headers(inline ? {
+      // exocad scene opened for review: isolated (opaque) origin, like the doctor links
+      "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store",
+      "Content-Security-Policy": "sandbox allow-scripts allow-downloads allow-popups allow-modals; frame-ancestors 'self'",
+      ...LINK_HEADERS,
+    } : {
       "Content-Type": "application/octet-stream",
       "Content-Disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(file.name),
       "Cache-Control": "private, no-store",
@@ -1017,12 +1401,13 @@ async function handleJobs(request, env, url, who) {
     const file = (job.files || []).find((x) => x.fid === f[1]);
     if (!file) return json({ error: "File not found." }, 404);
     if (by === "client" && (file.kind !== "input" || !["received", "needs_info"].includes(job.status))) return json({ error: "Not allowed." }, 403);
+    if (by === "admin" && !(who.can("cases.delete") || (file.kind === "design" && file.by === actor && who.can("cases.design")))) return nope();
     const store = partStore(env, file.st || "kv");
     await Promise.all(Array.from({ length: file.parts }, (_, i) => store.del(partKey(job.id, file.fid, i))));
     job.files = job.files.filter((x) => x.fid !== file.fid);
     job.updated = Date.now();
     await saveJob(env, job);
-    return json({ job: await jobView(env, job, by === "admin") });
+    return json({ job: await jobView(env, job, viewer) });
   }
 
   return json({ error: "Not found." }, 404);

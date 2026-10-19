@@ -11,7 +11,8 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 ## Đăng nhập
 
 - **Khách hàng** đăng nhập bằng Google (Google Identity Services). Máy chủ kiểm tra chữ ký ID token bằng khóa công khai của Google (RS256), rồi đặt cookie phiên `d8s` (ký HMAC, HttpOnly, SameSite=Lax, 30 ngày). Không lưu mật khẩu, chỉ nhận tên, email, ảnh đại diện.
-- **Quản trị**: email trong `ADMIN_EMAILS` (mặc định `d.eightdesigncenter@gmail.com`) đăng nhập Google là vào được `/admin` và `/stl`. Mật khẩu `UPLOAD_PASSWORD` cũ vẫn dùng được (header `X-Upload-Key`, chỉ gửi từ trang quản trị).
+- **Chủ tài khoản**: email trong `ADMIN_EMAILS` (mặc định `d.eightdesigncenter@gmail.com`) luôn là Quản trị, đủ mọi quyền, không bị khóa hay xóa được. Mật khẩu `UPLOAD_PASSWORD` vẫn dùng được như tài khoản chủ (header `X-Upload-Key`, chỉ gửi từ trang quản trị).
+- **Nhân sự** (Quản trị, Kỹ thuật viên thiết kế, QC, và vai trò tự tạo): chủ thêm email Google ở **Workspace → Nhân sự & phân quyền**; người đó đăng nhập Google là vào được khu làm việc với đúng quyền của mình. Ai không có trong danh sách là khách hàng.
 - Chống giả mạo yêu cầu: yêu cầu ghi từ trang khác bị chặn (kiểm tra `Origin`), yêu cầu dùng cookie phải có header `X-D8: 1`.
 - Client ID Google (công khai) nằm trong `_worker.js` (`GOOGLE_CLIENT_ID`), có thể ghi đè bằng biến môi trường cùng tên. Không cần client secret.
 
@@ -25,12 +26,18 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - **Dùng thử miễn phí:** 2 ca đầu của mỗi khách tự được đánh dấu `trial` (tổng giá trị đến 50 USD; hằng số `TRIAL_CASES`, `TRIAL_CREDIT_USD` trong `_worker.js`).
 - Danh sách ca của khách đọc từ chỉ mục `own:<email>` (không tốn lượt "list" của KV).
 
-## Quản trị (`/admin`)
+## Workspace – khu làm việc (`/admin`)
 
-- **Ca hàng**: lọc theo trạng thái, tìm theo mã/tên/email, dấu "Khách vừa nhắn". Trong từng ca: đổi trạng thái, tải file của khách, tạo link 3D từ HTML exocad và gắn vào ca (tự chuyển sang Chờ duyệt), tải file STL hoàn chỉnh lên để giao (tự chuyển Đã giao), nhắn tin với mẫu soạn sẵn.
+Trang riêng cho đội D.EIGHT (thanh bên trái, không có menu trang web), liên kết qua lại với trang web và cổng khách hàng bằng nút chuyển ở đầu trang. Mỗi người chỉ thấy mục và nút mình có quyền; máy chủ kiểm tra lại mọi quyền.
+
+- **Tổng quan**: việc của mình (ca được giao thiết kế, chờ QC, đã qua QC chờ gửi khách, ca chưa giao KTV, khách vừa nhắn, thanh toán chờ xác nhận, tin nhắn web).
+- **Phân quyền**: 21 quyền chia nhóm (ca hàng, thiết kế & QC, tin nhắn, tiền, quản lý). Vai trò mặc định: *Quản trị* (tất cả), *Kỹ thuật viên thiết kế* (tải file khách, tải file thiết kế, gửi QC, ghi chú nội bộ, đọc tin nhắn, AI, link 3D), *QC* (như KTV nhưng duyệt QC thay vì thiết kế). Tạo thêm vai trò (ví dụ Trưởng nhóm), tick quyền theo bảng, hoặc đặt quyền riêng cho từng người. Người không có quyền "Xem tất cả ca" chỉ thấy ca được giao cho mình; không có quyền "Xem email khách" thì không thấy email; không có quyền tiền thì không thấy giá.
+- **Quy trình một ca**: giao KTV + QC → KTV tải file thiết kế (nội bộ, khách không thấy; file HTML exocad bấm **Xem 3D**) → **Gửi QC** → QC **Đạt** hoặc **Không đạt** (bắt buộc ghi lỗi, ca quay lại KTV) → người có quyền giao: **Gửi khách xem 3D** (tạo link từ file HTML) hoặc **Giao file đã chọn cho khách**. Mọi bước ghi vào **Ghi chú nội bộ** (khách không thấy).
+- **Ca hàng**: lọc theo trạng thái và người làm (của tôi, chưa giao KTV, chờ QC, đã qua QC, thanh toán chờ xác nhận), tìm theo mã/tên/khách. Trong từng ca: đổi trạng thái, tải file của khách, tạo link 3D, giao file STL, nhắn tin với mẫu soạn sẵn.
+- **Bảng giá**: bảng giá mặc định và bảng giá riêng từng khách (dịch vụ, hạng mục, tính theo răng / hàm / ca). Khi báo giá một ca, hệ thống gợi ý số tiền theo số răng trong phiếu. Khách không bao giờ thấy bảng giá.
 - **Link xem 3D**: tạo link gửi bác sĩ như trước (QR, tin nhắn tiếng Anh kèm bản tiếng Việt).
 - **Tin nhắn**: tin từ form Liên hệ trên trang web, tự xóa sau 180 ngày.
-- **Khách hàng**: các tài khoản đã đăng nhập, lab, quốc gia, số điện thoại, số ca.
+- **Khách hàng**: các tài khoản đã đăng nhập; bấm vào khách để xem hồ sơ, các ca, dùng thử và bảng giá riêng.
 - **Báo giá & thanh toán** trong từng ca: giá ca (USD), số tiền khách cần trả (để trống = bằng giá ca, dùng khi chỉ thu phần vượt dùng thử), trạng thái Chưa báo giá / Miễn phí (dùng thử) / Chờ thanh toán / Đã thanh toán; hiện số tiền dùng thử đã dùng / 50 USD của khách. **Giá chỉ admin thấy**: khách chỉ thấy số tiền khi ca ở trạng thái Chờ thanh toán (hoặc số đã trả).
 - **Xuất CSV** (mở bằng Excel): ca hàng, khách hàng, tin nhắn.
 
@@ -79,7 +86,8 @@ Tách các lớp lưới 3D trong file HTML của exocad thành file STL, xử l
 ## Thanh toán PayPal / Stripe
 
 - Khi admin chọn **Chờ thanh toán**, ca của khách hiện khung "Payment due" với nút **Pay with PayPal** và/hoặc **Pay by card** (Stripe Checkout). Nút nào hiện tùy khóa API đã gắn; chưa gắn khóa nào thì khung chỉ báo số tiền và link WhatsApp.
-- Luồng: máy chủ tạo đơn PayPal (Orders v2) hoặc phiên Stripe Checkout với số tiền tính ở máy chủ → khách trả trên trang PayPal/Stripe → quay về `/portal?pay=...&case=...` → máy chủ hỏi thẳng PayPal/Stripe (capture đơn PayPal, đọc phiên Stripe), kiểm tra mã ca, số tiền, USD rồi mới đánh dấu **Đã thanh toán** và ghi vào chat. Khách đóng tab giữa chừng thì lần sau mở ca (khách hoặc admin) hệ thống tự kiểm tra lại; admin có nút **Kiểm tra thanh toán**.
+- Luồng: máy chủ tạo đơn PayPal (Orders v2) hoặc phiên Stripe Checkout với số tiền tính ở máy chủ → khách trả trên trang PayPal/Stripe → quay về `/portal?pay=...&case=...` → máy chủ hỏi thẳng PayPal/Stripe (capture đơn PayPal, đọc phiên Stripe), kiểm tra mã ca, số tiền, USD → ca chuyển sang **Khách báo đã trả, chờ xác nhận**. Khách đóng tab giữa chừng thì lần sau mở ca (khách hoặc admin) hệ thống tự kiểm tra lại; admin có nút **Kiểm tra thanh toán**.
+- **Admin xác nhận mọi khoản** (giảm rủi ro): khi tiền đã về tài khoản PayPal/Stripe/ngân hàng, người có quyền "Báo giá, xác nhận thanh toán" bấm **Đã nhận tiền** → ca **Đã thanh toán**; bấm **Chưa nhận được** → ca quay về Chờ thanh toán. Khách cũng có thể báo "đã trả bằng chuyển khoản / Payoneer" kèm mã giao dịch; khoản này cũng chờ admin xác nhận.
 - Lưu trên ca: `payTries` (tối đa 5 lần thử gần nhất, chỉ admin thấy) và `paid` (cách trả, mã giao dịch, số tiền, thời gian). Không bao giờ lưu thông tin thẻ.
 - Admin vẫn có thể chọn Đã thanh toán bằng tay (chuyển khoản, Payoneer…), ghi là "Chuyển khoản / thủ công".
 - **Biến bí mật (Cloudflare → Settings → Variables and secrets, loại Secret):**
@@ -120,6 +128,14 @@ node server.mjs ../public 8788 mat-khau-thu
 # R2=1 node server.mjs ...   giả lập R2;  NO_AI=1 ... tắt Workers AI giả lập;  /__test/ops đếm lượt dùng KV
 # PAY=1 node server.mjs ...  giả lập PayPal + Stripe (trang thanh toán giả tự quay về cổng khách hàng)
 ```
+
+**Kiểm tra trước mỗi lần đưa lên web** (bắt buộc, xem `CLAUDE.md`):
+
+```bash
+dev/tests/run.sh /tmp/d8-shots    # API + trình duyệt (máy tính, điện thoại, sáng/tối), tốc độ, không có lỗi trang
+```
+
+Gồm: phân quyền và quy trình KTV → QC → giao khách (`rbac.test.mjs`), thanh toán (`pay.test.mjs`), Workspace (`workspace_ui.py`), cổng khách hàng (`portal_ui.py`), trang web và giao diện chung (`site_ui.py`), tốc độ và độ ổn định bố cục trên điện thoại chậm (`perf.py`). Chạy hai lần: có và không có PayPal/Stripe/AI.
 
 ## Giới hạn gói miễn phí (Cloudflare KV)
 

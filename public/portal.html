@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>try{var t=localStorage.getItem("d8-theme");if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<script>try{var h=JSON.parse(localStorage.getItem("d8-hint")||"null");if(h&&h.email)document.documentElement.classList.add("sub-pre")}catch(e){}</script>
 <meta name="robots" content="noindex, nofollow">
 <title>Customer portal | D.EIGHT DESIGN CENTER</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -14,8 +15,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-19.4">
-<link rel="stylesheet" href="/case.css?v=2026-10-19.4">
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.5">
+<link rel="stylesheet" href="/case.css?v=2026-10-19.5">
 <style>
   body { background: var(--paper); }
 </style>
@@ -160,6 +161,13 @@ window.D8_DICT = {
   "pay.wait": ["We haven't received the payment yet. If you just paid, this page will update shortly.", "Chưa nhận được thanh toán. Nếu bạn vừa trả, trang sẽ tự cập nhật sau ít phút."],
   "pay.held": ["PayPal is reviewing this payment. We'll mark the case paid as soon as it clears.", "PayPal đang xét duyệt khoản thanh toán này. Ca sẽ được đánh dấu đã trả ngay khi hoàn tất."],
   "pay.paidline": ["{amt} via {via} on {d}", "{amt} qua {via} ngày {d}"],
+  "pay.sent": ["Payment sent. We'll confirm it as soon as it arrives.", "Đã gửi thanh toán. Chúng tôi sẽ xác nhận ngay khi nhận được."],
+  "pay.check.h": ["Payment being confirmed", "Đang xác nhận thanh toán"],
+  "pay.check.p": ["Thank you. We'll confirm your payment as soon as it reaches us; this page will then show the case as paid.", "Cảm ơn bạn. Chúng tôi sẽ xác nhận ngay khi nhận được tiền; sau đó trang này sẽ hiện ca đã thanh toán."],
+  "pay.other": ["Paid by bank transfer or Payoneer?", "Đã trả bằng chuyển khoản hoặc Payoneer?"],
+  "pay.other.l": ["How did you pay? (transfer reference, date)", "Bạn trả bằng cách nào? (mã giao dịch, ngày)"],
+  "pay.other.ph": ["e.g. Wise transfer 18 Oct, ref 12345", "VD: chuyển khoản ngày 18/10, mã 12345"],
+  "pay.other.b": ["Tell D.EIGHT", "Báo cho D.EIGHT"],
   "p.ms.sent": ["Sent", "Đã gửi"],
   "p.pf.note": ["Your name and photo come from Google. Change them in your Google account.", "Họ tên và ảnh lấy từ Google. Muốn đổi, hãy đổi trong tài khoản Google."],
   "p.pf.out": ["Sign out", "Đăng xuất"],
@@ -192,8 +200,8 @@ window.D8_DICT = {
   "chk.patient": ["This may contain a patient name or detail: “{found}”. Please remove it.", "Có thể chứa tên hoặc thông tin bệnh nhân: “{found}”. Vui lòng xóa đi."]
 };
 </script>
-<script src="/shell.js?v=2026-10-19.4" defer></script>
-<script src="/portal.js?v=2026-10-19.4" defer></script>
+<script src="/shell.js?v=2026-10-19.5" defer></script>
+<script src="/portal.js?v=2026-10-19.5" defer></script>
 </head>
 <body data-page="portal" data-title-key="title">
 <div id="d8-header"></div>

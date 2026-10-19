@@ -1,4 +1,6 @@
-/* D.EIGHT admin: cases from the customer portal, 3D preview links, contact messages, customers. */
+/* D.EIGHT workspace: dashboard, cases (design → QC → customer), customers and price lists,
+   staff and permissions, 3D preview links, contact messages. What each person sees follows their permissions;
+   the server checks every permission again. */
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -22,9 +24,16 @@
   };
   const stChip = (s) => `<span class="st st-${esc(s)}">${esc(D8.statusLabel(s))}</span>`;
   const money = (n) => "US$" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
-  const PAY_LABEL = { "": "Chưa báo giá", trial: "Miễn phí (dùng thử)", due: "Chờ thanh toán", paid: "Đã thanh toán" };
-  const payChip = (x) => (typeof x.price === "number" || x.pay === "due" || x.pay === "paid")
-    ? `<span class="pay ${x.pay === "due" || x.pay === "paid" ? "pay-" + x.pay : ""}">${typeof x.price === "number" ? esc(money(x.price)) + " · " : ""}${esc(PAY_LABEL[x.pay || ""])}</span>` : "";
+  const PAY_LABEL = { "": "Chưa báo giá", trial: "Miễn phí (dùng thử)", due: "Chờ thanh toán", check: "Khách báo đã trả, chờ xác nhận", paid: "Đã thanh toán" };
+  const payChip = (x) => (typeof x.price === "number" || ["due", "check", "paid"].includes(x.pay))
+    ? `<span class="pay ${["due", "check", "paid"].includes(x.pay) ? "pay-" + x.pay : ""}">${typeof x.price === "number" ? esc(money(x.price)) + " · " : ""}${esc(x.pay === "check" ? "Chờ xác nhận" : PAY_LABEL[x.pay || ""])}</span>` : "";
+  const can = (p) => D8.can(p);
+  const STAGE = { "": "Chưa giao KTV", design: "Đang thiết kế", qc: "Chờ QC", fix: "QC yêu cầu sửa", ready: "Đã qua QC", done: "Đã giao" };
+  const stageChip = (s) => `<span class="stage stage-${esc(s || "none")}">${esc(STAGE[s || ""] || s)}</span>`;
+  let team = [];              // staff, for names and assignment lists
+  const teamName = (email) => { if (!email) return ""; const t = team.find((x) => x.email === email); return (t && (t.name || t.email.split("@")[0])) || email.split("@")[0]; };
+  async function loadTeam() { try { team = (await api("/api/staff/team")).team || []; } catch { team = []; } }
+  const myEmail = () => (D8.user && D8.user.email) || "";
   const TRIAL_CREDIT = 50;
   // free-trial credit used by a customer: sum of the prices of their trial cases
   const trialUse = (owner) => {
@@ -53,22 +62,26 @@
   const payChecked = new Set(); // cases whose open payments were checked with PayPal/Stripe in this visit
   let payCfg = {};
   D8.config().then((c) => { payCfg = (c && c.pay) || {}; });
-  const VIA = { paypal: "PayPal", stripe: "Thẻ (Stripe)", manual: "Chuyển khoản / thủ công" };
+  const VIA = { paypal: "PayPal", stripe: "Thẻ (Stripe)", manual: "Chuyển khoản / thủ công", claim: "khách tự chuyển (chuyển khoản / Payoneer…)" };
+  let jobWho = "";
   const TRY_STATE = { open: "đang chờ khách trả", held: "PayPal đang giữ tiền để xét duyệt", paid: "đã trả", dead: "đã hủy / hết hạn" };
 
   /* ------------------------------------------------------------ band + panels */
   const BANDS = {
     jobs: ["Ca hàng", "Ca khách gửi qua cổng khách hàng"],
+    denied: ["Không có quyền", "Nhờ quản trị cấp thêm quyền"],
     links: ["Link xem 3D", "Gửi bác sĩ xem thiết kế ngay trên trình duyệt"],
     messages: ["Tin nhắn", "Từ mục Liên hệ trên trang web"],
     customers: ["Khách hàng", "Tài khoản đăng nhập bằng Google"],
-    gate: ["Quản trị", "Ca hàng, link xem 3D, tin nhắn và khách hàng"],
+    gate: ["Workspace", "Khu làm việc của đội D.EIGHT"],
   };
   function setBand(title, sub, opts = {}) {
     $("bandTitle").textContent = title;
     $("bandSub").textContent = sub || "";
     $("bandSub").hidden = !sub;
     $("bandBack").hidden = !opts.back;
+    $("bandBack").href = opts.backHref || "#jobs";
+    $("bandBack").lastChild.textContent = opts.backText || "Ca hàng";
     $("bandEyebrow").hidden = !!opts.back;
     $("bandRight").innerHTML = opts.right || "";
   }
@@ -76,14 +89,14 @@
   function show(id, isLoading) {
     $("booting").hidden = true;
     document.querySelectorAll(".panel").forEach((p) => { p.hidden = p.id !== id; });
-    const key = location.hash || "#jobs";
+    const key = location.hash || "#home";
     if (!isLoading && key !== animKey) { animKey = key; D8.animIn($(id)); }
   }
 
   /* ------------------------------------------------------------ sign in */
   async function boot() {
     const u = await D8.ready;
-    if (u && u.role === "admin") return enter("google");
+    if (u && u.staff) return enter("google");
     if (D8.adminKey()) {
       try { await api("/api/ping"); return enter("key"); }
       catch (err) { if (err.status === 401) clearKey(); }
@@ -94,14 +107,14 @@
     mode = null;
     setBand(...BANDS.gate);
     show("gate");
-    $("gateWho").innerHTML = u ? `<p class="who">Bạn đang đăng nhập bằng <b>${esc(u.email)}</b>. Tài khoản này không có quyền quản trị.
+    $("gateWho").innerHTML = u ? `<p class="who">Bạn đang đăng nhập bằng <b>${esc(u.email)}</b>. Tài khoản này chưa được cấp quyền vào khu làm việc. Nhờ quản trị thêm email này ở mục Nhân sự &amp; phân quyền.
       <button class="btn small" type="button" id="gateOut" style="margin-top:10px">Đăng xuất tài khoản này</button></p>` : "";
     if (u) $("gateOut").onclick = D8.signOut;
     D8.renderGoogleButton($("gbtn"), null, { width: 320 });
   }
   document.addEventListener("d8:user", (e) => {
     if (mode || !e.detail) return;
-    if (e.detail.role === "admin") enter("google"); else showGate(e.detail);
+    if (e.detail.staff) enter("google"); else showGate(e.detail);
   });
   $("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -114,38 +127,50 @@
     $("loginBtn").disabled = false;
   });
 
-  function enter(m) {
+  async function enter(m) {
     mode = m;
     document.body.dataset.authed = "1";
+    document.body.dataset.authMode = m;
     D8.renderHeader();
+    ["jobCsv", "custCsv", "msgCsv"].forEach((id) => { $(id).hidden = !can("export.csv"); });
+    await loadTeam();
     route();
     // Each listing is a KV "list" request (1,000 a day on the free plan), so load once and refresh sparingly.
-    const h = location.hash.replace(/^#/, "") || "jobs";
-    if (h !== "jobs") loadJobs(true);
-    if (h !== "messages") refreshMessages(true);
-    setInterval(() => { if (!document.hidden && !busy && !$("p-jobs").hidden) loadJobs(true); }, 300000);
+    const h = location.hash.replace(/^#/, "") || "home";
+    if (h !== "jobs" && h !== "home") loadJobs(true);
+    if (h !== "messages" && can("messages.view")) refreshMessages(true);
+    setInterval(() => { if (!document.hidden && !busy && (!$("p-jobs").hidden || !$("p-home").hidden)) loadJobs(true); }, 300000);
   }
 
   /* ------------------------------------------------------------ router */
   function route() {
     if (!mode) return;
-    const h = location.hash.replace(/^#/, "") || "jobs";
+    const h = location.hash.replace(/^#/, "") || "home";
     window.scrollTo(0, 0);
     let m;
+    const denied = () => { setBand(...BANDS.denied); show("p-denied"); };
     if ((m = h.match(/^jobs\/(.+)$/)) && ID_RE.test(m[1])) return openCase(m[1]);
     current = null;
-    if (h === "links") { setBand(...BANDS.links); show("p-links"); return refreshList(); }
-    if (h === "messages") { setBand(...BANDS.messages); show("p-messages"); return refreshMessages(); }
-    if (h === "customers") { setBand(...BANDS.customers); show("p-customers"); return loadCustomers(); }
-    setBand(...BANDS.jobs);
-    show("p-jobs");
-    drawJobs();
+    if ((m = h.match(/^customers\/(.+)$/))) { let e = ""; try { e = decodeURIComponent(m[1]); } catch {} return can("customers.view") && e ? openCustomer(e) : denied(); }
+    if (h === "links") { if (!can("links.manage")) return denied(); setBand(...BANDS.links); show("p-links"); return refreshList(); }
+    if (h === "messages") { if (!can("messages.view")) return denied(); setBand(...BANDS.messages); show("p-messages"); return refreshMessages(); }
+    if (h === "customers") { if (!can("customers.view")) return denied(); setBand(...BANDS.customers); show("p-customers"); return loadCustomers(); }
+    if (h === "staff") { if (!can("staff.manage")) return denied(); show("p-staff"); return drawStaff(); }
+    if (h === "prices") { if (!can("pricing.manage")) return denied(); show("p-prices"); return drawPrices(); }
+    if (h === "jobs") {
+      setBand(...BANDS.jobs);
+      show("p-jobs");
+      drawJobs();
+      return loadJobs(false, 30000);
+    }
+    show("p-home");
+    drawHome();
     loadJobs(false, 30000);
   }
   window.addEventListener("hashchange", route);
 
   function setNavCount(href, n) {
-    const a = document.querySelector(`.sh-sub a[href="${href}"]`);
+    const a = document.querySelector(`#wsNav a[href="${href}"], .sh-sub a[href="${href}"]`);
     if (!a) return;
     let b = a.querySelector(".count");
     if (!n) { if (b) b.remove(); return; }
@@ -162,12 +187,17 @@
       jobsAt = Date.now();
       $("jobErr").hidden = true;
       if (!$("p-jobs").hidden) drawJobs();
+      if (!$("p-home").hidden) drawHome();
       updateJobCount();
-    } catch (err) { if (!quiet) { $("jobErr").textContent = err.message; $("jobErr").hidden = false; if (!jobsAt) { jobsAt = -1; drawJobs(); } } }
+    } catch (err) { if (!quiet) { $("jobErr").textContent = err.message; $("jobErr").hidden = false; if (!jobsAt) { jobsAt = -1; drawJobs(); if (!$("p-home").hidden) drawHome(); } } }
   }
   const adminSeen = () => store.get("d8-admin-seen", {});
   const needsReply = (x, seen) => x.lastBy === "client" && OPEN.includes(x.status) && (seen[x.id] || 0) < x.updated;
-  function updateJobCount() { const seen = adminSeen(); setNavCount("/admin#jobs", jobs.filter((x) => needsReply(x, seen)).length); }
+  function updateJobCount() {
+    const seen = adminSeen(), me = myEmail();
+    // the badge counts what needs this person: customer replies (if they read chat), their design work, QC queue
+    setNavCount("/admin#jobs", jobs.filter((x) => (can("cases.chat_read") && needsReply(x, seen)) || (me && x.designer === me && x.stage === "fix") || (can("cases.qc") && x.stage === "qc" && (!x.qcBy || x.qcBy === me))).length);
+  }
 
   function drawJobs() {
     const seen = adminSeen();
@@ -176,19 +206,21 @@
     $("jobFilters").innerHTML = filters.map(([f, l]) => `<button type="button" data-f="${f}" aria-pressed="${jobFilter === f}">${esc(l)}<b>${count(f)}</b></button>`).join("");
     $("jobFilters").querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { jobFilter = b.dataset.f; drawJobs(); }));
     if (!jobsAt && !jobs.length) { $("jobList").innerHTML = D8.skel.rows(4); return; }
-    const q = jobQuery.toLowerCase();
-    const shown = jobs.filter((x) => (jobFilter === "all" || (jobFilter === "open" ? OPEN.includes(x.status) : x.status === jobFilter)) &&
-      (!q || (x.id + " " + x.title + " " + x.owner).toLowerCase().includes(q)));
+    const q = jobQuery.toLowerCase(), me = myEmail();
+    const whoOk = (x) => !jobWho || (jobWho === "mine" ? x.designer === me || x.qcBy === me : jobWho === "none" ? !x.designer : jobWho === "qc" ? x.stage === "qc" : jobWho === "ready" ? x.stage === "ready" : jobWho === "check" ? x.pay === "check" : true);
+    const shown = jobs.filter((x) => (jobFilter === "all" || (jobFilter === "open" ? OPEN.includes(x.status) : x.status === jobFilter)) && whoOk(x) &&
+      (!q || (x.id + " " + x.title + " " + x.owner + " " + (x.ownerName || "")).toLowerCase().includes(q)));
     $("jobList").innerHTML = shown.length ? shown.map((x) => {
       const nr = needsReply(x, seen);
       return `<a class="pt-row" href="#jobs/${esc(x.id)}">
-        <div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span><span class="owner">${esc(x.owner)}</span></div>
+        <div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span><span class="owner">${esc([x.ownerName, x.owner].filter(Boolean).join(" · "))}</span></div>
         <span class="meta">Gửi ${esc(D8.fmtDate(x.created, true))} · cập nhật ${esc(D8.ago(x.updated))}${x.storedMB ? " · " + x.storedMB + " MB" : ""}</span>
-        <span class="right">${stChip(x.status)}${x.trial ? '<span class="badge-trial">Dùng thử</span>' : ""}${payChip(x)}${nr ? '<span class="new client">Khách vừa nhắn</span>' : ""}</span></a>`;
+        <span class="right">${stChip(x.status)}${x.stage || OPEN.includes(x.status) ? stageChip(x.stage) : ""}${x.designer ? `<span class="who-chip" title="KTV">✎ ${esc(teamName(x.designer))}</span>` : ""}${x.qcBy ? `<span class="who-chip" title="QC">QC ${esc(teamName(x.qcBy))}</span>` : ""}${x.trial ? '<span class="badge-trial">Dùng thử</span>' : ""}${payChip(x)}${nr && can("cases.chat_read") ? '<span class="new client">Khách vừa nhắn</span>' : ""}</span></a>`;
     }).join("") : `<div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">${jobs.length ? "Không có ca nào khớp" : "Chưa có ca nào"}</h2>
       <p>${jobs.length ? "Thử bộ lọc khác hoặc xóa ô tìm kiếm." : "Khi khách đăng nhập cổng khách hàng và gửi ca, ca sẽ hiện ở đây."}</p></div>`;
   }
   $("jobQ").addEventListener("input", () => { jobQuery = $("jobQ").value; drawJobs(); });
+  $("jobWho").addEventListener("change", () => { jobWho = $("jobWho").value; drawJobs(); });
 
   /* ------------------------------------------------------------ case detail */
   async function openCase(id) {
@@ -206,6 +238,48 @@
     ["Đã giao file", "Final files are uploaded and ready to download on this page. Thank you for working with D.EIGHT!"],
   ];
 
+  // What the team wrote or did on a case, in plain Vietnamese
+  function noteText(n) {
+    const t = String(n.text || "");
+    if (n.kind === "assign") {
+      const [d, q] = t.replace(/^assign:/, "").split("|");
+      return "Phân công: KTV " + (d && d !== "-" ? teamName(d) : "chưa giao") + " · QC " + (q && q !== "-" ? teamName(q) : "chưa giao");
+    }
+    if (n.kind === "upload") return "Tải lên " + t.replace(/^upload:/, "") + " file thiết kế";
+    if (n.kind === "deliver") { const k = +t.replace(/^deliver:/, "") || 0; return k ? "Giao " + k + " file thiết kế cho khách" : "Chuyển ca sang Đã giao"; }
+    const head = { submit: "Gửi QC", qc_pass: "QC đạt", qc_fail: "QC không đạt, trả KTV sửa", reopen: "Mở lại để sửa" }[n.kind];
+    return head ? head + (t ? ": " + t : "") : t;
+  }
+  const teamOptions = (list, sel) => {
+    const items = list.map((t) => [t.email, (t.name || t.email) + " · " + t.label]);
+    if (sel && !items.some((x) => x[0] === sel)) items.push([sel, teamName(sel) + " (không còn quyền)"]);
+    return '<option value="">— Chưa giao —</option>' + items.map(([v, l]) => `<option value="${esc(v)}"${v === sel ? " selected" : ""}>${esc(l)}</option>`).join("");
+  };
+  // Teeth / units / arches in a case, for price suggestions ("11, 21", "14-24", "3-14" in Universal)
+  const FDI_ORDER = [[18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28], [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38]];
+  function countUnits(teeth, numbering) {
+    const set = new Set(), arches = new Set();
+    const archOf = (n) => (numbering === "UNS" ? (n <= 16 ? 0 : 1) : FDI_ORDER[0].includes(n) ? 0 : FDI_ORDER[1].includes(n) ? 1 : -1);
+    const valid = (n) => (numbering === "UNS" ? n >= 1 && n <= 32 : archOf(n) >= 0);
+    for (const tok of String(teeth || "").replace(/[–—]/g, "-").split(/[,;\s]+/).filter(Boolean)) {
+      const r = /^(\d{1,2})-(\d{1,2})$/.exec(tok);
+      if (r) {
+        const a = +r[1], b = +r[2];
+        if (!valid(a) || !valid(b)) continue;
+        if (numbering === "UNS") { for (let n = Math.min(a, b); n <= Math.max(a, b); n++) set.add(n); }
+        else if (archOf(a) === archOf(b)) { const row = FDI_ORDER[archOf(a)], i = row.indexOf(a), k = row.indexOf(b); row.slice(Math.min(i, k), Math.max(i, k) + 1).forEach((n) => set.add(n)); }
+      } else if (/^\d{1,2}$/.test(tok) && valid(+tok)) set.add(+tok);
+    }
+    set.forEach((n) => arches.add(archOf(n)));
+    return { units: set.size, arches: arches.size };
+  }
+  const priceCache = new Map();
+  async function priceListFor(owner) {
+    if (!priceCache.has(owner)) priceCache.set(owner, api("/api/prices/" + encodeURIComponent(owner)).catch(() => null));
+    return priceCache.get(owner);
+  }
+  const UNIT_LABEL = { unit: "răng / đơn vị", arch: "hàm", case: "ca" };
+
   function drawCase(j) {
     const seen = adminSeen(); seen[j.id] = j.updated; const ks = Object.keys(seen); if (ks.length > 500) delete seen[ks[0]]; store.set("d8-admin-seen", seen); updateJobCount();
     setBand(j.title, j.id + " · gửi " + D8.fmtDate(j.created, true), { back: true, right: stChip(j.status) + (j.trial ? ' <span class="badge-trial" style="background:var(--c-cream);color:var(--c-navy)">Dùng thử</span>' : "") });
@@ -214,110 +288,175 @@
       const cls = st === "cancelled" ? "" : i < idx || (i === idx && s === "delivered") ? "done" : i === idx ? "cur" : "";
       return `<li class="${cls}"><span class="dot">${cls === "done" ? ICON.check : ""}</span><span class="lbl">${esc(D8.statusLabel(s))}</span></li>`;
     }).join("");
-    const initials = String(j.ownerName || j.owner).split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+    const me = myEmail(), keyMode = mode === "key";
+    const owner = j.owner || "";
+    const initials = String(j.ownerName || owner || "?").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
     const files = j.files || [];
-    const ins = files.filter((f) => f.kind !== "output"), outs = files.filter((f) => f.kind === "output");
-    const fileRow = (f) => {
+    const ins = files.filter((f) => f.kind === "input"), outs = files.filter((f) => f.kind === "output"), designs = files.filter((f) => f.kind === "design");
+    const canDl = can("cases.files"), canDeliver = can("cases.deliver"), canDesign = can("cases.design");
+    const fileRow = (f, opt = {}) => {
       const ext = (f.name.split(".").pop() || "").slice(0, 4);
-      return `<li class="${f.kind === "output" ? "out" : ""}"><span class="ext">${esc(ext)}</span><div class="nm"><b title="${esc(f.name)}">${esc(f.name)}</b>
-        <small>${esc(D8.size(f.size))}${f.gz ? " (lưu nén " + esc(D8.size(f.stored)) + ")" : ""} · ${esc(D8.fmtDate(f.at, true))} · lưu đến ${esc(D8.fmtDate(f.exp))}</small></div>
-        <a class="iconbtn" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}" download="${esc(f.name)}" title="Tải về" aria-label="Tải ${esc(f.name)}">${ICON.dl}</a>
-        <button class="iconbtn del" type="button" data-del="${esc(f.fid)}" title="Xóa file" aria-label="Xóa ${esc(f.name)}">${ICON.trash}</button></li>`;
+      const dl = f.kind !== "input" || canDl;
+      const del = can("cases.delete") || (f.kind === "design" && f.by && f.by === me && canDesign);
+      const html = /\.html?$/i.test(f.name);
+      return `<li class="${f.kind === "output" ? "out" : ""}">${opt.select ? `<input type="checkbox" class="sel" data-pick="${esc(f.fid)}" aria-label="Chọn ${esc(f.name)}">` : ""}<span class="ext">${esc(ext)}</span><div class="nm"><b title="${esc(f.name)}">${esc(f.name)}</b>
+        <small>${esc(D8.size(f.size))}${f.gz ? " (lưu nén " + esc(D8.size(f.stored)) + ")" : ""} · ${esc(D8.fmtDate(f.at, true))}${f.by ? " · " + esc(teamName(f.by)) : ""} · lưu đến ${esc(D8.fmtDate(f.exp))}</small></div>
+        ${html && f.kind === "design" ? `<a class="btn small" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}?view=1" target="_blank" rel="noopener">Xem 3D</a>` : ""}
+        ${opt.publish && html ? `<button class="btn small" type="button" data-publish="${esc(f.fid)}">Gửi khách xem 3D</button>` : ""}
+        ${dl ? `<a class="iconbtn" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}" download="${esc(f.name)}" title="Tải về" aria-label="Tải ${esc(f.name)}">${ICON.dl}</a>` : ""}
+        ${del ? `<button class="iconbtn del" type="button" data-del="${esc(f.fid)}" title="Xóa file" aria-label="Xóa ${esc(f.name)}">${ICON.trash}</button>` : ""}</li>`;
     };
     const previews = (j.previews || []).map((p) => `<div class="pv"><span class="ic">${ICON.cube}</span><div class="tx"><b>${esc(p.label || j.title)}</b>
       <small>Dùng được đến ${esc(D8.fmtDate(p.expires))}</small></div>
       <a class="btn small" href="${esc(p.url)}" target="_blank" rel="noopener">Mở</a>
-      <button class="iconbtn del rm" type="button" data-unlink="${esc(p.id)}" title="Gỡ link khỏi ca" aria-label="Gỡ link">${ICON.x}</button></div>`).join("");
-    const thread = D8.threadHtml(j, "admin", "vi");
+      ${canDeliver ? `<button class="iconbtn del rm" type="button" data-unlink="${esc(p.id)}" title="Gỡ link khỏi ca" aria-label="Gỡ link">${ICON.x}</button>` : ""}</div>`).join("");
     const det = [["Dịch vụ", D8.svcLabel(j.service)], ["Răng", j.teeth ? j.teeth + " (" + (j.numbering === "UNS" ? "Universal" : "FDI") + ")" : ""],
       ["Vật liệu", j.material], ["Màu răng", j.shade], ["Cần trước", j.neededBy ? D8.fmtDate(Date.parse(j.neededBy + "T12:00:00")) : ""],
       ["Ngày gửi", D8.fmtDate(j.created, true)], ["Đã duyệt", j.approvedAt ? D8.fmtDate(j.approvedAt, true) : ""]]
       .filter((r) => r[1]).concat(D8.rxRows(j.rx)).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
-    const tu = trialUse(j.owner);
-    const left = TRIAL_CREDIT - tu.used;
-    const tries = (j.payTries || []).filter((t) => t.state !== "paid");
-    const openTry = tries.some((t) => t.state === "open" || t.state === "held");
-    const online = [payCfg.paypal ? "PayPal" : "", payCfg.stripe ? "Stripe" : ""].filter(Boolean);
-    const billing = `<section class="card"><h2 class="h-caps" style="margin-bottom:6px">Báo giá &amp; thanh toán</h2>
-      <p class="sub">Giá ca chỉ admin thấy. Khách chỉ thấy số tiền cần trả khi bạn chọn <b>Chờ thanh toán</b>, và trả qua ${online.length ? esc(online.join(" hoặc ")) : "PayPal/Stripe (chưa gắn khóa API)"}.</p>
-      ${j.pay === "paid" && j.paid ? `<div class="ai-ok" style="margin:0 0 14px">Đã nhận ${esc(money(j.paid.amount))} qua ${esc(VIA[j.paid.via] || j.paid.via)} lúc ${esc(D8.fmtDate(j.paid.at, true))}${j.paid.ref ? ` · mã ${esc(j.paid.ref)}` : ""}</div>` : ""}
-      ${tries.length ? `<ul class="pay-tries">${tries.map((t) => `<li>${esc(VIA[t.via] || t.via)} · ${esc(money(t.amount))} · ${esc(D8.fmtDate(t.at, true))} · <b>${esc(TRY_STATE[t.state] || t.state)}</b></li>`).join("")}</ul>
-        ${openTry ? `<button class="btn small" type="button" id="payCheck" style="margin:0 0 14px">Kiểm tra thanh toán</button>` : ""}` : ""}
-      <form id="billForm" style="display:grid;gap:12px">
-        <div><label class="field-label" for="billPrice">Giá ca (USD)</label><input class="input" id="billPrice" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.price === "number" ? j.price : ""}" placeholder="VD: 35"></div>
-        <div><label class="field-label" for="billDue">Số tiền khách cần trả (USD)</label><input class="input" id="billDue" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.due === "number" ? j.due : ""}" placeholder="Để trống = bằng giá ca">
-          <p class="hint" style="margin:6px 0 0">Dùng khi chỉ thu một phần, ví dụ phần vượt quá US$50 dùng thử.</p></div>
-        <div><label class="field-label" for="billPay">Thanh toán</label><select class="input" id="billPay">${Object.entries(PAY_LABEL).map(([k, l]) => `<option value="${k}"${(j.pay || "") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
-        <label class="check" style="margin:0"><input type="checkbox" id="billTrial"${j.trial ? " checked" : ""}> Ca dùng thử miễn phí</label>
-        ${tu.cases ? `<p class="hint" style="margin:0">Khách này có ${tu.cases} ca dùng thử, đã dùng ${esc(money(tu.used))} / ${money(TRIAL_CREDIT)}${left < 0 ? ` (vượt ${esc(money(-left))}: thương lượng hoặc tính ở ca thứ 2)` : ` (còn ${esc(money(left))})`}.</p>` : ""}
-        <button class="btn btn-primary small" type="submit" style="justify-self:start">Lưu báo giá</button>
-      </form></section>`;
+
+    // internal workflow
+    const stage = j.stage || "";
+    const openCase = !["delivered", "cancelled"].includes(st);
+    const canSubmit = canDesign && (j.designer === me || can("cases.all") || keyMode) && ["", "design", "fix"].includes(stage) && openCase;
+    const canQc = can("cases.qc") && stage === "qc" && (!j.qcBy || j.qcBy === me || can("cases.all") || keyMode);
+    const canReopen = (can("cases.assign") || can("cases.qc")) && (stage === "ready" || stage === "done");
+    const qcLine = j.qc && j.qc.state ? `<p class="hint" style="margin:10px 0 0">QC ${j.qc.state === "passed" ? "đạt" : j.qc.state === "failed" ? "không đạt" : "đang chờ"}${j.qc.by ? " · " + esc(teamName(j.qc.by)) : ""} · ${esc(D8.fmtDate(j.qc.at, true))}</p>` : "";
+    const team_ = (j.team || []).slice().reverse();
+    const wfCard = `<section class="card" id="wfCard"><div class="card-head-row"><h2 class="h-caps">Quy trình nội bộ</h2>${stageChip(stage)}</div>
+      <p class="sub">Chỉ đội D.EIGHT thấy mục này. KTV tải file thiết kế lên rồi gửi QC; QC đạt thì mới gửi khách.</p>
+      ${can("cases.assign") ? `<form id="asForm"><div class="wf-grid">
+          <div><label class="field-label" for="asD">KTV thiết kế</label><select class="input" id="asD">${teamOptions(team.filter((t) => t.design), j.designer || "")}</select></div>
+          <div><label class="field-label" for="asQ">QC</label><select class="input" id="asQ">${teamOptions(team.filter((t) => t.qc), j.qcBy || "")}</select></div></div>
+          <div class="wf-actions"><button class="btn small btn-primary" type="submit">Lưu phân công</button></div></form>`
+        : `<p style="margin:0">KTV: <b>${esc(teamName(j.designer) || "chưa giao")}</b> · QC: <b>${esc(teamName(j.qcBy) || "chưa giao")}</b></p>`}
+      ${qcLine}
+      ${canSubmit || canQc || canReopen ? `<div style="margin-top:16px"><label class="field-label" for="wfNote">${canQc ? "Nhận xét QC (bắt buộc khi không đạt)" : "Ghi chú kèm theo (không bắt buộc)"}</label>
+        <textarea class="input" id="wfNote" rows="2" maxlength="2000" style="min-height:70px"></textarea>
+        <div class="wf-actions">
+          ${canSubmit ? `<button class="btn btn-primary small" type="button" id="wfSubmit"${designs.length ? "" : " disabled"}>Gửi QC</button>${designs.length ? "" : '<span class="hint" style="margin:0;align-self:center">Tải file thiết kế lên trước.</span>'}` : ""}
+          ${canQc ? `<button class="btn btn-ok small" type="button" id="wfPass">${ICON.check}Đạt</button><button class="btn small btn-danger" type="button" id="wfFail">Không đạt, trả KTV sửa</button>` : ""}
+          ${canReopen ? `<button class="btn small" type="button" id="wfReopen">Mở lại để sửa</button>` : ""}</div></div>` : ""}
+      ${can("cases.notes") ? `<form class="compose" id="teamForm" style="margin-top:18px"><label class="field-label" for="teamBox">Ghi chú nội bộ</label>
+          <textarea class="input" id="teamBox" maxlength="2000" rows="2" style="min-height:70px" placeholder="Trao đổi trong đội (khách không thấy)…"></textarea>
+          <div class="wf-actions"><button class="btn small" type="submit" id="teamSend">Thêm ghi chú</button></div></form>
+        <div class="team">${team_.length ? team_.map((n) => `<div class="n k-${esc(n.kind || "note")}"><small>${esc(teamName(n.by) || n.name || "")} · ${esc(D8.fmtDate(n.at, true))}</small><p>${esc(noteText(n))}</p></div>`).join("") : '<p class="muted" style="margin:0">Chưa có ghi chú.</p>'}</div>` : ""}
+    </section>`;
+
+    const designCard = canDesign || designs.length ? `<section class="card"><h2 class="h-caps">File thiết kế (nội bộ)</h2>
+      <p class="sub">Khách không thấy các file này cho tới khi được giao. File HTML exocad bấm <b>Xem 3D</b> để xem nhanh.</p>
+      ${designs.length ? `<ul class="files">${designs.map((f) => fileRow(f, { select: canDeliver, publish: canDeliver })).join("")}</ul>` : '<p class="muted" style="margin:0">Chưa có file thiết kế.</p>'}
+      ${canDeliver && designs.length ? `<div class="wf-actions" style="align-items:center"><label class="check" style="margin:0"><input type="checkbox" id="prDeliver" checked> Chuyển ca sang Đã giao</label>
+          <button class="btn btn-primary small" type="button" id="prBtn">Giao file đã chọn cho khách</button></div>
+          ${stage !== "ready" && stage !== "done" ? '<p class="hint" style="margin:6px 0 0">Ca này chưa qua QC.</p>' : ""}<div class="progress block" id="prProg" hidden><div class="progress-bar"><i></i></div><p></p></div><p class="error" id="prErr" hidden></p>` : ""}
+      ${canDesign ? `<div style="margin-top:16px"><label class="drop compact" id="dsZone">${ICON.up}<strong>Kéo file thiết kế vào đây</strong><span>STL, HTML exocad, ảnh chụp… · nhiều file cùng lúc</span><input type="file" id="dsFiles" multiple></label>
+          <ul class="picked" id="dsList"></ul>
+          <div class="progress block" id="dsProg" hidden><div class="progress-bar"><i></i></div><p></p></div>
+          <p class="error" id="dsErr" hidden></p>
+          <div style="margin-top:12px"><button class="btn btn-primary small" type="button" id="dsBtn" disabled>Tải file thiết kế lên</button></div></div>` : ""}
+    </section>` : "";
+
+    const custCard = `<section class="card"><div class="card-head-row"><h2 class="h-caps">File của khách</h2>
+        ${canDl && ins.length > 1 ? `<button class="btn small" type="button" id="zipAll">${ICON.dl}Tải tất cả (.zip)</button>` : ""}</div>
+      <p class="sub">${canDl ? "Bấm để tải về máy. File tự xóa sau 60 ngày." : "Bạn chưa có quyền tải file của khách."}</p>
+      ${ins.length ? `<ul class="files">${ins.map((f) => fileRow(f)).join("")}</ul>` : '<p class="muted" style="margin:0">Khách chưa tải file nào lên.</p>'}
+      ${(j.links || []).length ? `<p class="grp" style="margin-top:18px">Link file khách gửi</p><div class="links">${j.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(l)}</a>`).join("")}</div>` : ""}
+    </section>`;
+
+    const linkCard = canDeliver ? `<section class="card"><h2 class="h-caps">Link xem 3D cho khách</h2><p class="sub">Gắn link vào ca sẽ tự chuyển ca sang Chờ duyệt và khách thấy nút Duyệt thiết kế.</p>
+      ${previews || '<p class="muted" style="margin:0">Chưa gắn link 3D nào.</p>'}
+      <div class="attach">
+        <span class="field-label" style="margin:0">Tạo link mới từ file HTML exocad</span>
+        <div class="row"><input class="input" type="file" id="pvFile" accept=".html,.htm,text/html" aria-label="File HTML exocad">
+          <div class="seg" role="radiogroup" aria-label="Hạn dùng">${[7, 14, 30].map((d) => `<label><input type="radio" name="pvDays" value="${d}"${d === 30 ? " checked" : ""}><span>${d} ngày</span></label>`).join("")}</div></div>
+        <div class="row"><input class="input" id="pvLabel" maxlength="80" value="${esc(j.title)}" aria-label="Tên ca hiển thị"><button class="btn btn-primary small" type="button" id="pvCreate">Tạo &amp; gắn link</button></div>
+        <div class="progress block" id="pvProg" hidden><div class="progress-bar"><i></i></div><p></p></div>
+        <span class="field-label" style="margin:6px 0 0">Hoặc gắn link đã tạo</span>
+        <div class="row"><select class="input" id="pvPick"><option value="">Đang tải danh sách link…</option></select><button class="btn small" type="button" id="pvAttach">Gắn link</button></div>
+        <p class="error" id="pvErr" hidden></p>
+      </div></section>` : (previews ? `<section class="card"><h2 class="h-caps">Link xem 3D</h2>${previews}</section>` : "");
+
+    const outCard = canDeliver ? `<section class="card"><h2 class="h-caps">Giao file hoàn chỉnh</h2><p class="sub">File ở đây là file khách nhận (STL đã thiết kế).</p>
+      ${outs.length ? `<ul class="files">${outs.map((f) => fileRow(f)).join("")}</ul>` : ""}
+      <div style="margin-top:14px"><label class="drop compact" id="outZone">${ICON.up}<strong>Kéo file STL hoàn chỉnh vào đây</strong><span>hoặc bấm để chọn · nhiều file cùng lúc</span><input type="file" id="outFiles" multiple></label>
+        <ul class="picked" id="outList"></ul>
+        <label class="check"><input type="checkbox" id="outDeliver" checked> Chuyển ca sang <b>&nbsp;Đã giao&nbsp;</b> khi tải xong</label>
+        <div class="progress block" id="outProg" hidden><div class="progress-bar"><i></i></div><p></p></div>
+        <p class="error" id="outErr" hidden></p>
+        <div style="margin-top:12px"><button class="btn btn-primary small" type="button" id="outBtn" disabled>Tải lên &amp; giao</button></div></div>
+    </section>` : (outs.length ? `<section class="card"><h2 class="h-caps">File đã giao khách</h2><ul class="files">${outs.map((f) => fileRow(f)).join("")}</ul></section>` : "");
+
+    const chatCard = can("cases.chat_read") ? `<section class="card"><h2 class="h-caps">Tin nhắn với khách</h2><p class="sub">${can("cases.chat") ? "Khách thấy tin nhắn trong cổng khách hàng. Bấm <b>Dịch</b> dưới tin của khách để xem tiếng Việt; viết tiếng Việt rồi bấm <b>Dịch sang tiếng Anh</b> trước khi gửi." : "Bạn chỉ được đọc tin nhắn. Muốn trả lời khách, nhờ quản trị hoặc ghi chú nội bộ."}</p>
+      <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> Luôn dịch tin của khách</label><button type="button" data-tr-all hidden>Dịch tất cả</button></div>
+      <div class="thread" id="thread">${D8.threadHtml(j, "admin", "vi") || '<p class="muted" style="margin:0">Chưa có tin nhắn.</p>'}</div>
+      ${can("cases.chat") ? `<form class="compose" id="composeForm">
+        <div class="tpl">${TEMPLATES.map((t, i) => `<button type="button" data-tpl="${i}">${esc(t[0])}</button>`).join("")}</div>
+        <label class="sr-only" for="composer">Tin nhắn</label>
+        <textarea class="input" id="composer" maxlength="4000" placeholder="Viết tin nhắn cho khách (tiếng Việt hoặc tiếng Anh)…"></textarea>
+        <p class="compose-orig" id="composeOrig" hidden></p>
+        <div class="compose-foot"><p class="hint">Ctrl + Enter để gửi.</p>
+          <div class="compose-tr"><button class="btn small" type="button" id="aiSuggest" hidden title="Gõ vài ý tiếng Việt (không bắt buộc) rồi bấm để AI soạn câu trả lời tiếng Anh">${ICON.spark}Gợi ý trả lời</button><button class="btn small" type="button" id="toEn">Dịch sang tiếng Anh</button><button class="btn btn-primary small" type="submit" id="sendMsg">Gửi</button></div></div>
+        <p class="error" id="msgErr" hidden></p>
+      </form>` : ""}
+    </section>` : "";
+
+    // billing
+    let billing = "";
+    if (can("billing.view") && "pay" in j) {
+      const tu = trialUse(j.owner);
+      const left = TRIAL_CREDIT - tu.used;
+      const tries = (j.payTries || []).filter((t) => t.state !== "paid");
+      const openTry = tries.some((t) => t.state === "open" || t.state === "held");
+      const online = [payCfg.paypal ? "PayPal" : "", payCfg.stripe ? "Stripe" : ""].filter(Boolean);
+      const edit = can("billing.edit");
+      const p = j.paid || {};
+      const pend = j.pay === "check" ? `<div class="pay-box"><b>Khách báo đã thanh toán ${esc(money(p.amount || 0))}</b> qua ${esc(VIA[p.via] || p.via || "")}${p.ref ? " · mã " + esc(p.ref) : ""} lúc ${esc(D8.fmtDate(p.at, true))}.
+          ${p.note ? `<br>Khách ghi: “${esc(p.note)}”` : ""}<br>Kiểm tra tài khoản ${p.via === "paypal" ? "PayPal" : p.via === "stripe" ? "Stripe" : "ngân hàng / Payoneer"} rồi xác nhận.
+          ${edit ? `<div class="btns"><button class="btn btn-ok small" type="button" id="payOk">${ICON.check}Đã nhận tiền</button><button class="btn small btn-danger" type="button" id="payNo">Chưa nhận được</button></div>` : ""}</div>` : "";
+      billing = `<section class="card"><h2 class="h-caps" style="margin-bottom:6px">Báo giá &amp; thanh toán</h2>
+        <p class="sub">Giá ca chỉ đội D.EIGHT thấy. Khách chỉ thấy số tiền cần trả khi chọn <b>Chờ thanh toán</b>, trả qua ${online.length ? esc(online.join(" hoặc ")) : "PayPal/Stripe (chưa gắn khóa API)"} hoặc báo đã chuyển khoản. Mọi khoản đều chờ bạn xác nhận.</p>
+        ${pend}
+        ${j.pay === "paid" && p.amount != null ? `<div class="ai-ok" style="margin:0 0 14px">Đã nhận ${esc(money(p.amount))} qua ${esc(VIA[p.via] || p.via)}${p.ref ? ` · mã ${esc(p.ref)}` : ""}${p.confirmedAt ? ` · xác nhận ${esc(D8.fmtDate(p.confirmedAt, true))}${p.confirmedBy ? " bởi " + esc(teamName(p.confirmedBy) || p.confirmedBy) : ""}` : ""}</div>` : ""}
+        ${tries.length ? `<ul class="pay-tries">${tries.map((t) => `<li>${esc(VIA[t.via] || t.via)} · ${esc(money(t.amount))} · ${esc(D8.fmtDate(t.at, true))} · <b>${esc(TRY_STATE[t.state] || t.state)}</b></li>`).join("")}</ul>
+          ${openTry ? `<button class="btn small" type="button" id="payCheck" style="margin:0 0 14px">Kiểm tra thanh toán</button>` : ""}` : ""}
+        ${edit ? `<form id="billForm" style="display:grid;gap:12px">
+          <div><label class="field-label" for="billPrice">Giá ca (USD)</label><input class="input" id="billPrice" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.price === "number" ? j.price : ""}" placeholder="VD: 35"></div>
+          <div id="billSuggest"></div>
+          <div><label class="field-label" for="billDue">Số tiền khách cần trả (USD)</label><input class="input" id="billDue" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.due === "number" ? j.due : ""}" placeholder="Để trống = bằng giá ca">
+            <p class="hint" style="margin:6px 0 0">Dùng khi chỉ thu một phần (ví dụ phần vượt mức dùng thử bạn đã thương lượng).</p></div>
+          <div><label class="field-label" for="billPay">Thanh toán</label><select class="input" id="billPay">${Object.entries(PAY_LABEL).filter(([k]) => k !== "check" || j.pay === "check").map(([k, l]) => `<option value="${k}"${(j.pay || "") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
+          <label class="check" style="margin:0"><input type="checkbox" id="billTrial"${j.trial ? " checked" : ""}> Ca dùng thử miễn phí</label>
+          ${tu.cases ? `<p class="hint" style="margin:0">Khách này có ${tu.cases} ca dùng thử, tổng giá ${esc(money(tu.used))} / mức ${money(TRIAL_CREDIT)}${left < 0 ? ` (vượt ${esc(money(-left))})` : ` (còn ${esc(money(left))})`}.</p>` : ""}
+          <button class="btn btn-primary small" type="submit" style="justify-self:start">Lưu báo giá</button>
+        </form>` : `<dl class="dl"><div><dt>Giá ca</dt><dd>${typeof j.price === "number" ? esc(money(j.price)) : "—"}</dd></div><div><dt>Thanh toán</dt><dd>${esc(PAY_LABEL[j.pay || ""] || "")}</dd></div></dl>`}
+      </section>`;
+    }
 
     show("p-case");
     $("p-case").innerHTML = `
       <div class="adm-head">
-        <div class="adm-cust"><span class="av">${esc(initials)}</span><div><b>${esc(j.ownerName || j.owner)}</b>
-          <a href="mailto:${esc(j.owner)}?subject=${encodeURIComponent(j.id + " · " + j.title)}">${esc(j.owner)}</a></div></div>
-        <form class="stat-form" id="statForm"><label class="sr-only" for="statSel">Trạng thái</label>
+        <div class="adm-cust"><span class="av">${esc(initials)}</span><div><b>${esc(j.ownerName || owner || "Khách hàng")}</b>
+          ${owner ? `<a href="mailto:${esc(owner)}?subject=${encodeURIComponent(j.id + " · " + j.title)}">${esc(owner)}</a>` : ""}
+          ${owner && can("customers.view") ? ` · <a href="#customers/${encodeURIComponent(owner)}">Hồ sơ khách</a>` : ""}</div></div>
+        ${can("cases.status") ? `<form class="stat-form" id="statForm"><label class="sr-only" for="statSel">Trạng thái</label>
           <select class="input" id="statSel">${STATUSES.map((s) => `<option value="${s}"${s === st ? " selected" : ""}>${esc(D8.statusLabel(s))}</option>`).join("")}</select>
-          <button class="btn btn-primary small" type="submit">Cập nhật trạng thái</button></form>
+          <button class="btn btn-primary small" type="submit">Cập nhật trạng thái</button></form>` : ""}
       </div>
       <ol class="pt-steps" aria-label="Tiến độ">${steps}</ol>
       ${st === "review" ? `<div class="pt-alert info">${ICON.warn}<div>Đang chờ khách duyệt bản 3D.</div></div>` : ""}
-      ${st === "approved" ? `<div class="pt-alert ok">${ICON.check}<div>Khách đã duyệt lúc ${esc(D8.fmtDate(j.approvedAt || j.updated, true))}. Xuất file hoàn chỉnh rồi tải lên ở mục Giao file.</div></div>` : ""}
+      ${st === "approved" ? `<div class="pt-alert ok">${ICON.check}<div>Khách đã duyệt lúc ${esc(D8.fmtDate(j.approvedAt || j.updated, true))}. Xuất file hoàn chỉnh rồi giao cho khách.</div></div>` : ""}
+      ${j.pay === "check" && can("billing.edit") ? `<div class="pt-alert info">${ICON.warn}<div>Khách báo đã thanh toán. Kiểm tra tiền đã về rồi bấm xác nhận ở mục Báo giá &amp; thanh toán.</div></div>` : ""}
       <div class="pt-grid">
-        <div>
-          <section class="card"><div class="card-head-row"><h2 class="h-caps">File của khách</h2>
-            ${files.length > 1 ? `<button class="btn small" type="button" id="zipAll">${ICON.dl}Tải tất cả (.zip)</button>` : ""}</div>
-            <p class="sub">Bấm để tải về máy. File tự xóa sau 60 ngày.</p>
-            ${ins.length ? `<ul class="files">${ins.map(fileRow).join("")}</ul>` : '<p class="muted" style="margin:0">Khách chưa tải file nào lên.</p>'}
-            ${(j.links || []).length ? `<p class="grp" style="margin-top:18px">Link file khách gửi</p><div class="links">${j.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(l)}</a>`).join("")}</div>` : ""}
-          </section>
-          <section class="card"><h2 class="h-caps">Link xem 3D</h2><p class="sub">Gắn link vào ca sẽ tự chuyển ca sang Chờ duyệt và khách thấy nút Duyệt thiết kế.</p>
-            ${previews || '<p class="muted" style="margin:0">Chưa gắn link 3D nào.</p>'}
-            <div class="attach">
-              <span class="field-label" style="margin:0">Tạo link mới từ file HTML exocad</span>
-              <div class="row"><input class="input" type="file" id="pvFile" accept=".html,.htm,text/html" aria-label="File HTML exocad">
-                <div class="seg" role="radiogroup" aria-label="Hạn dùng">${[7, 14, 30].map((d) => `<label><input type="radio" name="pvDays" value="${d}"${d === 30 ? " checked" : ""}><span>${d} ngày</span></label>`).join("")}</div></div>
-              <div class="row"><input class="input" id="pvLabel" maxlength="80" value="${esc(j.title)}" aria-label="Tên ca hiển thị"><button class="btn btn-primary small" type="button" id="pvCreate">Tạo &amp; gắn link</button></div>
-              <div class="progress block" id="pvProg" hidden><div class="progress-bar"><i></i></div><p></p></div>
-              <span class="field-label" style="margin:6px 0 0">Hoặc gắn link đã tạo</span>
-              <div class="row"><select class="input" id="pvPick"><option value="">Đang tải danh sách link…</option></select><button class="btn small" type="button" id="pvAttach">Gắn link</button></div>
-              <p class="error" id="pvErr" hidden></p>
-            </div>
-          </section>
-          <section class="card"><h2 class="h-caps">Giao file hoàn chỉnh</h2><p class="sub">File tải lên ở đây là file khách nhận (STL đã thiết kế).</p>
-            ${outs.length ? `<ul class="files">${outs.map(fileRow).join("")}</ul>` : ""}
-            <div style="margin-top:14px"><label class="drop compact" id="outZone">${ICON.up}<strong>Kéo file STL hoàn chỉnh vào đây</strong><span>hoặc bấm để chọn · nhiều file cùng lúc</span><input type="file" id="outFiles" multiple></label>
-              <ul class="picked" id="outList"></ul>
-              <label class="check"><input type="checkbox" id="outDeliver" checked> Chuyển ca sang <b>&nbsp;Đã giao&nbsp;</b> khi tải xong</label>
-              <div class="progress block" id="outProg" hidden><div class="progress-bar"><i></i></div><p></p></div>
-              <p class="error" id="outErr" hidden></p>
-              <div style="margin-top:12px"><button class="btn btn-primary small" type="button" id="outBtn" disabled>Tải lên &amp; giao</button></div></div>
-          </section>
-          <section class="card"><h2 class="h-caps">Tin nhắn với khách</h2><p class="sub">Khách thấy tin nhắn trong cổng khách hàng. Bấm <b>Dịch</b> dưới tin của khách để xem tiếng Việt; viết tiếng Việt rồi bấm <b>Dịch sang tiếng Anh</b> trước khi gửi.</p>
-            <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> Luôn dịch tin của khách</label><button type="button" data-tr-all hidden>Dịch tất cả</button></div>
-            <div class="thread" id="thread">${thread || '<p class="muted" style="margin:0">Chưa có tin nhắn.</p>'}</div>
-            <form class="compose" id="composeForm">
-              <div class="tpl">${TEMPLATES.map((t, i) => `<button type="button" data-tpl="${i}">${esc(t[0])}</button>`).join("")}</div>
-              <label class="sr-only" for="composer">Tin nhắn</label>
-              <textarea class="input" id="composer" maxlength="4000" placeholder="Viết tin nhắn cho khách (tiếng Việt hoặc tiếng Anh)…"></textarea>
-              <p class="compose-orig" id="composeOrig" hidden></p>
-              <div class="compose-foot"><p class="hint">Ctrl + Enter để gửi.</p>
-                <div class="compose-tr"><button class="btn small" type="button" id="aiSuggest" hidden title="Gõ vài ý tiếng Việt (không bắt buộc) rồi bấm để AI soạn câu trả lời tiếng Anh">${ICON.spark}Gợi ý trả lời</button><button class="btn small" type="button" id="toEn">Dịch sang tiếng Anh</button><button class="btn btn-primary small" type="submit" id="sendMsg">Gửi</button></div></div>
-              <p class="error" id="msgErr" hidden></p>
-            </form>
-          </section>
-        </div>
-        <aside><section class="card" id="aiSumCard" hidden><div class="card-head-row"><h2 class="h-caps" style="display:flex;align-items:center;gap:8px">Tóm tắt cho KTV <span class="ai-tag">AI</span></h2>
+        <div>${wfCard}${custCard}${designCard}${linkCard}${outCard}${chatCard}</div>
+        <aside>${can("ai.use") ? `<section class="card" id="aiSumCard" hidden><div class="card-head-row"><h2 class="h-caps" style="display:flex;align-items:center;gap:8px">Tóm tắt cho KTV <span class="ai-tag">AI</span></h2>
             <button class="btn small" type="button" id="aiSumBtn">${j.ai && j.ai.sum ? "Làm mới" : "Tạo tóm tắt"}</button></div>
-          <div id="aiSumBody">${j.ai && j.ai.sum ? `<p class="ai-sum">${esc(j.ai.sum)}</p><p class="ai-meta">Tạo lúc ${esc(D8.fmtDate(j.ai.sumAt, true))}${j.ai.sumUpd < j.updated ? " · <b>ca đã có cập nhật sau bản tóm tắt này</b>" : ""}. AI có thể sai, đối chiếu lại phiếu gốc.</p>` : '<p class="muted" style="margin:0">AI đọc phiếu chỉ định và tin nhắn của khách rồi tóm tắt bằng tiếng Việt.</p>'}</div></section>
+          <div id="aiSumBody">${j.ai && j.ai.sum ? `<p class="ai-sum">${esc(j.ai.sum)}</p><p class="ai-meta">Tạo lúc ${esc(D8.fmtDate(j.ai.sumAt, true))}${j.ai.sumUpd < j.updated ? " · <b>ca đã có cập nhật sau bản tóm tắt này</b>" : ""}. AI có thể sai, đối chiếu lại phiếu gốc.</p>` : '<p class="muted" style="margin:0">AI đọc phiếu chỉ định và tin nhắn của khách rồi tóm tắt bằng tiếng Việt.</p>'}</div></section>` : ""}
           <section class="card"><h2 class="h-caps" style="margin-bottom:16px">Thông tin ca</h2><dl class="dl">${det}</dl>
           ${j.notes ? `<p class="grp" style="margin-top:20px">Yêu cầu của khách</p><p class="notes">${esc(j.notes)}</p>` : ""}</section>
           ${billing}</aside>
       </div>`;
-    const th = $("thread"); th.scrollTop = th.scrollHeight;
-    D8.wireThread(th, j, "vi");
+    const th = $("thread");
+    if (th) { th.scrollTop = th.scrollHeight; D8.wireThread(th, j, "vi"); }
     wireCase(j);
   }
 
@@ -329,138 +468,250 @@
       try { await onGo(); } catch (err) { btn.disabled = false; btn.classList.remove("armed"); on = false; D8.toast(err.message); }
     });
   }
+  // file picker + drop zone shared by the design and delivery uploads
+  function picker(zone, input, list, onChange, opts) {
+    const files = [];
+    const draw = () => { D8.renderPicked(list, files, (i) => { files.splice(i, 1); draw(); }, { ...opts, removeLabel: "Bỏ" }); onChange(files); };
+    const add = (fs) => { fs.forEach((f) => { if (!files.some((x) => x.name === f.name && x.size === f.size)) files.push(f); }); draw(); };
+    input.addEventListener("change", () => { add([...input.files]); input.value = ""; });
+    ["dragenter", "dragover"].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("over"); }));
+    ["dragleave", "drop"].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove("over"); }));
+    zone.addEventListener("drop", (e) => add([...(e.dataTransfer.files || [])]));
+    draw();
+    return files;
+  }
 
   function wireCase(j) {
     const redraw = (job) => {
       current = job;
       const i = jobs.findIndex((x) => x.id === job.id);
-      if (i >= 0) Object.assign(jobs[i], { status: job.status, updated: job.updated, lastBy: job.lastBy, trial: !!job.trial, price: typeof job.price === "number" ? job.price : null, pay: job.pay || "" });
+      if (i >= 0) Object.assign(jobs[i], { status: job.status, updated: job.updated, lastBy: job.lastBy, trial: !!job.trial, designer: job.designer || "", qcBy: job.qcBy || "", stage: job.stage || "",
+        ...("pay" in job ? { price: typeof job.price === "number" ? job.price : null, pay: job.pay || "" } : {}) });
       drawCase(job);
     };
+    const post = (path, body) => api(`/api/jobs/${j.id}${path}`, { method: "POST", body });
     const zip = $("zipAll");
     if (zip) zip.addEventListener("click", async () => {
       zip.disabled = true;
-      try { await D8.downloadZip((j.files || []).map((f) => ({ name: f.name, url: `/api/jobs/${j.id}/files/${f.fid}` })), j.id + ".zip", (i, n) => { zip.textContent = "Đang gom file " + i + "/" + n + "…"; }); }
+      try { await D8.downloadZip((j.files || []).filter((f) => f.kind === "input").map((f) => ({ name: f.name, url: `/api/jobs/${j.id}/files/${f.fid}` })), j.id + ".zip", (i, n) => { zip.textContent = "Đang gom file " + i + "/" + n + "…"; }); }
       catch (err) { D8.toast(err.message); }
       zip.disabled = false; zip.innerHTML = ICON.dl + "Tải tất cả (.zip)";
     });
-    $("billForm").addEventListener("submit", async (e) => {
+
+    // workflow: assignment, QC, notes
+    const asForm = $("asForm");
+    if (asForm) asForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const raw = $("billPrice").value.trim(), rawDue = $("billDue").value.trim();
-      const b = e.submitter || $("billForm").querySelector("[type=submit]");
-      D8.busy(b, true);
-      try {
-        redraw((await api(`/api/jobs/${j.id}/billing`, { method: "POST", body: { price: raw === "" ? null : Number(raw), due: rawDue === "" ? null : Number(rawDue), pay: $("billPay").value, trial: $("billTrial").checked } })).job);
-        D8.done($("billForm").querySelector("[type=submit]"), "Đã lưu");
-      } catch (err) { D8.busy(b, false); D8.toast(err.message); }
+      const b = asForm.querySelector("[type=submit]"); D8.busy(b, true);
+      try { redraw((await post("/assign", { designer: $("asD").value, qcBy: $("asQ").value })).job); D8.done(asForm.querySelector("[type=submit]"), "Đã lưu"); }
+      catch (err) { D8.busy(b, false); D8.toast(err.message); }
     });
+    const stageBtn = (id, action, doneText) => {
+      const b = $(id); if (!b) return;
+      b.addEventListener("click", async () => {
+        const note = (($("wfNote") || {}).value || "").trim();
+        if (action === "fail" && note.length < 3) { D8.toast("Ghi rõ lỗi cần sửa để KTV biết."); return $("wfNote").focus(); }
+        D8.busy(b, true);
+        try { redraw((await post("/stage", { action, note })).job); D8.toast(doneText); }
+        catch (err) { D8.busy(b, false); D8.toast(err.message); }
+      });
+    };
+    stageBtn("wfSubmit", "submit", "Đã gửi QC.");
+    stageBtn("wfPass", "pass", "QC đạt. Ca sẵn sàng gửi khách.");
+    stageBtn("wfFail", "fail", "Đã trả KTV sửa.");
+    stageBtn("wfReopen", "reopen", "Đã mở lại ca để sửa.");
+    const teamForm = $("teamForm");
+    if (teamForm) teamForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = $("teamBox").value.trim(); if (!text) return $("teamBox").focus();
+      D8.busy($("teamSend"), true);
+      try { redraw((await post("/team", { text })).job); D8.done($("teamSend"), "Đã thêm"); }
+      catch (err) { D8.busy($("teamSend"), false); D8.toast(err.message); }
+    });
+
+    // design files: upload (exocad HTML gets the storage shim so "Xem 3D" works), deliver, publish as a 3D link
+    if ($("dsZone")) {
+      const btn = $("dsBtn");
+      const picked = picker($("dsZone"), $("dsFiles"), $("dsList"), (fs) => { btn.disabled = !fs.length; btn.textContent = fs.length ? `Tải ${fs.length} file thiết kế lên` : "Tải file thiết kế lên"; }, { design: true });
+      btn.addEventListener("click", async () => {
+        const prog = $("dsProg"), err = $("dsErr");
+        err.hidden = true; D8.busy(btn, true); prog.hidden = false; busy = true;
+        try {
+          const ready = await Promise.all(picked.map(async (f) => (/\.html?$/i.test(f.name) ? new File([await withStorageShim(f)], f.name, { type: "text/html" }) : f)));
+          const out = await D8.uploadJobFiles(j.id, ready, { kind: "design", onProgress: (p) => { prog.querySelector("i").style.width = p.pct + "%"; prog.querySelector("p").textContent = p.text; } });
+          busy = false; redraw(out.job); D8.toast("Đã tải file thiết kế lên.");
+        } catch (ex) { busy = false; D8.busy(btn, false); prog.hidden = true; err.textContent = ex.message; err.hidden = false; }
+      });
+    }
+    const prBtn = $("prBtn");
+    if (prBtn) prBtn.addEventListener("click", async () => {
+      const fids = [...document.querySelectorAll("#p-case [data-pick]:checked")].map((x) => x.dataset.pick);
+      const err = $("prErr"); err.hidden = true;
+      if (!fids.length && !$("prDeliver").checked) { err.textContent = "Chọn file cần giao cho khách."; err.hidden = false; return; }
+      D8.busy(prBtn, true);
+      try { redraw((await post("/promote", { fids, deliver: $("prDeliver").checked })).job); D8.toast(fids.length ? "Đã giao file cho khách." : "Đã chuyển ca sang Đã giao."); }
+      catch (ex) { D8.busy(prBtn, false); err.textContent = ex.message; err.hidden = false; }
+    });
+    document.querySelectorAll("#p-case [data-publish]").forEach((b) => b.addEventListener("click", async () => {
+      const f = (j.files || []).find((x) => x.fid === b.dataset.publish); if (!f) return;
+      const prog = $("prProg"), bar = prog ? prog.querySelector("i") : null, txt = prog ? prog.querySelector("p") : null;
+      D8.busy(b, true); busy = true; if (prog) prog.hidden = false;
+      try {
+        if (txt) txt.textContent = "Đang lấy file thiết kế…";
+        const res = await fetch(`/api/jobs/${j.id}/files/${f.fid}`, { headers: D8.authHeaders(), credentials: "same-origin" });
+        if (!res.ok) throw new Error("Không lấy được file (" + res.status + ").");
+        const file = new File([await res.blob()], f.name, { type: "text/html" });
+        const link = await createLink(file, j.title, 30, (p, t) => { if (bar) bar.style.width = Math.round(p * 100) + "%"; if (txt) txt.textContent = t; });
+        pending.set(link.id, link);
+        redraw((await post("/previews", { linkId: link.id, trust: true })).job);
+        D8.toast("Đã gửi bản 3D cho khách duyệt.");
+      } catch (err) { D8.busy(b, false); if (prog) prog.hidden = true; D8.toast(err.message); }
+      busy = false;
+    }));
+
+    // billing and payment confirmation
+    const bf = $("billForm");
+    if (bf) {
+      bf.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const raw = $("billPrice").value.trim(), rawDue = $("billDue").value.trim();
+        const b = e.submitter || bf.querySelector("[type=submit]");
+        D8.busy(b, true);
+        try {
+          redraw((await post("/billing", { price: raw === "" ? null : Number(raw), due: rawDue === "" ? null : Number(rawDue), pay: $("billPay").value, trial: $("billTrial").checked })).job);
+          D8.done($("billForm").querySelector("[type=submit]"), "Đã lưu");
+        } catch (err) { D8.busy(b, false); D8.toast(err.message); }
+      });
+      // price suggestion from the customer's price list (or the default list)
+      if (j.owner && j.service) priceListFor(j.owner).then((d) => {
+        const box = $("billSuggest"); if (!d || !box || !current || current.id !== j.id) return;
+        const items = d.custom ? d.list.items : (d.fallback.items || []);
+        const row = items.find((x) => x.service === j.service);
+        if (!row) { box.innerHTML = `<p class="hint" style="margin:0">Chưa có giá cho dịch vụ này trong bảng giá ${d.custom ? "riêng của khách" : "mặc định"}.</p>`; return; }
+        const c = countUnits(j.teeth, j.numbering);
+        const qty = row.unit === "case" ? 1 : row.unit === "arch" ? Math.max(1, c.arches) : Math.max(1, c.units);
+        const total = Math.round(row.price * qty * 100) / 100;
+        box.innerHTML = `<p class="suggest">Theo bảng giá ${d.custom ? "riêng của khách" : "mặc định"}: <b>${esc(money(total))}</b> (${esc(row.name || D8.svcLabel(row.service))} ${esc(money(row.price))} / ${esc(UNIT_LABEL[row.unit])}${row.unit === "case" ? "" : " × " + qty})
+          <br><button class="btn small" type="button" id="useSuggest">Dùng giá này</button></p>`;
+        $("useSuggest").addEventListener("click", () => { $("billPrice").value = total; $("billPrice").focus(); });
+      });
+    }
+    const payOk = $("payOk"), payNo = $("payNo");
+    if (payOk) payOk.addEventListener("click", async () => {
+      D8.busy(payOk, true);
+      try { redraw((await post("/pay/confirm", { ok: true })).job); D8.toast("Đã xác nhận thanh toán. Khách thấy ca Đã thanh toán."); }
+      catch (err) { D8.busy(payOk, false); D8.toast(err.message); }
+    });
+    if (payNo) armed(payNo, async () => { redraw((await post("/pay/confirm", { ok: false })).job); D8.toast("Đã chuyển lại Chờ thanh toán."); });
     const pc = $("payCheck");
     const runPayCheck = async (loud) => {
       if (pc) D8.busy(pc, true);
       try {
-        const out = await api(`/api/jobs/${j.id}/pay/check`, { method: "POST" });
+        const out = await post("/pay/check");
         if (current && current.id === j.id && (out.job.updated !== current.updated || out.job.pay !== current.pay || JSON.stringify(out.job.payTries) !== JSON.stringify(current.payTries))) redraw(out.job);
         else if (pc && pc.isConnected) D8.busy(pc, false);
-        if (loud) D8.toast(out.paid ? "Khách đã thanh toán." : "Chưa có thanh toán mới.");
+        if (loud) D8.toast(out.sent ? "Khách đã trả qua cổng thanh toán, chờ bạn xác nhận." : out.paid ? "Ca đã thanh toán." : "Chưa có thanh toán mới.");
       } catch (err) { if (pc && pc.isConnected) D8.busy(pc, false); if (loud) D8.toast(err.message); }
     };
     if (pc) pc.addEventListener("click", () => runPayCheck(true));
     if (pc && j.pay === "due" && !payChecked.has(j.id)) { payChecked.add(j.id); runPayCheck(false); }
-    $("statForm").addEventListener("submit", async (e) => {
+
+    const sf = $("statForm");
+    if (sf) sf.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const b = e.submitter || $("statForm").querySelector("[type=submit]");
+      const b = e.submitter || sf.querySelector("[type=submit]");
       D8.busy(b, true);
-      try { redraw((await api(`/api/jobs/${j.id}/status`, { method: "POST", body: { status: $("statSel").value } })).job); D8.done($("statForm").querySelector("[type=submit]"), "Đã cập nhật"); }
+      try { redraw((await post("/status", { status: $("statSel").value })).job); D8.done($("statForm").querySelector("[type=submit]"), "Đã cập nhật"); }
       catch (err) { D8.busy(b, false); D8.toast(err.message); }
     });
     document.querySelectorAll("#p-case [data-del]").forEach((b) => armed(b, async () => redraw((await api(`/api/jobs/${j.id}/files/${b.dataset.del}`, { method: "DELETE" })).job)));
-    document.querySelectorAll("#p-case [data-unlink]").forEach((b) => armed(b, async () => redraw((await api(`/api/jobs/${j.id}/previews`, { method: "POST", body: { linkId: b.dataset.unlink, remove: true } })).job)));
+    document.querySelectorAll("#p-case [data-unlink]").forEach((b) => armed(b, async () => redraw((await post("/previews", { linkId: b.dataset.unlink, remove: true })).job)));
 
-    // 3D links: pick an existing one
-    api("/api/list").then((d) => {
-      const pick = $("pvPick"); if (!pick) return;
-      const have = new Set((j.previews || []).map((p) => p.id));
-      const items = (d.items || []).filter((x) => !have.has(x.id));
-      pick.innerHTML = items.length ? '<option value="">Chọn link đang hoạt động…</option>' + items.map((x) => `<option value="${esc(x.id)}">${esc((x.label || "Chưa đặt tên") + " · đến " + D8.fmtDate(x.expires))}</option>`).join("")
-        : '<option value="">Không có link nào khác</option>';
-    }).catch(() => {});
-    const pvErr = (m) => { $("pvErr").textContent = m; $("pvErr").hidden = !m; };
-    $("pvAttach").addEventListener("click", async () => {
-      const id = $("pvPick").value; if (!id) return;
-      pvErr("");
-      try { redraw((await api(`/api/jobs/${j.id}/previews`, { method: "POST", body: { linkId: id } })).job); } catch (err) { pvErr(err.message); }
-    });
-    $("pvCreate").addEventListener("click", async () => {
-      const f = $("pvFile").files[0];
-      if (!f) return pvErr("Chọn file HTML xuất từ exocad trước.");
-      pvErr("");
-      const prog = $("pvProg"), bar = prog.querySelector("i"), txt = prog.querySelector("p");
-      const days = (document.querySelector('input[name="pvDays"]:checked') || {}).value || "30";
-      $("pvCreate").disabled = true; prog.hidden = false; busy = true;
-      try {
-        const link = await createLink(f, $("pvLabel").value.trim(), days, (p, t) => { bar.style.width = Math.round(p * 100) + "%"; txt.textContent = t; });
-        txt.textContent = "Đang gắn link vào ca…";
-        pending.set(link.id, link);
-        redraw((await api(`/api/jobs/${j.id}/previews`, { method: "POST", body: { linkId: link.id, trust: true } })).job);
-        D8.toast("Đã tạo link 3D và gắn vào ca.");
-      } catch (err) { $("pvCreate").disabled = false; prog.hidden = true; pvErr(err.message); }
-      busy = false;
-    });
+    // 3D links for the customer
+    if ($("pvPick")) {
+      api("/api/list").then((d) => {
+        const pick = $("pvPick"); if (!pick) return;
+        const have = new Set((j.previews || []).map((p) => p.id));
+        const items = (d.items || []).filter((x) => !have.has(x.id));
+        pick.innerHTML = items.length ? '<option value="">Chọn link đang hoạt động…</option>' + items.map((x) => `<option value="${esc(x.id)}">${esc((x.label || "Chưa đặt tên") + " · đến " + D8.fmtDate(x.expires))}</option>`).join("")
+          : '<option value="">Không có link nào khác</option>';
+      }).catch(() => {});
+      const pvErr = (m) => { $("pvErr").textContent = m; $("pvErr").hidden = !m; };
+      $("pvAttach").addEventListener("click", async () => {
+        const id = $("pvPick").value; if (!id) return;
+        pvErr("");
+        try { redraw((await post("/previews", { linkId: id })).job); } catch (err) { pvErr(err.message); }
+      });
+      $("pvCreate").addEventListener("click", async () => {
+        const f = $("pvFile").files[0];
+        if (!f) return pvErr("Chọn file HTML xuất từ exocad trước.");
+        pvErr("");
+        const prog = $("pvProg"), bar = prog.querySelector("i"), txt = prog.querySelector("p");
+        const days = (document.querySelector('input[name="pvDays"]:checked') || {}).value || "30";
+        D8.busy($("pvCreate"), true); prog.hidden = false; busy = true;
+        try {
+          const link = await createLink(f, $("pvLabel").value.trim(), days, (p, t) => { bar.style.width = Math.round(p * 100) + "%"; txt.textContent = t; });
+          txt.textContent = "Đang gắn link vào ca…";
+          pending.set(link.id, link);
+          redraw((await post("/previews", { linkId: link.id, trust: true })).job);
+          D8.toast("Đã tạo link 3D và gắn vào ca.");
+        } catch (err) { D8.busy($("pvCreate"), false); prog.hidden = true; pvErr(err.message); }
+        busy = false;
+      });
+    }
 
-    // deliver output files
-    let outs = [];
-    const list = $("outList"), btn = $("outBtn");
-    const drawPicked = () => {
+    // deliver final files
+    if ($("outZone")) {
+      const btn = $("outBtn");
+      let outs = [];
+      const label = () => {
+        btn.disabled = !outs.length && !$("outDeliver").checked;
+        btn.textContent = outs.length ? `Tải lên ${outs.length} file${$("outDeliver").checked ? " & giao" : ""}` : ($("outDeliver").checked ? "Chuyển sang Đã giao" : "Tải lên & giao");
+        if (j.status === "delivered" && !outs.length) btn.disabled = true;
+      };
       // design = true: finished restorations should be closed meshes
-      D8.renderPicked(list, outs, (i) => { outs.splice(i, 1); drawPicked(); }, { design: true, removeLabel: "Bỏ" });
-      btn.disabled = !outs.length && !$("outDeliver").checked;
-      btn.textContent = outs.length ? `Tải lên ${outs.length} file${$("outDeliver").checked ? " & giao" : ""}` : ($("outDeliver").checked ? "Chuyển sang Đã giao" : "Tải lên & giao");
-    };
-    const add = (fs) => { fs.forEach((f) => { if (!outs.some((x) => x.name === f.name && x.size === f.size)) outs.push(f); }); drawPicked(); };
-    const zone = $("outZone"), input = $("outFiles");
-    input.addEventListener("change", () => { add([...input.files]); input.value = ""; });
-    ["dragenter", "dragover"].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("over"); }));
-    ["dragleave", "drop"].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove("over"); }));
-    zone.addEventListener("drop", (e) => add([...(e.dataTransfer.files || [])]));
-    $("outDeliver").addEventListener("change", drawPicked);
-    drawPicked();
-    if (j.status === "delivered" && !outs.length) btn.disabled = true;
-    btn.addEventListener("click", async () => {
-      const prog = $("outProg"), err = $("outErr");
-      err.hidden = true; btn.disabled = true; busy = true;
-      try {
-        let job;
-        if (outs.length) {
-          prog.hidden = false;
-          job = (await D8.uploadJobFiles(j.id, outs, { deliver: $("outDeliver").checked, onProgress: (p) => { prog.querySelector("i").style.width = p.pct + "%"; prog.querySelector("p").textContent = p.text; } })).job;
-        } else {
-          job = (await api(`/api/jobs/${j.id}/files`, { method: "POST", body: { files: [], deliver: true } })).job;
-        }
-        busy = false; redraw(job); D8.toast(job.status === "delivered" ? "Đã giao file cho khách." : "Đã tải file lên.");
-      } catch (ex) { busy = false; btn.disabled = false; prog.hidden = true; err.textContent = ex.message; err.hidden = false; }
-    });
+      outs = picker($("outZone"), $("outFiles"), $("outList"), label, { design: true });
+      $("outDeliver").addEventListener("change", label);
+      label();
+      btn.addEventListener("click", async () => {
+        const prog = $("outProg"), err = $("outErr");
+        err.hidden = true; D8.busy(btn, true); busy = true;
+        try {
+          let job;
+          if (outs.length) {
+            prog.hidden = false;
+            job = (await D8.uploadJobFiles(j.id, outs, { deliver: $("outDeliver").checked, onProgress: (p) => { prog.querySelector("i").style.width = p.pct + "%"; prog.querySelector("p").textContent = p.text; } })).job;
+          } else job = (await post("/files", { files: [], deliver: true })).job;
+          busy = false; redraw(job); D8.toast(job.status === "delivered" ? "Đã giao file cho khách." : "Đã tải file lên.");
+        } catch (ex) { busy = false; D8.busy(btn, false); prog.hidden = true; err.textContent = ex.message; err.hidden = false; }
+      });
+    }
 
     // AI summary for the designer (made automatically the first time the case is opened)
     const sumCard = $("aiSumCard"), sumBtn = $("aiSumBtn"), sugBtn = $("aiSuggest");
-    const runSummary = async () => {
-      sumBtn.disabled = true; sumBtn.textContent = "Đang tóm tắt…";
-      try {
-        const r = await api(`/api/jobs/${j.id}/summary`, { method: "POST" });
-        j.ai = { ...(j.ai || {}), sum: r.summary, sumAt: r.at, sumUpd: j.updated };
-        $("aiSumBody").innerHTML = `<p class="ai-sum">${esc(r.summary)}</p><p class="ai-meta">Tạo lúc ${esc(D8.fmtDate(r.at, true))}. AI có thể sai, đối chiếu lại phiếu gốc.</p>`;
-        sumBtn.textContent = "Làm mới";
-      } catch (err) { D8.toast(err.message); sumBtn.textContent = j.ai && j.ai.sum ? "Làm mới" : "Tạo tóm tắt"; }
-      sumBtn.disabled = false;
-    };
-    const aiReady = () => {
-      sumCard.hidden = !D8.aiOn; sugBtn.hidden = !D8.aiOn;
-      if (D8.aiOn && !(j.ai && j.ai.sum) && !aiTried.has(j.id)) { aiTried.add(j.id); runSummary(); }
-    };
-    aiReady(); if (!D8.aiOn) document.addEventListener("d8:config", aiReady, { once: true });
-    sumBtn.addEventListener("click", runSummary);
+    if (sumCard) {
+      const runSummary = async () => {
+        sumBtn.disabled = true; sumBtn.textContent = "Đang tóm tắt…";
+        try {
+          const r = await post("/summary");
+          j.ai = { ...(j.ai || {}), sum: r.summary, sumAt: r.at, sumUpd: j.updated };
+          $("aiSumBody").innerHTML = `<p class="ai-sum">${esc(r.summary)}</p><p class="ai-meta">Tạo lúc ${esc(D8.fmtDate(r.at, true))}. AI có thể sai, đối chiếu lại phiếu gốc.</p>`;
+          sumBtn.textContent = "Làm mới";
+        } catch (err) { D8.toast(err.message); sumBtn.textContent = j.ai && j.ai.sum ? "Làm mới" : "Tạo tóm tắt"; }
+        sumBtn.disabled = false;
+      };
+      const aiReady = () => {
+        sumCard.hidden = !D8.aiOn; if (sugBtn) sugBtn.hidden = !D8.aiOn;
+        if (D8.aiOn && !(j.ai && j.ai.sum) && !aiTried.has(j.id)) { aiTried.add(j.id); runSummary(); }
+      };
+      aiReady(); if (!D8.aiOn) document.addEventListener("d8:config", aiReady, { once: true });
+      sumBtn.addEventListener("click", runSummary);
+    }
 
     // messages (write in Vietnamese, translate to English, send English with the Vietnamese kept as the original)
-    const form = $("composeForm"), box = $("composer");
+    const form = $("composeForm");
+    if (!form) return;
+    const box = $("composer");
     let orig = "";
     const showOrig = () => { const o = $("composeOrig"); o.hidden = !orig; o.innerHTML = orig ? "<b>Bản tiếng Việt</b>" + esc(orig) : ""; };
     $("toEn").addEventListener("click", async () => {
@@ -473,11 +724,11 @@
       } catch (err) { D8.toast(err.message); }
       b.disabled = false; b.textContent = "Dịch sang tiếng Anh";
     });
-    sugBtn.addEventListener("click", async () => {
+    if (sugBtn && can("ai.use")) sugBtn.addEventListener("click", async () => {
       const hint = orig || box.value.trim(); // Vietnamese ideas typed by the designer guide the reply
       sugBtn.disabled = true; sugBtn.textContent = "Đang soạn…";
       try {
-        const r = await api(`/api/jobs/${j.id}/suggest`, { method: "POST", body: { hint } });
+        const r = await post("/suggest", { hint });
         box.value = r.en; orig = r.vi || ""; showOrig(); box.focus();
       } catch (err) { D8.toast(err.message); }
       sugBtn.disabled = false; sugBtn.innerHTML = ICON.spark + "Gợi ý trả lời";
@@ -488,7 +739,7 @@
       e.preventDefault();
       const text = box.value.trim(); if (!text) return box.focus();
       D8.busy($("sendMsg"), true); $("msgErr").hidden = true;
-      try { redraw((await api(`/api/jobs/${j.id}/messages`, { method: "POST", body: orig ? { text, original: orig, originalLang: "vi" } : { text } })).job); D8.done($("sendMsg"), "Đã gửi"); }
+      try { redraw((await post("/messages", orig ? { text, original: orig, originalLang: "vi" } : { text })).job); D8.done($("sendMsg"), "Đã gửi"); }
       catch (err) { D8.busy($("sendMsg"), false); $("msgErr").textContent = err.message; $("msgErr").hidden = false; }
     });
   }
@@ -508,13 +759,219 @@
     const per = {}; jobs.forEach((x) => { per[x.owner] = (per[x.owner] || 0) + 1; });
     const shown = users.filter((u) => !q || (u.name + " " + u.email + " " + u.practice + " " + u.country).toLowerCase().includes(q));
     $("custBody").innerHTML = shown.length ? shown.map((u) => `<tr>
-      <td><b>${esc(u.name || "—")}</b><small>${esc(u.email)}</small></td><td>${esc(u.practice || "—")}</td><td>${esc(u.country || "—")}</td><td>${esc(u.phone || "—")}</td>
+      <td><a href="#customers/${encodeURIComponent(u.email)}"><b>${esc(u.name || "—")}</b></a><small>${esc(u.email)}</small></td><td>${esc(u.practice || "—")}</td><td>${esc(u.country || "—")}</td><td>${esc(u.phone || "—")}</td>
       <td class="num">${per[u.email] ? `<a href="#jobs" data-owner="${esc(u.email)}">${per[u.email]} ca</a>` : "0"}</td>
       <td>${esc(D8.fmtDate(u.created))}</td><td>${esc(D8.ago(u.last))}</td></tr>`).join("")
       : `<tr><td colspan="7" class="muted">${users.length ? "Không có khách nào khớp." : "Chưa có khách nào đăng nhập."}</td></tr>`;
     $("custBody").querySelectorAll("[data-owner]").forEach((a) => a.addEventListener("click", () => { jobFilter = "all"; jobQuery = a.dataset.owner; $("jobQ").value = jobQuery; }));
   }
   $("custQ").addEventListener("input", drawCustomers);
+
+  /* ------------------------------------------------------------ dashboard */
+  function drawHome() {
+    const host = $("dash");
+    const u = D8.user;
+    setBand("Xin chào" + (u && u.name ? ", " + u.name : ""), u ? (u.roleLabel || "") + " · việc cần làm hôm nay" : "Việc cần làm hôm nay");
+    if (!jobsAt && !jobs.length) { host.innerHTML = D8.skel.card(4) + D8.skel.card(4) + D8.skel.card(4); return; }
+    const me = myEmail(), seen = adminSeen(), keyMode = mode === "key";
+    const open = (x) => !["delivered", "cancelled"].includes(x.status);
+    const row = (x) => `<li><a href="#jobs/${esc(x.id)}"><span class="t">${esc(x.title)}</span><span class="i">${esc(x.id)}${x.ownerName ? " · " + esc(x.ownerName) : ""}</span><span class="a">${esc(D8.ago(x.updated))}</span></a></li>`;
+    const card = (title, list, empty, more) => `<section class="card"><div class="dash-h"><h2 class="h-caps">${esc(title)}</h2><b>${list.length}</b></div>
+      ${list.length ? `<ul>${list.slice(0, 6).map(row).join("")}</ul>${list.length > 6 && more ? `<p class="hint"><a href="#jobs" data-who="${more}">Xem tất cả ${list.length} ca</a></p>` : ""}` : `<p class="none">${esc(empty)}</p>`}</section>`;
+    const cards = [];
+    if (can("cases.design") && !keyMode) cards.push(card("Việc thiết kế của tôi", jobs.filter((x) => open(x) && x.designer === me && ["", "design", "fix"].includes(x.stage)), "Không có ca nào đang chờ bạn thiết kế.", "mine"));
+    if (can("cases.qc")) cards.push(card("Chờ QC", jobs.filter((x) => x.stage === "qc" && (!x.qcBy || x.qcBy === me || keyMode || can("cases.all"))), "Không có ca nào chờ QC.", "qc"));
+    if (can("cases.deliver")) cards.push(card("Đã qua QC, chờ gửi khách", jobs.filter((x) => x.stage === "ready" && open(x)), "Không có ca nào chờ gửi.", "ready"));
+    if (can("cases.assign")) cards.push(card("Chưa giao KTV", jobs.filter((x) => open(x) && !x.designer), "Ca nào cũng đã có người làm.", "none"));
+    if (can("cases.chat_read")) cards.push(card("Khách vừa nhắn", jobs.filter((x) => needsReply(x, seen)), "Không có tin nhắn mới của khách."));
+    if (can("billing.edit")) cards.push(card("Thanh toán chờ xác nhận", jobs.filter((x) => x.pay === "check"), "Không có khoản nào chờ xác nhận.", "check"));
+    if (can("messages.view")) {
+      const unread = messages.filter((m) => !seenMsgs.has(m.id)).length;
+      cards.push(`<section class="card"><div class="dash-h"><h2 class="h-caps">Tin nhắn từ trang web</h2><b>${unread}</b></div><p class="none">${unread ? "Có tin nhắn mới chưa đọc." : "Không có tin nhắn mới."} <a href="#messages">Mở hộp thư</a></p></section>`);
+    }
+    if (!cards.length) cards.push(`<section class="card"><h2 class="h-caps">Ca hàng</h2><p class="none">Các ca được giao cho bạn sẽ hiện ở đây. <a href="#jobs">Xem danh sách ca</a></p></section>`);
+    host.innerHTML = cards.join("");
+    host.querySelectorAll("[data-who]").forEach((a) => a.addEventListener("click", () => { jobWho = a.dataset.who; $("jobWho").value = jobWho; jobFilter = "all"; }));
+  }
+
+  /* ------------------------------------------------------------ price lists */
+  const UNITS = [["unit", "/ răng – đơn vị"], ["arch", "/ hàm"], ["case", "/ ca"]];
+  async function priceEditor(host, key) {
+    host.innerHTML = D8.skel.card(4);
+    let data;
+    try { data = await api("/api/prices/" + encodeURIComponent(key)); } catch (err) { host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+    const isDefault = key === "default";
+    let items = (data.custom || isDefault ? data.list.items : []).map((x) => ({ ...x }));
+    let note = (data.custom || isDefault ? data.list.note : "") || "";
+    const fallback = (data.fallback && data.fallback.items) || [];
+    const draw = () => {
+      host.innerHTML = `<div class="tbl-wrap"><table class="grid-tbl" style="min-width:640px"><thead><tr><th>Dịch vụ</th><th>Hạng mục</th><th class="unit">Tính theo</th><th class="num">Giá (USD)</th><th class="x"></th></tr></thead><tbody>
+        ${items.map((x, i) => `<tr>
+          <td><select class="input" data-i="${i}" data-k="service">${["", ...D8.SERVICES].map((s) => `<option value="${esc(s)}"${s === x.service ? " selected" : ""}>${esc(s ? D8.svcLabel(s) : "— Chọn dịch vụ —")}</option>`).join("")}</select></td>
+          <td><input class="input" data-i="${i}" data-k="name" maxlength="80" value="${esc(x.name || "")}" placeholder="VD: Mão zirconia trên implant"></td>
+          <td class="unit"><select class="input" data-i="${i}" data-k="unit">${UNITS.map(([u, l]) => `<option value="${u}"${u === x.unit ? " selected" : ""}>${l}</option>`).join("")}</select></td>
+          <td class="num"><input class="input" type="number" min="0" step="0.01" inputmode="decimal" data-i="${i}" data-k="price" value="${x.price ?? ""}"></td>
+          <td class="x"><button class="iconbtn del" type="button" data-rm="${i}" aria-label="Xóa dòng">${ICON.trash}</button></td></tr>`).join("")
+          || `<tr><td colspan="5" class="muted">${isDefault ? "Chưa có dòng giá nào." : "Khách này đang dùng bảng giá mặc định" + (fallback.length ? " (" + fallback.length + " dòng)" : "") + ". Thêm dòng để đặt giá riêng cho khách."}</td></tr>`}
+        </tbody></table></div>
+        <div class="wf-actions"><button class="btn small" type="button" data-add>+ Thêm dòng</button>${!isDefault && fallback.length && !items.length ? '<button class="btn small" type="button" data-copy>Chép từ bảng giá mặc định</button>' : ""}</div>
+        <label class="field-label" style="margin-top:16px" for="pn-${esc(key)}">Ghi chú (chỉ nội bộ)</label><textarea class="input" id="pn-${esc(key)}" data-note rows="2" maxlength="600" style="min-height:64px">${esc(note)}</textarea>
+        <div class="wf-actions"><button class="btn btn-primary small" type="button" data-save>Lưu bảng giá</button>${!isDefault && data.custom ? '<button class="btn small btn-danger" type="button" data-reset>Bỏ giá riêng, dùng bảng mặc định</button>' : ""}</div>
+        <p class="error" data-err hidden></p>`;
+      host.querySelectorAll("[data-i]").forEach((el) => el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => { const x = items[+el.dataset.i]; x[el.dataset.k] = el.dataset.k === "price" ? el.value : el.value; }));
+      host.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { items.splice(+b.dataset.rm, 1); draw(); }));
+      host.querySelector("[data-add]").addEventListener("click", () => { items.push({ service: "", name: "", unit: "unit", price: "" }); draw(); });
+      const cp = host.querySelector("[data-copy]"); if (cp) cp.addEventListener("click", () => { items = fallback.map((x) => ({ ...x })); draw(); });
+      host.querySelector("[data-note]").addEventListener("input", (e) => { note = e.target.value; });
+      const err = host.querySelector("[data-err]");
+      host.querySelector("[data-save]").addEventListener("click", async (e) => {
+        const b = e.currentTarget; err.hidden = true;
+        if (items.some((x) => x.price === "" || isNaN(Number(x.price)))) { err.textContent = "Điền giá cho mọi dòng (số USD)."; err.hidden = false; return; }
+        D8.busy(b, true);
+        try {
+          const r = await api("/api/prices/" + encodeURIComponent(key), { method: "POST", body: { items: items.map((x) => ({ ...x, price: Number(x.price) })), note } });
+          data = { ...data, list: r.list, custom: r.custom }; items = r.list.items.map((x) => ({ ...x })); priceCache.clear();
+          draw(); D8.done(host.querySelector("[data-save]"), "Đã lưu");
+        } catch (ex) { D8.busy(b, false); err.textContent = ex.message; err.hidden = false; }
+      });
+      const rs = host.querySelector("[data-reset]");
+      if (rs) armed(rs, async () => { await api("/api/prices/" + encodeURIComponent(key), { method: "POST", body: { reset: true } }); priceCache.clear(); data.custom = false; items = []; note = ""; draw(); D8.toast("Khách dùng lại bảng giá mặc định."); });
+    };
+    draw();
+  }
+  function drawPrices() {
+    setBand("Bảng giá", "Giá mặc định cho mọi khách; đặt giá riêng trong hồ sơ từng khách");
+    $("p-prices").innerHTML = `<section class="card"><h2 class="h-caps">Bảng giá mặc định</h2>
+      <p class="sub">Khách không bao giờ thấy bảng giá. Khi báo giá một ca, hệ thống gợi ý số tiền theo bảng giá riêng của khách (nếu có) hoặc bảng này, nhân với số răng / số hàm trong phiếu.</p>
+      <div id="defPrices"></div></section>
+      ${can("customers.view") ? `<section class="card"><h2 class="h-caps">Giá riêng theo khách</h2><p class="sub">Mở <a href="#customers">Khách hàng</a>, chọn một khách rồi chỉnh mục Bảng giá riêng.</p></section>` : ""}`;
+    priceEditor($("defPrices"), "default");
+  }
+
+  /* ------------------------------------------------------------ one customer */
+  async function openCustomer(email) {
+    setBand("Khách hàng", email, { back: true, backHref: "#customers", backText: "Khách hàng" });
+    const host = $("p-customer");
+    show("p-customer", true);
+    host.innerHTML = D8.skel.page();
+    try { await Promise.all([users.length ? null : api("/api/admin/users").then((u) => { users = u.users || []; }), jobsAt ? null : loadJobs(true)]); }
+    catch (err) { host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+    const u = users.find((x) => x.email === email) || { email, name: "", practice: "", country: "", phone: "" };
+    const mine = jobs.filter((x) => x.owner === email);
+    const tu = trialUse(email);
+    setBand(u.name || email, [u.practice, u.country].filter(Boolean).join(" · ") || email, { back: true, backHref: "#customers", backText: "Khách hàng" });
+    show("p-customer");
+    host.innerHTML = `<div class="pt-grid"><div>
+        <section class="card"><div class="card-head-row"><h2 class="h-caps">Các ca của khách</h2><span class="chip">${mine.length} ca</span></div>
+          ${mine.length ? `<div class="pt-list">${mine.map((x) => `<a class="pt-row" href="#jobs/${esc(x.id)}"><div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
+            <span class="meta">Gửi ${esc(D8.fmtDate(x.created, true))} · cập nhật ${esc(D8.ago(x.updated))}</span>
+            <span class="right">${stChip(x.status)}${x.trial ? '<span class="badge-trial">Dùng thử</span>' : ""}${payChip(x)}</span></a>`).join("")}</div>` : '<p class="muted" style="margin:0">Khách chưa gửi ca nào.</p>'}
+        </section>
+        ${can("pricing.manage") ? `<section class="card"><h2 class="h-caps">Bảng giá riêng</h2><p class="sub">Chỉ đội D.EIGHT thấy. Để trống thì khách dùng bảng giá mặc định.</p><div id="custPrices"></div></section>` : ""}
+      </div><aside>
+        <section class="card"><h2 class="h-caps" style="margin-bottom:16px">Hồ sơ</h2><dl class="dl">
+          <div><dt>Tên</dt><dd>${esc(u.name || "—")}</dd></div><div><dt>Email</dt><dd><a href="mailto:${esc(email)}">${esc(email)}</a></dd></div>
+          <div><dt>Lab / phòng khám</dt><dd>${esc(u.practice || "—")}</dd></div><div><dt>Quốc gia</dt><dd>${esc(u.country || "—")}</dd></div>
+          <div><dt>Điện thoại</dt><dd>${esc(u.phone || "—")}</dd></div>
+          <div><dt>Đăng nhập đầu</dt><dd>${u.created ? esc(D8.fmtDate(u.created)) : "—"}</dd></div><div><dt>Gần nhất</dt><dd>${u.last ? esc(D8.ago(u.last)) : "—"}</dd></div></dl></section>
+        ${can("billing.view") ? `<section class="card"><h2 class="h-caps" style="margin-bottom:12px">Dùng thử</h2><p class="muted" style="margin:0">${tu.cases ? `${tu.cases} ca dùng thử, tổng giá ${esc(money(tu.used))} / mức ${esc(money(TRIAL_CREDIT))}. Phần vượt do bạn thương lượng với khách.` : "Không có ca dùng thử."}</p></section>` : ""}
+      </aside></div>`;
+    if ($("custPrices")) priceEditor($("custPrices"), email);
+  }
+
+  /* ------------------------------------------------------------ staff and permissions */
+  let staffData = null, roleDraft = null;
+  async function drawStaff() {
+    setBand("Nhân sự & phân quyền", "Ai vào được khu làm việc và được làm gì");
+    const host = $("p-staff");
+    if (!staffData) host.innerHTML = D8.skel.card(5) + D8.skel.card(6);
+    try { staffData = await api("/api/staff"); roleDraft = JSON.parse(JSON.stringify(staffData.roles)); }
+    catch (err) { host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+    renderStaff();
+  }
+  const slugify = (s, taken) => {
+    let k = String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 20);
+    if (!/^[a-z]/.test(k)) k = "role_" + k;
+    if (k.length < 2) k = "role";
+    let out = k, n = 2;
+    while (taken.includes(out)) out = (k.slice(0, 20) + "_" + n++);
+    return out;
+  };
+  function renderStaff() {
+    const host = $("p-staff");
+    const { staff, roles, perms } = staffData;
+    const roleName = (k) => (roles[k] ? roles[k].label : k);
+    const groups = [...new Set(perms.map((p) => p.group))];
+    const roleOpts = (sel) => Object.entries(roles).map(([k, r]) => `<option value="${esc(k)}"${k === sel ? " selected" : ""}>${esc(r.label)}</option>`).join("");
+    const meEmail = myEmail();
+    const rows = staff.map((s, i) => {
+      const own = s.owner;
+      const permList = Array.isArray(s.perms) ? s.perms : null;
+      return `<tr class="staff-row${s.active === false ? " off" : ""}">
+        <td><b>${esc(s.name || s.email.split("@")[0])}</b>${own ? '<span class="tag">Chủ</span>' : ""}${s.email === meEmail ? '<span class="tag">Bạn</span>' : ""}<small>${esc(s.email)}</small></td>
+        <td>${own ? esc(roleName("admin")) : `<select class="input" data-role="${i}" style="height:40px;min-width:180px">${roleOpts(s.role)}</select>`}</td>
+        <td>${own ? "Tất cả" : permList ? `Quyền riêng (${permList.length})` : "Theo vai trò"}</td>
+        <td>${s.last ? esc(D8.ago(s.last)) : '<span class="muted">Chưa đăng nhập</span>'}</td>
+        <td>${own ? "" : `<div class="row-tools"><button class="btn small" type="button" data-perm="${i}">Sửa quyền</button>
+          <button class="btn small" type="button" data-active="${i}">${s.active === false ? "Mở lại" : "Khóa"}</button>
+          <button class="btn small btn-danger" type="button" data-remove="${i}">Xóa</button></div>`}</td></tr>
+        ${own ? "" : `<tr hidden data-permrow="${i}"><td colspan="5"><div class="perm-grid">${groups.map((g) => `<p class="grp">${esc(g)}</p>` + perms.filter((p) => p.group === g).map((p) =>
+          `<label><input type="checkbox" data-pk="${esc(p.key)}"${(permList || (roles[s.role] || { perms: [] }).perms).includes(p.key) ? " checked" : ""}> ${esc(p.label)}</label>`).join("")).join("")}</div>
+          <div class="wf-actions"><button class="btn btn-primary small" type="button" data-psave="${i}">Lưu quyền riêng</button><button class="btn small" type="button" data-preset="${i}">Dùng quyền theo vai trò</button></div></td></tr>`}`;
+    }).join("");
+    const rk = Object.keys(roleDraft);
+    const matrix = `<div class="tbl-wrap"><table class="grid-tbl matrix" style="min-width:${300 + rk.length * 130}px"><thead><tr><th>Quyền</th>${rk.map((k) => `<th class="r">
+        ${k === "admin" ? esc(roleDraft[k].label) : `<input class="input" data-rlabel="${esc(k)}" value="${esc(roleDraft[k].label)}" maxlength="60" style="height:34px;text-align:center;font-size:13px">`}
+        ${k === "admin" ? '<small class="muted">luôn đủ quyền</small>' : `<button class="btn small btn-danger rm" type="button" data-rdel="${esc(k)}">Xóa</button>`}</th>`).join("")}</tr></thead><tbody>
+      ${groups.map((g) => `<tr class="grp-row"><td colspan="${rk.length + 1}">${esc(g)}</td></tr>` + perms.filter((p) => p.group === g).map((p) => `<tr><td>${esc(p.label)}</td>${rk.map((k) =>
+        `<td class="c"><input type="checkbox" data-rk="${esc(k)}" data-rp="${esc(p.key)}"${roleDraft[k].perms.includes(p.key) ? " checked" : ""}${k === "admin" ? " disabled" : ""} aria-label="${esc(roleDraft[k].label + ": " + p.label)}"></td>`).join("")}</tr>`).join("")).join("")}
+      </tbody></table></div>`;
+    host.innerHTML = `<section class="card"><div class="card-head"><div><h2 class="h-caps">Nhân sự</h2><p class="muted" style="margin:6px 0 0;font-size:13px;line-height:1.6">Người đăng nhập Google bằng email trong danh sách này vào được khu làm việc với quyền của vai trò. Người khác chỉ là khách hàng. Quyền đổi có hiệu lực trong vòng vài giây.</p></div></div>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nhân sự</th><th>Vai trò</th><th>Quyền</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+        <form class="add-row" id="stAdd"><input class="input" type="email" id="stEmail" placeholder="Email Google của nhân sự mới" required autocomplete="off"><select class="input" id="stRole">${roleOpts("designer")}</select><button class="btn btn-primary" type="submit">Thêm nhân sự</button></form>
+        <p class="error" id="stErr" hidden></p></section>
+      <section class="card"><div class="card-head"><div><h2 class="h-caps">Vai trò &amp; quyền</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tick quyền cho từng vai trò. Thêm vai trò mới (ví dụ Trưởng nhóm) nếu cần.</p></div></div>
+        ${matrix}
+        <div class="add-row"><input class="input" id="rNew" placeholder="Tên vai trò mới, ví dụ Trưởng nhóm" maxlength="60"><button class="btn small" type="button" id="rAdd">+ Thêm vai trò</button><button class="btn btn-primary" type="button" id="rSave">Lưu vai trò &amp; quyền</button></div>
+        <p class="error" id="rErr" hidden></p></section>`;
+
+    const err = (m) => { $("stErr").textContent = m; $("stErr").hidden = !m; };
+    const save = async (s, patch, btn) => {
+      err(""); if (btn) D8.busy(btn, true);
+      try {
+        await api("/api/staff", { method: "POST", body: { email: s.email, role: s.role, perms: Array.isArray(s.perms) ? s.perms : null, active: s.active !== false, name: s.name || "", ...patch } });
+        await drawStaff(); loadTeam(); D8.toast("Đã lưu.");
+      } catch (ex) { if (btn && btn.isConnected) D8.busy(btn, false); err(ex.message); }
+    };
+    host.querySelectorAll("[data-role]").forEach((sel) => sel.addEventListener("change", () => save(staff[+sel.dataset.role], { role: sel.value })));
+    host.querySelectorAll("[data-perm]").forEach((b) => b.addEventListener("click", () => { const r = host.querySelector(`[data-permrow="${b.dataset.perm}"]`); r.hidden = !r.hidden; }));
+    host.querySelectorAll("[data-psave]").forEach((b) => b.addEventListener("click", () => {
+      const r = host.querySelector(`[data-permrow="${b.dataset.psave}"]`);
+      save(staff[+b.dataset.psave], { perms: [...r.querySelectorAll("[data-pk]:checked")].map((x) => x.dataset.pk) }, b);
+    }));
+    host.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => save(staff[+b.dataset.preset], { perms: null }, b)));
+    host.querySelectorAll("[data-active]").forEach((b) => b.addEventListener("click", () => { const s = staff[+b.dataset.active]; save(s, { active: s.active === false }, b); }));
+    host.querySelectorAll("[data-remove]").forEach((b) => armed(b, async () => { await api("/api/staff/" + encodeURIComponent(staff[+b.dataset.remove].email), { method: "DELETE" }); await drawStaff(); loadTeam(); D8.toast("Đã xóa nhân sự."); }));
+    $("stAdd").addEventListener("submit", (e) => { e.preventDefault(); save({ email: $("stEmail").value.trim(), role: $("stRole").value }, {}, $("stAdd").querySelector("[type=submit]")); });
+
+    // roles matrix (edited as a draft, saved together)
+    host.querySelectorAll("[data-rk]").forEach((c) => c.addEventListener("change", () => {
+      const r = roleDraft[c.dataset.rk], p = c.dataset.rp;
+      r.perms = c.checked ? [...new Set([...r.perms, p])] : r.perms.filter((x) => x !== p);
+    }));
+    host.querySelectorAll("[data-rlabel]").forEach((i) => i.addEventListener("input", () => { roleDraft[i.dataset.rlabel].label = i.value; }));
+    host.querySelectorAll("[data-rdel]").forEach((b) => armed(b, async () => { delete roleDraft[b.dataset.rdel]; renderStaff(); }));
+    $("rAdd").addEventListener("click", () => {
+      const label = $("rNew").value.trim(); if (!label) return $("rNew").focus();
+      roleDraft[slugify(label, Object.keys(roleDraft))] = { label, perms: ["cases.notes"] };
+      renderStaff();
+    });
+    $("rSave").addEventListener("click", async (e) => {
+      const b = e.currentTarget; $("rErr").hidden = true; D8.busy(b, true);
+      try { await api("/api/roles", { method: "POST", body: { roles: roleDraft } }); await drawStaff(); loadTeam(); D8.toast("Đã lưu vai trò và quyền."); }
+      catch (ex) { if (b.isConnected) D8.busy(b, false); $("rErr").textContent = ex.message; $("rErr").hidden = false; }
+    });
+  }
 
   /* ------------------------------------------------------------ CSV exports (open in Excel) */
   const userName = (email) => (users.find((u) => u.email === email) || {}).name || "";

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>try{var t=localStorage.getItem("d8-theme");if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <meta name="robots" content="noindex, nofollow">
-<meta name="d8-version" content="2026-10-19.4">
+<meta name="d8-version" content="2026-10-19.5">
 <title>Chuyển HTML sang STL | D.EIGHT</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -15,9 +15,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-19.4">
-<link rel="stylesheet" href="/case.css?v=2026-10-19.4">
-<script src="/shell.js?v=2026-10-19.4" defer></script>
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.5">
+<link rel="stylesheet" href="/case.css?v=2026-10-19.5">
+<script src="/shell.js?v=2026-10-19.5" defer></script>
 <style>
   body { background: var(--paper); }
   .gate { max-width: 480px; margin: 10px auto 0; }
@@ -211,24 +211,25 @@
     $("gateWho").innerHTML = "";
     if (u) {
       const p = document.createElement("p"); p.className = "who";
-      p.textContent = "Bạn đang đăng nhập bằng " + u.email + ". Tài khoản này không có quyền quản trị.";
+      p.textContent = "Bạn đang đăng nhập bằng " + u.email + ". Tài khoản này chưa có quyền dùng công cụ này (quyền Link xem 3D và HTML sang STL).";
       $("gateWho").appendChild(p);
     }
     D8.renderGoogleButton($("gbtn"), null, { width: 320 });
   }
   document.addEventListener("DOMContentLoaded", async () => {
     const u = await D8.ready;
-    if (u && u.role === "admin") return showApp(true);
+    const allowed = (x) => !!(x && x.staff && (x.perms || []).includes("links.manage"));
+    if (allowed(u)) return showApp(true);
     if (D8.adminKey()) {
-      try { await D8.api("/api/ping"); return showApp(true); } catch (err) { if (err.status === 401) clearKey(); }
+      try { await D8.api("/api/ping"); document.body.dataset.authMode = "key"; return showApp(true); } catch (err) { if (err.status === 401) clearKey(); }
     }
     showGate(u);
-    document.addEventListener("d8:user", (e) => { if (authed || !e.detail) return; if (e.detail.role === "admin") showApp(true); else showGate(e.detail); });
+    document.addEventListener("d8:user", (e) => { if (authed || !e.detail) return; if (allowed(e.detail)) showApp(true); else showGate(e.detail); });
   });
   $("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault(); $("loginError").hidden = true; $("loginBtn").disabled = true;
     try { ($("remember").checked ? localStorage : sessionStorage).setItem(KEY_NAME, $("pw").value); } catch {}
-    try { await D8.api("/api/ping"); showApp(true); }
+    try { await D8.api("/api/ping"); document.body.dataset.authMode = "key"; showApp(true); }
     catch (err) { clearKey(); $("loginError").textContent = err.message; $("loginError").hidden = false; }
     $("loginBtn").disabled = false;
   });

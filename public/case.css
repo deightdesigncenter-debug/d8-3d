@@ -214,6 +214,7 @@ select.input { appearance: none; -webkit-appearance: none; padding-right: 40px; 
   letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; background: var(--steel-100); color: var(--navy); }
 .pay-due { background: var(--warn-bg); color: var(--warn-fg); }
 .pay-paid { background: var(--ok-bg); color: var(--success); }
+.pay-check { background: var(--info-bg); color: var(--navy); }
 .card-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
 /* picked files with health check */
@@ -260,8 +261,18 @@ select.input { appearance: none; -webkit-appearance: none; padding-right: 40px; 
 .pay-act .hint { display: flex; gap: 6px; align-items: center; justify-content: flex-end; margin: 10px 0 0; font-size: 12.5px; text-align: right; }
 .pay-act .hint svg { flex: 0 0 auto; }
 .paid-line { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+.pay-card-check { border-color: var(--line); background: var(--info-bg); }
+.pay-card-check .pay-amt .eyebrow { color: var(--navy); }
+.pay-other { margin-top: 12px; text-align: right; }
+.pay-other summary { cursor: pointer; color: var(--navy); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; list-style: none; }
+.pay-other summary::-webkit-details-marker { display: none; }
+.pay-other form { display: grid; gap: 8px; margin-top: 10px; text-align: left; }
+.pay-other form .btn { justify-self: end; }
+@media (max-width: 760px) { .pay-other { text-align: left; } .pay-other form .btn { justify-self: start; } }
 @media (max-width: 760px) {
   .pay-card { grid-template-columns: minmax(0, 1fr); padding: 20px; }
   .pay-act .btns .btn { flex: 1 1 100%; }
   .pay-act .hint { justify-content: flex-start; text-align: left; }
 }
+/* keep the footer below the fold while a portal screen loads (no jump when content arrives) */
+body[data-page="portal"] #view { min-height: calc(100vh - 140px); }

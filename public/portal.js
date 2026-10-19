@@ -63,7 +63,7 @@
   }
   function loading(kind) {
     const body = kind === "case" ? D8.skel.page() : kind === "form" ? D8.skel.form() : D8.skel.rows(3);
-    page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><span class="sk sk-line h28" style="margin:14px 0 0;width:min(420px,70vw)"></span></div>`), body, true);
+    page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><span class="sk sk-line h28" style="margin:14px 0 0;width:min(420px,70vw);height:40px"></span><span class="sk sk-line" style="margin:12px 0 0;width:min(300px,55vw);height:30px"></span></div>`), body, true);
   }
   function failed(msg) {
     page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><h1>${esc(T("p.list.h"))}</h1></div>`),
@@ -153,7 +153,7 @@
       return `<a class="pt-row" href="#/case/${esc(x.id)}">
         <div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
         <span class="meta">${esc(T("p.sent").replace("{d}", D8.fmtDate(x.created)))} · ${esc(T("p.updated").replace("{t}", D8.ago(x.updated)))}</span>
-        <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${x.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
+        <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${x.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>` : x.pay === "check" ? `<span class="pay pay-check">${esc(T("bill.check"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
     }).join("");
     const empty = !items.length
       ? `<div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">${esc(T("p.empty.h"))}</h2><p>${esc(T("p.empty.p"))}</p>
@@ -198,7 +198,7 @@
       const out = await D8.api(`/api/jobs/${id}/pay/check`, { method: "POST" });
       if (!current || current.id !== id) return;
       if (out.job.updated !== current.updated || out.job.pay !== current.pay || out.job.payHeld !== current.payHeld) { current = out.job; drawCase(current); }
-      if (loud) D8.toast(T(out.paid ? "pay.ok" : out.job.payHeld ? "pay.held" : "pay.wait"));
+      if (loud) D8.toast(T(out.paid ? "pay.ok" : out.sent ? "pay.sent" : out.job.payHeld ? "pay.held" : "pay.wait"));
     } catch (err) { if (loud) D8.toast(err.message); }
   }
   async function refreshCase() {
@@ -258,9 +258,9 @@
       .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
     // Customers never see a price list or the case price, only a free trial or the amount they are asked to pay.
     const paidLine = j.pay === "paid" && j.paid ? T("pay.paidline").replace("{amt}", money(j.paid.amount)).replace("{via}", D8.t("pay.via." + j.paid.via, j.paid.via)).replace("{d}", D8.fmtDate(j.paid.at)) : "";
-    const bill = j.trial || j.pay === "due" || j.pay === "paid"
-      ? `<div><dt>${esc(T("bill.pay"))}</dt><dd>${j.trial && j.pay !== "due" && j.pay !== "paid" ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${
-          j.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>${typeof j.amount === "number" ? " " + esc(money(j.amount)) : ""}` : ""}${
+    const bill = j.trial || ["due", "check", "paid"].includes(j.pay)
+      ? `<div><dt>${esc(T("bill.pay"))}</dt><dd>${j.trial && !["due", "check", "paid"].includes(j.pay) ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${
+          j.pay === "due" || j.pay === "check" ? `<span class="pay pay-${j.pay}">${esc(T("bill." + j.pay))}</span>${typeof j.amount === "number" ? " " + esc(money(j.amount)) : ""}` : ""}${
           j.pay === "paid" ? `<span class="pay pay-paid">${esc(T("bill.paid"))}</span>${paidLine ? `<small class="paid-line">${esc(paidLine)}</small>` : ""}` : ""}</dd></div>` : "";
     let payBox = "";
     if (j.pay === "due") {
@@ -273,7 +273,15 @@
         <div class="pay-act">${amt && btns.length
           ? `<div class="btns">${btns.join("")}</div><p class="hint">${ICON.lock}<span>${esc(T("pay.safe"))}</span></p>`
           : `<p class="hint">${esc(T("pay.none"))} <a href="${esc(D8.waLink(T("pay.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">WhatsApp · Danny Do</a></p>`}
-          ${j.payHeld ? `<p class="hint">${esc(T("pay.held"))}</p>` : ""}</div></section>`;
+          ${j.payHeld ? `<p class="hint">${esc(T("pay.held"))}</p>` : ""}
+          ${amt ? `<details class="pay-other"><summary>${esc(T("pay.other"))}</summary>
+            <form id="claimForm"><label class="field-label" for="claimNote">${esc(T("pay.other.l"))}</label>
+              <input class="input" id="claimNote" maxlength="300" placeholder="${esc(T("pay.other.ph"))}">
+              <button class="btn small" type="submit" id="claimBtn">${esc(T("pay.other.b"))}</button></form></details>` : ""}</div></section>`;
+    } else if (j.pay === "check") {
+      payBox = `<section class="pay-card pay-card-check" aria-labelledby="payH">
+        <div class="pay-amt"><span class="eyebrow" id="payH">${esc(T("pay.check.h"))}</span><b>${esc(typeof j.amount === "number" ? money(j.amount) : "")}</b><small>${esc(T("pay.for").replace("{id}", j.id))}</small></div>
+        <div class="pay-act"><p class="hint">${esc(T("pay.check.p"))}</p></div></section>`;
     }
 
     page(band(`<div><a class="pt-back" href="#/">${ICON.back}${esc(T("p.back"))}</a>
@@ -364,9 +372,19 @@
       try {
         const out = await D8.api(`/api/jobs/${j.id}/pay`, { method: "POST", body: { via: b.dataset.pay } });
         if (out.url) { location.href = out.url; return; }
-        if (out.job) { current = out.job; drawCase(current); D8.toast(T("pay.ok")); }
+        if (out.job) { current = out.job; drawCase(current); D8.toast(T(out.paid ? "pay.ok" : "pay.sent")); }
       } catch (err) { D8.busy(b, false); all.forEach((x) => { x.disabled = false; }); D8.toast(err.message); }
     }));
+    // paid another way (bank transfer, Payoneer): tell D.EIGHT, who confirms when the money arrives
+    const cf = document.getElementById("claimForm");
+    if (cf) cf.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const note = document.getElementById("claimNote").value.trim();
+      if (note.length < 3) return document.getElementById("claimNote").focus();
+      const b = document.getElementById("claimBtn"); D8.busy(b, true);
+      try { current = (await D8.api(`/api/jobs/${j.id}/pay/claim`, { method: "POST", body: { note } })).job; drawCase(current); D8.toast(T("pay.sent")); }
+      catch (err) { D8.busy(b, false); D8.toast(err.message); }
+    });
     // approve (two-step, no browser dialog)
     const ap = document.getElementById("approve");
     if (ap) {

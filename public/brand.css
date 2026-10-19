@@ -318,6 +318,7 @@ a { color: var(--navy); }
    Site shell (shell.js): one header/footer for website, portal and admin
    ===================================================================== */
 #d8-header { min-height: 104px; }
+html.sub-pre #d8-header { min-height: 157px; }
 .sh { position: sticky; top: 0; z-index: 50; background: var(--cream); color: var(--navy); border-bottom: 1px solid var(--line); }
 .sh-top { background: var(--band); color: var(--on-brand-2); font-size: 12px; }
 .sh-top-in { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 32px; }
@@ -349,7 +350,9 @@ a { color: var(--navy); }
 .sh-logo img { height: 36px; width: auto; }
 .sh-logo .sym { display: none; height: 30px; }
 .sh-logo .on-dark { display: none; }
+.sh-ws { margin-left: 4px; padding: 4px 10px; border-radius: 999px; background: var(--steel-100); color: var(--navy); font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; }
 .sh-nav { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.sh-nav[hidden] + .sh-right { margin-left: auto; }
 .sh-nav a, .sh-sub a {
   display: inline-flex; align-items: center; height: 36px; padding: 0 11px; border-radius: 999px; text-decoration: none; white-space: nowrap;
   font-family: var(--f-display); font-weight: 600; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: inherit; transition: background .15s, color .15s;
@@ -417,6 +420,10 @@ body[data-page="home"] #d8-header { min-height: 0; }
 
 /* footer */
 .sh-foot { margin-top: 0; }
+.sh-foot-ws .wrap { display: flex; justify-content: space-between; align-items: center; gap: 10px 24px; flex-wrap: wrap; padding-top: 18px; padding-bottom: 18px; font-size: 13px; color: var(--on-brand-2); }
+.sh-foot-ws nav { display: flex; gap: 18px; flex-wrap: wrap; }
+.sh-foot-ws a { color: var(--on-brand-2); text-decoration: none; }
+.sh-foot-ws a:hover { color: var(--on-brand); text-decoration: underline; }
 .sh-foot-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 32px; padding-top: 56px; padding-bottom: 40px; }
 .sh-foot-brand .tag { height: 26px; width: auto; margin-top: 14px; }
 .sh-foot-brand p { margin: 16px 0 0; color: #C9D6E4; font-size: 14px; line-height: 1.7; max-width: 320px; }
@@ -454,6 +461,7 @@ body[data-page="home"] #d8-header { min-height: 0; }
   html[data-theme="dark"] .sh-logo .sym.on-dark { display: block; }
   .sh-top .sh-top-r a span, .sh-top .sh-theme span { display: none; }
   #d8-header { min-height: 94px; }
+  html.sub-pre #d8-header { min-height: 148px; }
 }
 
 /* ---------- motion ----------

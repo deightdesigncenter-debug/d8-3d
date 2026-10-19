@@ -4,9 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>try{var t=localStorage.getItem("d8-theme");if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<script>try{var h=JSON.parse(localStorage.getItem("d8-hint")||"null");if(h&&h.staff)document.documentElement.classList.add("ws-pre")}catch(e){}</script>
 <meta name="robots" content="noindex, nofollow">
-<meta name="d8-version" content="2026-10-19.4">
-<title>Quản trị | D.EIGHT</title>
+<meta name="d8-version" content="2026-10-19.5">
+<title>Workspace | D.EIGHT</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
@@ -15,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-19.4">
-<link rel="stylesheet" href="/case.css?v=2026-10-19.4">
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.5">
+<link rel="stylesheet" href="/case.css?v=2026-10-19.5">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -122,7 +123,104 @@
   .tbl tr:hover td { background: var(--hover); }
   .tbl .num { text-align: right; white-space: nowrap; }
 
+  /* workspace layout: sidebar + content */
+  /* ws-pre: drawn from the last known account before sign-in is confirmed, so the layout does not jump */
+  html.ws-pre .ws-side[hidden] { display: flex !important; }
+  .ws.has-nav, html.ws-pre .ws { display: grid; grid-template-columns: 236px minmax(0, 1fr); align-items: start;
+                background: linear-gradient(90deg, var(--white) 0 235px, var(--line) 235px 236px, transparent 236px); }
+  .ws-main { min-width: 0; }
+  .ws-main > .pt-main { min-height: calc(100vh - 250px); }
+  .ws-side { position: sticky; top: 105px; height: calc(100vh - 105px); overflow: auto; padding: 22px 14px 18px; display: flex; flex-direction: column; gap: 18px; }
+  .ws-who { padding: 4px 10px 14px; border-bottom: 1px solid var(--line); }
+  .ws-who b { display: block; color: var(--navy); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ws-who span { display: block; margin-top: 2px; font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--steel); }
+  .ws-side nav { display: grid; gap: 2px; }
+  .ws-side nav a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; text-decoration: none; color: var(--ink); font-size: 14px; font-weight: 500;
+                   transition: background-color var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out); }
+  .ws-side nav a svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--steel); }
+  .ws-side nav a:hover { background: var(--steel-100); }
+  .ws-side nav a[aria-current] { background: var(--brand); color: var(--on-brand); }
+  .ws-side nav a[aria-current] svg { color: var(--on-brand-2); }
+  .ws-side nav a .count { margin-left: auto; }
+  .ws-side-foot { margin-top: auto; display: grid; gap: 4px; padding: 12px 10px 0; border-top: 1px solid var(--line); }
+  .ws-side-foot a { color: var(--muted); font-size: 13px; text-decoration: none; }
+  .ws-side-foot a:hover { color: var(--navy); text-decoration: underline; }
+  .ws-main .pt-band .wrap, .ws-main .pt-main .wrap { max-width: 1240px; }
+  .ws-side nav a[aria-current] .count { background: var(--c-cream); color: var(--c-navy); }
+  @media (max-width: 1099px) {
+    .ws.has-nav, html.ws-pre .ws { display: block; background: none; }
+    html.ws-pre .ws-side[hidden] { min-height: 54px; }
+    .ws-side { position: static; height: auto; background: var(--white); border-bottom: 1px solid var(--line); padding: 8px 12px; flex-direction: row; overflow-x: auto; scrollbar-width: none; }
+    .ws-side::-webkit-scrollbar { display: none; }
+    .ws-who, .ws-side-foot { display: none; }
+    .ws-side nav { display: flex; gap: 4px; }
+    .ws-side nav a { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+    .ws-side nav a svg { width: 16px; height: 16px; }
+  }
+
+  /* dashboard */
+  .dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+  .dash .card { margin: 0; }
+  .dash-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .dash-h b { font-family: var(--f-display); font-weight: 500; font-size: 30px; color: var(--navy); }
+  .dash ul { list-style: none; margin: 0; padding: 0; }
+  .dash li a { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--line); text-decoration: none; color: var(--ink); }
+  .dash li a:hover .t { color: var(--navy); text-decoration: underline; }
+  .dash li .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dash li .i { grid-column: 1; font-size: 12px; color: var(--muted); }
+  .dash li .a { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .dash .none { color: var(--muted); font-size: 14px; margin: 0; }
+
+  /* workflow on a case */
+  .stage { display: inline-flex; align-items: center; height: 26px; padding: 0 12px; border-radius: 999px; font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+           background: var(--steel-100); color: var(--navy); }
+  .stage-design, .stage-fix { background: var(--warn-bg); color: var(--warn-fg); }
+  .stage-qc { background: var(--info-bg); color: var(--navy); }
+  .stage-ready, .stage-done { background: var(--ok-bg); color: var(--ok-fg); }
+  .who-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--steel-100); color: var(--navy); font-size: 12px; white-space: nowrap; }
+  .wf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .wf-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .team { display: grid; gap: 10px; margin-top: 16px; max-height: 360px; overflow: auto; }
+  .team .n { padding: 10px 12px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); font-size: 14px; }
+  .team .n small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .team .n.k-qc_fail { border-color: var(--err-bd); background: var(--err-bg2); }
+  .team .n.k-qc_pass { border-color: var(--ok-bd); background: var(--ok-bg2); }
+  .team .n p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .files li .sel { flex: 0 0 auto; width: 18px; height: 18px; accent-color: var(--navy); }
+  .pay-box { margin: 0 0 14px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--warn-bd); background: var(--warn-bg2); font-size: 14px; line-height: 1.6; }
+  .pay-box .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .suggest { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--info-bg); font-size: 13.5px; line-height: 1.55; }
+  .suggest button { margin-top: 8px; }
+
+  /* price lists, staff */
+  .grid-tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .grid-tbl th { text-align: left; padding: 8px 8px; font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--steel); border-bottom: 1px solid var(--line); }
+  .grid-tbl td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .grid-tbl .input { height: 40px; }
+  .grid-tbl .num { width: 130px; }
+  .grid-tbl .unit { width: 150px; }
+  .grid-tbl .x { width: 46px; text-align: right; }
+  .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 18px; margin-top: 12px; }
+  .perm-grid .grp { grid-column: 1 / -1; margin: 10px 0 0; }
+  .perm-grid label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+  .matrix th.r { text-align: center; min-width: 110px; }
+  .matrix td.c { text-align: center; }
+  .matrix input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--navy); }
+  .matrix .grp-row td { padding-top: 16px; font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--steel); border-bottom: 0; }
+  .matrix th.r .rm { display: block; margin: 4px auto 0; }
+  .staff-row td { vertical-align: top; }
+  .staff-row .tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--steel-100); color: var(--navy); font-size: 11px; }
+  .staff-row.off td { opacity: .55; }
+  .row-tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .add-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .add-row .input { flex: 1 1 220px; min-width: 0; height: 44px; }
+  .add-row select.input { flex: 0 1 240px; }
+  .cust-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+
   @media (max-width: 720px) {
+    .wf-grid { grid-template-columns: 1fr; }
+    .dash { grid-template-columns: 1fr; }
+    .cust-head { grid-template-columns: 1fr; }
     .form-grid2 { grid-template-columns: 1fr; }
     .result { grid-template-columns: 1fr; padding: 22px; }
     .qr { justify-self: start; }
@@ -134,19 +232,22 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-19.4" defer></script>
-<script src="/admin.js?v=2026-10-19.4" defer></script>
+<script src="/shell.js?v=2026-10-19.5" defer></script>
+<script src="/admin.js?v=2026-10-19.5" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
 
+<div class="ws">
+<aside class="ws-side" id="wsNav" hidden></aside>
+<div class="ws-main">
 <section class="pt-band">
   <div class="wrap">
     <div>
       <a class="pt-back" id="bandBack" href="/admin#jobs" hidden><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>Ca hàng</a>
-      <span class="eyebrow" id="bandEyebrow">Quản trị D.EIGHT</span>
-      <h1 id="bandTitle">Quản trị</h1>
-      <p class="serif" id="bandSub">Ca hàng, link xem 3D, tin nhắn và khách hàng</p>
+      <span class="eyebrow" id="bandEyebrow">D.EIGHT Workspace</span>
+      <h1 id="bandTitle">Workspace</h1>
+      <p class="serif" id="bandSub">Khu làm việc của đội D.EIGHT</p>
     </div>
     <div id="bandRight"></div>
   </div>
@@ -159,8 +260,8 @@
     <!-- Sign in -->
     <section class="card gate panel" id="gate" hidden>
       <img class="lock-mark" src="/brand/symbol.svg" alt="">
-      <h2 class="h-caps">Đăng nhập quản trị</h2>
-      <p class="muted" style="margin:6px 0 0;line-height:1.7">Dùng tài khoản Google của D.EIGHT. Mật khẩu cũ vẫn dùng được khi cần.</p>
+      <h2 class="h-caps">Đăng nhập khu làm việc</h2>
+      <p class="muted" style="margin:6px 0 0;line-height:1.7">Dùng tài khoản Google đã được quản trị cấp quyền (quản trị, kỹ thuật viên, QC). Mật khẩu quản trị vẫn dùng được khi cần.</p>
       <div id="gateWho"></div>
       <div class="gbtn" id="gbtn"></div>
       <div class="divider">hoặc dùng mật khẩu</div>
@@ -175,11 +276,16 @@
       </form>
     </section>
 
+    <!-- Dashboard -->
+    <section class="panel" id="p-home" hidden><div class="dash" id="dash"></div></section>
+
     <!-- Case list -->
     <section class="panel" id="p-jobs" hidden>
       <div class="pt-tools">
         <div class="pt-filters" id="jobFilters" role="group" aria-label="Lọc theo trạng thái"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input pt-search" type="search" id="jobQ" placeholder="Tìm mã ca, tên ca, email khách" aria-label="Tìm ca">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="input" id="jobWho" style="width:auto;height:42px" aria-label="Người làm"><option value="">Mọi người làm</option><option value="mine">Ca của tôi</option><option value="none">Chưa giao KTV</option><option value="qc">Chờ QC</option><option value="ready">Đã qua QC</option><option value="check">Thanh toán chờ xác nhận</option></select>
+          <input class="input pt-search" type="search" id="jobQ" placeholder="Tìm mã ca, tên ca, khách" aria-label="Tìm ca">
           <button class="btn small" type="button" id="jobCsv">Xuất CSV</button></div>
       </div>
       <div class="pt-list" id="jobList"></div>
@@ -276,11 +382,25 @@
       </section>
     </section>
 
+    <!-- One customer -->
+    <section class="panel" id="p-customer" hidden></section>
+
+    <!-- Default price list -->
+    <section class="panel" id="p-prices" hidden></section>
+
+    <!-- Staff and permissions -->
+    <section class="panel" id="p-staff" hidden></section>
+
+    <!-- No access -->
+    <section class="panel" id="p-denied" hidden>
+      <div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">Bạn chưa có quyền dùng mục này</h2><p>Nhờ quản trị cấp thêm quyền ở mục Nhân sự &amp; phân quyền.</p><a class="btn" href="#home">Về tổng quan</a></div>
+    </section>
+
     <!-- Customers -->
     <section class="panel" id="p-customers" hidden>
       <section class="card">
         <div class="card-head">
-          <div><h2 class="h-caps">Khách hàng</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tài khoản đã đăng nhập cổng khách hàng bằng Google. Bấm vào khách để xem các ca của họ.</p></div>
+          <div><h2 class="h-caps">Khách hàng</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tài khoản đã đăng nhập cổng khách hàng bằng Google. Bấm vào khách để xem hồ sơ, các ca và bảng giá riêng.</p></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input pt-search" type="search" id="custQ" placeholder="Tìm tên, email, lab" aria-label="Tìm khách hàng">
             <button class="btn small" type="button" id="custCsv">Xuất CSV</button></div>
         </div>
@@ -291,6 +411,8 @@
     </section>
   </div>
 </main>
+</div>
+</div>
 
 <div id="d8-footer"></div>
 </body>

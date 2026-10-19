@@ -97,11 +97,11 @@
     "sh.send": ["Send a case", "Gửi ca"],
     "sh.view.site": ["Website", "Trang web"],
     "sh.view.portal": ["Customer", "Khách hàng"],
-    "sh.view.admin": ["Admin", "Quản trị"],
+    "sh.view.admin": ["Workspace", "Quản trị"],
     "sh.mycases": ["My cases", "Ca của tôi"],
     "sh.newcase": ["New case", "Gửi ca mới"],
     "sh.profile": ["Profile", "Hồ sơ"],
-    "sh.admintools": ["Admin tools", "Công cụ quản trị"],
+    "sh.admintools": ["Workspace", "Khu quản trị"],
     "sh.signout": ["Sign out", "Đăng xuất"],
     "sh.top.tag": ["Remote dental CAD design · Vietnam, UTC+7", "Thiết kế CAD nha khoa từ xa · Việt Nam, UTC+7"],
     "sh.foot.blurb": ["Remote CAD design team for dental labs and clinics. Production-ready STL, designed to fit.", "Đội thiết kế CAD từ xa cho lab và phòng khám nha khoa. File STL sẵn sàng sản xuất, thiết kế vừa khít."],
@@ -128,6 +128,15 @@
 
   /* ------------------------------------------------------------ API + auth */
   D8.user = null;
+  const HINT_KEY = "d8-hint";
+  let meDone = false;
+  const hint = (() => { try { const h = JSON.parse(localStorage.getItem(HINT_KEY) || "null"); return h && h.email ? h : null; } catch { return null; } })();
+  const saveHint = (u) => {
+    try {
+      if (u) localStorage.setItem(HINT_KEY, JSON.stringify({ email: u.email, name: u.name, picture: u.picture, staff: !!u.staff, roleLabel: u.roleLabel || "", perms: u.perms || [] }));
+      else localStorage.removeItem(HINT_KEY);
+    } catch {}
+  };
   // Admin password (fallback when the admin is not signed in with Google), kept by admin.html.
   D8.adminKey = () => { try { return sessionStorage.getItem("d8-upload-key") || localStorage.getItem("d8-upload-key") || ""; } catch { return ""; } };
   // Only the admin pages send the password; the customer portal always acts as the signed-in Google user.
@@ -238,7 +247,9 @@
     "rxo.Ortho model": ["Ortho model", "Mẫu chỉnh nha"], "rxo.Implant model with gingiva": ["Implant model with gingiva", "Mẫu implant có nướu"],
     "tr.orig": ["Original", "Bản gốc"], "tr.in.vi": ["Vietnamese version", "Bản tiếng Việt"], "tr.in.en": ["English version", "Bản tiếng Anh"], "tr.all": ["Translate all", "Dịch tất cả"], "tr.auto": ["Always translate", "Luôn dịch"],
     "bill.price": ["Price", "Giá"], "bill.trial": ["Free trial", "Dùng thử miễn phí"], "bill.due": ["Awaiting payment", "Chờ thanh toán"], "bill.paid": ["Paid", "Đã thanh toán"],
-    "pay.via.paypal": ["PayPal", "PayPal"], "pay.via.stripe": ["card (Stripe)", "thẻ (Stripe)"], "pay.via.manual": ["bank transfer", "chuyển khoản"],
+    "pay.via.paypal": ["PayPal", "PayPal"], "pay.via.stripe": ["card (Stripe)", "thẻ (Stripe)"], "pay.via.manual": ["bank transfer", "chuyển khoản"], "pay.via.claim": ["transfer", "chuyển khoản"],
+    "pay.ev.paid": ["Payment confirmed", "Đã xác nhận thanh toán"], "pay.ev.sent": ["Payment sent, being confirmed", "Đã gửi thanh toán, đang xác nhận"], "pay.ev.rejected": ["Payment not received", "Chưa nhận được thanh toán"],
+    "bill.check": ["Confirming payment", "Đang xác nhận thanh toán"],
   });
   // [label, value] rows for a case's extra prescription fields, in the current language
   D8.rxRows = (rx) => Object.entries(rx || {}).map(([k, v]) => [D8.t("rx." + k, k.replace(/_/g, " ")), D8.t("rxo." + v, v)]);
@@ -253,8 +264,12 @@
   // Chat thread (portal and admin). me = "client" | "admin"; to = language the viewer reads.
   D8.threadHtml = (job, me, to) => (job.thread || []).map((m) => {
     if (m.by === "system") {
-      const pay = /^pay:paid:(\w+)$/.exec(m.text);
-      if (pay) return `<div class="sys">${D8.esc(D8.fmtDate(m.at, true))} · <span class="pay pay-paid">${D8.esc(D8.t("bill.paid") + " · " + D8.t("pay.via." + pay[1], pay[1]))}</span></div>`;
+      const pay = /^pay:(paid|sent|rejected)(?::(\w+))?$/.exec(m.text);
+      if (pay) {
+        const via = pay[2] ? " · " + D8.t("pay.via." + pay[2], pay[2]) : "";
+        const cls = pay[1] === "paid" ? "pay-paid" : pay[1] === "sent" ? "pay-check" : "pay-due";
+        return `<div class="sys">${D8.esc(D8.fmtDate(m.at, true))} · <span class="pay ${cls}">${D8.esc(D8.t("pay.ev." + pay[1]) + via)}</span></div>`;
+      }
       const s = String(m.text).replace(/^status:/, "");
       return `<div class="sys">${D8.esc(D8.fmtDate(m.at, true))} · <span class="st st-${D8.esc(s)}">${D8.esc(D8.statusLabel(s))}</span></div>`;
     }
@@ -557,7 +572,7 @@
       metas.push({ fid, name, size: file.size, stored: blob.size, parts, gz });
     }
     say({ text: D8.t("up.attach"), pct: 100 });
-    return D8.api(`/api/jobs/${encodeURIComponent(jobId)}/files`, { method: "POST", body: { files: metas, deliver: !!opts.deliver } });
+    return D8.api(`/api/jobs/${encodeURIComponent(jobId)}/files`, { method: "POST", body: { files: metas, deliver: !!opts.deliver, ...(opts.kind ? { kind: opts.kind } : {}) } });
   };
 
   let configP = null;
@@ -585,6 +600,7 @@
     try {
       const data = await D8.api("/api/auth/google", { method: "POST", body: { credential: resp.credential } });
       D8.user = data.user;
+      saveHint(D8.user);
       renderHeader();
       document.dispatchEvent(new CustomEvent("d8:user", { detail: D8.user }));
       signInWaiters.splice(0).forEach((fn) => { try { fn(D8.user); } catch {} });
@@ -684,15 +700,19 @@
     store.del("d8-upload-key");
     try { sessionStorage.removeItem("d8-upload-key"); } catch {}
     D8.user = null;
+    saveHint(null);
     location.href = "/";
   };
 
   D8.ready = fetch("/api/me", { credentials: "same-origin" })
     .then((r) => r.json()).then((d) => { D8.user = d.user || null; })
     .catch(() => { D8.user = null; })
-    .then(() => { renderHeader(); document.dispatchEvent(new CustomEvent("d8:user", { detail: D8.user })); return D8.user; });
+    .then(() => { meDone = true; saveHint(D8.user); renderHeader(); document.dispatchEvent(new CustomEvent("d8:user", { detail: D8.user })); return D8.user; });
 
   /* ------------------------------------------------------------ header */
+  // The account last seen on this browser draws the header (and the workspace sidebar) at its final
+  // size before /api/me answers, so nothing jumps while the page loads; the real answer replaces it.
+  function who() { return D8.user || (!meDone ? hint : null); }
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const home = page === "home" ? "" : "/";
   const ICON = {
@@ -708,23 +728,23 @@
 
   function viewSwitch() {
     const keyAdmin = isAdminPage && document.body.dataset.authed === "1";
-    if (!D8.user && !keyAdmin) return "";
+    if (!who() && !keyAdmin) return "";
     const items = [["site", "/", "sh.view.site"], ["portal", "/portal", "sh.view.portal"]];
-    if (keyAdmin || D8.user.role === "admin") items.push(["admin", "/admin", "sh.view.admin"]);
+    if (keyAdmin || (who() && who().staff)) items.push(["admin", "/admin", "sh.view.admin"]);
     const cur = page === "portal" ? "portal" : isAdminPage ? "admin" : "site";
     return '<nav class="sh-switch" aria-label="View">' + items.map(([k, href, key]) =>
       `<a href="${href}"${k === cur ? ' aria-current="page"' : ""}>${esc(D8.t(key))}</a>`).join("") + "</nav>";
   }
 
   function userMenu() {
-    if (!D8.user) {
+    if (!who()) {
       if (isAdminPage && document.body.dataset.authed === "1") return `<button class="btn small sh-keyout" type="button">${esc(D8.t("sh.signout"))}</button>`;
       return `<a class="btn small sh-signin" href="/portal">${esc(D8.t("sh.signin"))}</a>`;
     }
-    const u = D8.user;
+    const u = who();
     const initials = (u.name || u.email).split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
     const avatar = u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span>${esc(initials)}</span>`;
-    const adminLinks = u.role === "admin" ? `<a href="/admin">${esc(D8.t("sh.admintools"))}</a>` : "";
+    const adminLinks = u.staff ? `<a href="/admin">${esc(D8.t("sh.admintools"))}</a>` : "";
     return `<div class="sh-user">
       <button class="sh-avatar" type="button" aria-haspopup="true" aria-expanded="false" aria-label="${esc(u.name || u.email)}">${avatar}</button>
       <div class="sh-menu" role="menu" hidden>
@@ -743,15 +763,42 @@
       <button type="button" data-lang="vi"${D8.lang === "vi" ? ' aria-pressed="true"' : ""}>VI</button></div>`;
   }
 
+  // Workspace sections, each shown only to staff with the permission it needs.
+  const WS_ICON = {
+    home: '<path d="M3 9.5 10 4l7 5.5V16a1 1 0 0 1-1 1h-3.5v-4.5h-5V17H4a1 1 0 0 1-1-1z"/>',
+    jobs: '<rect x="3" y="4" width="14" height="13" rx="2"/><path d="M7 8h6M7 11h6M7 14h3"/>',
+    customers: '<circle cx="8" cy="7.5" r="3"/><path d="M2.5 17c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5M13.5 4.8a2.8 2.8 0 0 1 0 5.4M15.5 12.8c1.2.7 1.9 2 2.2 4.2"/>',
+    prices: '<path d="M10.5 3H16a1 1 0 0 1 1 1v5.5l-7.5 7.5L3 10.5z"/><circle cx="13.2" cy="6.8" r="1.2"/>',
+    staff: '<circle cx="10" cy="7" r="3.2"/><path d="M4 17c.7-3.2 3-5 6-5s5.3 1.8 6 5"/><path d="M15.5 3.5l1 1 2-2"/>',
+    links: '<path d="M10 2.5 17 6.5v7L10 17.5 3 13.5v-7z"/><path d="M3 6.5 10 10.5l7-4M10 10.5v7"/>',
+    stl: '<path d="M4 3h8l4 4v10H4z"/><path d="M12 3v4h4M7 11h6M7 14h4"/>',
+    messages: '<path d="M3 5h14v9H8l-4 3v-3H3z"/>',
+  };
+  D8.WS_NAV = [["home", "/admin#home", "Tổng quan", ""], ["jobs", "/admin#jobs", "Ca hàng", ""], ["customers", "/admin#customers", "Khách hàng", "customers.view"],
+    ["prices", "/admin#prices", "Bảng giá", "pricing.manage"], ["staff", "/admin#staff", "Nhân sự & phân quyền", "staff.manage"],
+    ["links", "/admin#links", "Link xem 3D", "links.manage"], ["stl", "/stl", "HTML sang STL", "links.manage"], ["messages", "/admin#messages", "Tin nhắn web", "messages.view"]];
+  // Permission check for the workspace (the admin password counts as an owner with every permission).
+  D8.can = (p) => (isAdminPage && document.body.dataset.authMode === "key") || !!(who() && Array.isArray(who().perms) && who().perms.includes(p));
   function subNav() {
     if (page === "portal") {
       return [["#/", "sh.mycases"], ["#/new", "sh.newcase"], ["#/profile", "sh.profile"]];
     }
-    if (isAdminPage) {
-      return [["/admin#jobs", null, "Ca hàng"], ["/admin#links", null, "Link xem 3D"], ["/stl", null, "HTML sang STL"],
-              ["/admin#messages", null, "Tin nhắn"], ["/admin#customers", null, "Khách hàng"]];
-    }
+    if (isAdminPage) return D8.WS_NAV.filter((n) => !n[3] || D8.can(n[3])).map(([k, href, label]) => [href, null, label, k]);
     return null;
+  }
+  // Workspace sidebar (admin page); other workspace pages use the tab row under the header.
+  function renderSide(sub) {
+    const side = document.getElementById("wsNav");
+    if (!side) return false;
+    const on = isAdminPage && (document.body.dataset.authed === "1" || (!meDone && !!hint && !!hint.staff));
+    side.hidden = !on;
+    document.querySelector(".ws") && document.querySelector(".ws").classList.toggle("has-nav", on);
+    if (!on) { side.innerHTML = ""; return true; }
+    const u = who();
+    side.innerHTML = `<div class="ws-who">${u ? `<b>${esc(u.name || u.email)}</b><span>${esc(u.roleLabel || "")}</span>` : "<b>D.EIGHT</b><span>Mật khẩu quản trị</span>"}</div>
+      <nav aria-label="Khu quản trị">${sub.map(([href, , label, k]) => `<a href="${href}" data-sub="${esc(href)}"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">${WS_ICON[k] || ""}</svg><span>${esc(label)}</span></a>`).join("")}</nav>
+      <div class="ws-side-foot"><a href="/">${esc(D8.t("sh.view.site"))}</a><a href="/portal">${esc(D8.t("sh.view.portal"))}</a></div>`;
+    return true;
   }
 
   function renderHeader() {
@@ -759,8 +806,10 @@
     if (!host) return;
     const L = (k) => esc(D8.t(k));
     const sub = subNav();
-    const signedIn = !!D8.user;
-    const showSub = sub && (page === "portal" ? signedIn : (signedIn && D8.user.role === "admin") || document.body.dataset.authed === "1");
+    const signedIn = !!who();
+    if (meDone || document.body.dataset.authed === "1") document.documentElement.classList.remove("sub-pre", "ws-pre");
+    const sideNav = isAdminPage && renderSide(sub || []);
+    const showSub = sub && !sideNav && (page === "portal" ? signedIn : document.body.dataset.authed === "1");
     host.className = "sh" + (page === "home" ? " sh-home" : "") + (showSub ? " sh-has-sub" : "");
     host.innerHTML = `
       <div class="sh-top"><div class="wrap sh-top-in">
@@ -780,7 +829,8 @@
           <img class="sym on-light" src="/brand/symbol.svg" alt="" width="33" height="30">
           <img class="sym on-dark" src="/brand/symbol-reversed.svg" alt="" width="33" height="30">
         </a>
-        <nav class="sh-nav" aria-label="Main">
+        ${isAdminPage ? `<span class="sh-ws">Workspace</span>` : ""}
+        <nav class="sh-nav" aria-label="Main"${isAdminPage ? " hidden" : ""}>
           <a href="${home}#services">${L("sh.services")}</a>
           <a href="${home}#process">${L("sh.process")}</a>
           <a href="${home}#work">${L("sh.work")}</a>
@@ -800,7 +850,7 @@
       <div class="sh-drawer" id="sh-drawer" hidden>
         <div class="wrap">
           ${viewSwitch()}
-          <nav aria-label="Mobile">
+          <nav aria-label="Mobile"${isAdminPage ? " hidden" : ""}>
             <a href="${home}#services">${L("sh.services")}</a>
             <a href="${home}#process">${L("sh.process")}</a>
             <a href="${home}#work">${L("sh.work")}</a>
@@ -819,12 +869,13 @@
     const host = document.getElementById("d8-header");
     if (!host) return;
     const here = location.pathname.replace(/\/$/, "") + (location.hash || "");
-    host.querySelectorAll(".sh-sub a").forEach((a) => {
+    const section = (here.match(/^\/admin#([a-z]+)/) || [, "home"])[1];
+    document.querySelectorAll("#d8-header .sh-sub a, #wsNav nav a").forEach((a) => {
       const href = a.getAttribute("href");
       let on;
       if (page === "portal") on = (location.hash || "#/").startsWith(href) && (href !== "#/" || !/^#\/(new|profile)/.test(location.hash));
       else if (page === "stl") on = href === "/stl";
-      else on = href === here || (href === "/admin#jobs" && (here === "/admin" || here === "/admin#" || here.startsWith("/admin#jobs/")));
+      else on = href === "/admin#" + section;
       a.toggleAttribute("aria-current", !!on);
       if (on) a.setAttribute("aria-current", "page");
     });
@@ -895,6 +946,13 @@
     const host = document.getElementById("d8-footer");
     if (!host) return;
     const L = (k) => esc(D8.t(k));
+    if (isAdminPage) {
+      // the workspace gets a one-line footer, not the marketing one
+      host.className = "d8-footer sh-foot sh-foot-ws";
+      host.innerHTML = `<div class="wrap"><span>© ${new Date().getFullYear()} D.EIGHT DESIGN CENTER · Workspace</span>
+        <nav aria-label="Liên kết"><a href="/">${L("sh.view.site")}</a><a href="/portal">${L("sh.view.portal")}</a><a href="/privacy">${L("sh.privacy")}</a><a href="/terms">${L("sh.terms")}</a></nav></div>`;
+      return;
+    }
     host.className = "d8-footer sh-foot";
     host.innerHTML = `
       <div class="wrap sh-foot-grid">

@@ -3,3 +3,4 @@ dev/worker.mjs
 .DS_Store
 Thumbs.db
 *.zip
+__pycache__/
