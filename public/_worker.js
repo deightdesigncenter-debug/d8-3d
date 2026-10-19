@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-19.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-19.2"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -38,6 +38,10 @@ const FILE_MAX_PARTS = 15;                         // 300 MB per file after comp
 const JOB_FILES_MAX = 300 * 1024 * 1024;           // stored bytes per job
 const FILE_KEEP_DAYS = 60;                         // uploaded files expire after this
 const THREAD_MAX = 400;
+const TRIAL_CASES = 2;                             // a new customer's first cases are a free trial
+const TRIAL_CREDIT_USD = 50;                       // ...worth up to this much in total
+const PAY_STATES = ["", "trial", "due", "paid"];  // billing status set by D.EIGHT
+const AI_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/meta/llama-3.1-8b-instruct-fp8"]; // chat translation, tried in order
 
 const PRIVATE_HEADERS = {
   "X-Robots-Tag": "noindex, nofollow, noarchive",
@@ -92,7 +96,8 @@ async function handleApi(request, env, url) {
     return submitContact(request, env);
   }
   if (path === "/api/config" && method === "GET") {
-    return json({ googleClientId: conf(env).clientId }, 200, { "Cache-Control": "public, max-age=300" });
+    return json({ googleClientId: conf(env).clientId, trialCases: TRIAL_CASES, trialCredit: TRIAL_CREDIT_USD, translate: !!env.AI, fileStore: activeStore(env) },
+      200, { "Cache-Control": "public, max-age=300" });
   }
   if (path === "/api/auth/google" && method === "POST") return googleSignIn(request, env, url);
   if (path === "/api/auth/logout" && method === "POST") return json({ ok: true }, 200, { "Set-Cookie": clearSessionCookie(url) });
@@ -108,6 +113,15 @@ async function handleApi(request, env, url) {
   const isAdmin = keyOk || !!(session && session.role === "admin");
 
   /* ---- signed-in customers (and admin) ---- */
+  if (path === "/api/translate" && method === "POST") {
+    if (!session && !keyOk) return json({ error: "Please sign in." }, 401);
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const text = clip(b.text, 2000);
+    if (!text) return json({ error: "Empty text." }, 400);
+    try { return json({ text: await translateText(env, text, b.to === "vi" ? "vi" : "en") }); }
+    catch (err) { return json({ error: err.message, code: err.code || "" }, err.status || 502); }
+  }
+
   if (path.startsWith("/api/my/") || path.startsWith("/api/jobs/")) {
     if (!session && !keyOk) return json({ error: "Please sign in." }, 401);
     const who = session ? { email: session.email, name: session.name, admin: isAdmin, viaKey: keyOk } : { email: "", name: "D.EIGHT", admin: true, viaKey: true };
@@ -367,6 +381,63 @@ async function listUsers(env) {
 
 /* --------------------------------------------------------- Customer jobs */
 
+function cleanRx(rx) {
+  const out = {};
+  if (!rx || typeof rx !== "object" || Array.isArray(rx)) return out;
+  for (const [k, v] of Object.entries(rx).slice(0, 16)) {
+    if (!/^[a-z_]{1,24}$/.test(k)) continue;
+    const s = clip(v, 160);
+    if (s) out[k] = s;
+  }
+  return out;
+}
+
+// Chat translation with Workers AI (binding "AI"). Returns the translated text.
+async function translateText(env, text, to) {
+  if (!env.AI) throw Object.assign(new Error(to === "vi" ? "Chưa bật dịch tự động (Workers AI)." : "Translation is not switched on yet."), { status: 503, code: "no_ai" });
+  const target = to === "vi" ? "Vietnamese" : "English";
+  const system = "You translate chat messages between a dental lab or dental clinic and D.EIGHT, a remote dental CAD design team. " +
+    "Translate the user's message into " + target + ". Keep dental and CAD terms accurate (for example crown, bridge, abutment, margin, " +
+    "emergence profile, multi-unit abutment (MUA), screw channel, scan body, occlusion, surgical guide, sleeve). Keep tooth numbers, " +
+    "measurements, units, file names, links and people's names exactly as written. Reply with the translation only, without notes or quotes. " +
+    "If the message is already in " + target + ", return it unchanged.";
+  for (const model of AI_MODELS) {
+    try {
+      const out = await env.AI.run(model, {
+        messages: [{ role: "system", content: system }, { role: "user", content: text }],
+        temperature: 0.2, max_completion_tokens: 2048, chat_template_kwargs: { enable_thinking: false },
+      });
+      let t = (out && out.choices && out.choices[0] && out.choices[0].message && out.choices[0].message.content) || (out && out.response) || "";
+      t = String(t).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      if (t) return t.slice(0, 8000);
+    } catch (err) { console.error("translate", model, err && err.message); }
+  }
+  const out = await env.AI.run("@cf/meta/m2m100-1.2b", { text, source_lang: to === "vi" ? "en" : "vi", target_lang: to });
+  const t = String((out && (out.translated_text || (out.result && out.result.translated_text))) || "").trim();
+  if (!t) throw Object.assign(new Error(to === "vi" ? "Dịch không thành công, thử lại sau." : "Translation failed. Please try again."), { status: 502 });
+  return t;
+}
+
+// Case files are stored in 20 MB parts: in the R2 bucket bound as FILES when there is one, otherwise in KV.
+const partKey = (job, fid, n) => "jf:" + job + ":" + fid + ":" + n;
+const activeStore = (env) => (env.FILES ? "r2" : "kv");
+function partStore(env, kind) {
+  if (kind === "r2" && env.FILES) {
+    return {
+      put: (k, data) => env.FILES.put(k, data),
+      stream: async (k) => { const o = await env.FILES.get(k); return o ? o.body : null; },
+      exists: async (k) => !!(await env.FILES.head(k)),
+      del: (k) => env.FILES.delete(k),
+    };
+  }
+  return {
+    put: (k, data) => env.CASES.put(k, data, { expiration: Math.floor(Date.now() / 1000) + FILE_KEEP_DAYS * 86400, metadata: { s: data.byteLength } }),
+    stream: (k) => env.CASES.get(k, { type: "stream" }),
+    exists: async (k) => { const s = await env.CASES.get(k, { type: "stream" }); if (s && s.cancel) s.cancel(); return !!s; },
+    del: (k) => env.CASES.delete(k),
+  };
+}
+
 function newJobId() {
   const d = new Date();
   const ymd = String(d.getUTCFullYear() % 100).padStart(2, "0") + String(d.getUTCMonth() + 1).padStart(2, "0") + String(d.getUTCDate()).padStart(2, "0");
@@ -378,7 +449,9 @@ const clip = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u0008\u000
 
 function jobMeta(job) {
   return { o: job.owner.slice(0, 120), t: job.title.slice(0, 60), s: job.status, c: job.created, u: job.updated, lb: job.lastBy || "client",
-    sz: Math.round((job.files || []).reduce((t, f) => t + (f.stored || 0), 0) / 1048576) };
+    sz: Math.round((job.files || []).reduce((t, f) => t + (f.stored || 0), 0) / 1048576),
+    sv: String(job.service || "").slice(0, 40), on: String(job.ownerName || "").slice(0, 40), tr: job.trial ? 1 : 0,
+    p: typeof job.price === "number" ? job.price : null, py: job.pay || "" };
 }
 async function saveJob(env, job) {
   await env.CASES.put("job:" + job.id, JSON.stringify(job), { metadata: jobMeta(job) });
@@ -410,7 +483,8 @@ async function listOwnJobs(env, email) {
   const items = [];
   rows.forEach((r, i) => {
     const m = r && r.metadata;
-    if (m) items.push({ id: ids[i], owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0 });
+    if (m) items.push({ id: ids[i], owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
+      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "" });
   });
   items.sort((a, b) => b.updated - a.updated);
   return json({ items });
@@ -424,7 +498,8 @@ async function listJobs(env, owner) {
     for (const k of page.keys) {
       const m = k.metadata || {};
       if (owner && m.o !== owner) continue;
-      items.push({ id: k.name.slice(4), owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0 });
+      items.push({ id: k.name.slice(4), owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
+      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "" });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
@@ -459,11 +534,13 @@ async function handleJobs(request, env, url, who) {
       id: newJobId(), owner: who.email, ownerName: clip(who.name, 100),
       title, service: clip(b.service, 60), teeth: clip(b.teeth, 120), numbering: b.numbering === "UNS" ? "UNS" : "FDI",
       material: clip(b.material, 120), shade: clip(b.shade, 40), neededBy: clip(b.neededBy, 20), notes: clip(b.notes, 4000), links,
+      rx: cleanRx(b.rx),
       status: "received", created: now, updated: now, lastBy: "client", approvedAt: 0,
-      files: [], previews: [], thread: [],
+      files: [], previews: [], thread: [], price: null, pay: "",
     };
     while (await env.CASES.get("job:" + job.id)) job.id = newJobId();
     const own = await ownerIds(env, who.email, true);
+    if (own.length < TRIAL_CASES) { job.trial = true; job.pay = "trial"; }
     await saveJob(env, job);
     await env.CASES.put("own:" + who.email, JSON.stringify([job.id, ...own.filter((x) => x !== job.id)].slice(0, 2000)));
     return json({ job: await jobView(env, job) }, 201);
@@ -498,9 +575,41 @@ async function handleJobs(request, env, url, who) {
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     const text = clip(b.text, 4000);
     if (!text) return json({ error: "Empty message." }, 400);
-    job.thread.push({ by, name: by === "admin" ? "D.EIGHT" : clip(who.name, 100), text, at: Date.now() });
+    const msg = { by, name: by === "admin" ? "D.EIGHT" : clip(who.name, 100), text, at: Date.now() };
+    const original = clip(b.original, 4000);
+    if (original && original !== text && (b.originalLang === "vi" || b.originalLang === "en")) {
+      msg.tr = { [b.originalLang]: original };
+      msg.lang = b.originalLang === "vi" ? "en" : "vi"; // language of the sent text
+    }
+    job.thread.push(msg);
     if (job.thread.length > THREAD_MAX) job.thread = job.thread.slice(-THREAD_MAX);
     job.updated = Date.now(); job.lastBy = by;
+    await saveJob(env, job);
+    return json({ job: await jobView(env, job) });
+  }
+
+  // translate one message for the person viewing it; the result is kept on the message for everyone
+  if (sub === "/translate" && method === "POST") {
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const to = b.to === "vi" ? "vi" : "en";
+    const msg = (job.thread || []).find((x) => x.at === b.at && x.by !== "system");
+    if (!msg) return json({ error: "Message not found." }, 404);
+    if (!(msg.tr && msg.tr[to])) {
+      try { msg.tr = { ...(msg.tr || {}), [to]: await translateText(env, msg.text, to) }; }
+      catch (err) { return json({ error: err.message, code: err.code || "" }, err.status || 502); }
+      await saveJob(env, job);
+    }
+    return json({ at: msg.at, to, text: msg.tr[to] });
+  }
+
+  if (sub === "/billing" && method === "POST") {
+    if (!who.admin) return json({ error: "Not allowed." }, 403);
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const price = b.price === null || b.price === "" || b.price === undefined ? null : Math.round(Number(b.price) * 100) / 100;
+    if (price !== null && !(price >= 0 && price <= 100000)) return json({ error: "Giá không hợp lệ." }, 400);
+    if (!PAY_STATES.includes(b.pay)) return json({ error: "Trạng thái thanh toán không hợp lệ." }, 400);
+    job.price = price; job.pay = b.pay; job.trial = !!b.trial;
+    job.updated = Date.now(); job.lastBy = "admin";
     await saveJob(env, job);
     return json({ job: await jobView(env, job) });
   }
@@ -561,9 +670,7 @@ async function handleJobs(request, env, url, who) {
     const used = (job.files || []).reduce((t, x) => t + (x.stored || 0), 0);
     if (used + len > JOB_FILES_MAX) return json({ error: "This case has reached its storage limit (300 MB)." }, 413);
     const data = await request.arrayBuffer();
-    await env.CASES.put("jf:" + job.id + ":" + f[1] + ":" + n, data, {
-      expiration: Math.floor(Date.now() / 1000) + FILE_KEEP_DAYS * 86400, metadata: { s: data.byteLength },
-    });
+    await partStore(env, activeStore(env)).put(partKey(job.id, f[1], n), data);
     return json({ ok: true });
   }
 
@@ -576,11 +683,10 @@ async function handleJobs(request, env, url, who) {
     for (const x of list) {
       if (!FID_RE.test(x.fid || "") || (job.files || []).some((y) => y.fid === x.fid)) continue;
       const parts = Math.max(1, Math.min(FILE_MAX_PARTS, parseInt(x.parts, 10) || 1));
-      const lastPart = await env.CASES.get("jf:" + job.id + ":" + x.fid + ":" + (parts - 1), { type: "stream" });
-      if (!lastPart) continue;
-      if (lastPart.cancel) lastPart.cancel();
+      const st = activeStore(env);
+      if (!(await partStore(env, st).exists(partKey(job.id, x.fid, parts - 1)))) continue;
       job.files.push({ fid: x.fid, name: clip(x.name, 160) || "file", size: Math.max(0, +x.size || 0), stored: Math.max(0, +x.stored || 0),
-        parts, gz: x.gz ? 1 : 0, kind: by === "admin" ? "output" : "input", at: now, exp: now + FILE_KEEP_DAYS * DAY_MS });
+        parts, gz: x.gz ? 1 : 0, st, kind: by === "admin" ? "output" : "input", at: now, exp: now + FILE_KEEP_DAYS * DAY_MS });
       added++;
     }
     if (added || (by === "admin" && b.deliver)) {
@@ -599,14 +705,15 @@ async function handleJobs(request, env, url, who) {
   if (f && method === "GET") {
     const file = (job.files || []).find((x) => x.fid === f[1]);
     if (!file) return json({ error: "File not found." }, 404);
-    const first = await env.CASES.get("jf:" + job.id + ":" + file.fid + ":0", { type: "stream" });
+    const store = partStore(env, file.st || "kv");
+    const first = await store.stream(partKey(job.id, file.fid, 0));
     if (!first) return json({ error: "This file has expired." }, 410);
     const { readable, writable } = new TransformStream();
     (async () => {
       try {
         await first.pipeTo(writable, { preventClose: true });
         for (let i = 1; i < file.parts; i++) {
-          const s = await env.CASES.get("jf:" + job.id + ":" + file.fid + ":" + i, { type: "stream" });
+          const s = await store.stream(partKey(job.id, file.fid, i));
           if (!s) throw new Error("missing part " + i);
           await s.pipeTo(writable, { preventClose: true });
         }
@@ -628,7 +735,8 @@ async function handleJobs(request, env, url, who) {
     const file = (job.files || []).find((x) => x.fid === f[1]);
     if (!file) return json({ error: "File not found." }, 404);
     if (by === "client" && (file.kind !== "input" || !["received", "needs_info"].includes(job.status))) return json({ error: "Not allowed." }, 403);
-    await Promise.all(Array.from({ length: file.parts }, (_, i) => env.CASES.delete("jf:" + job.id + ":" + file.fid + ":" + i)));
+    const store = partStore(env, file.st || "kv");
+    await Promise.all(Array.from({ length: file.parts }, (_, i) => store.del(partKey(job.id, file.fid, i))));
     job.files = job.files.filter((x) => x.fid !== file.fid);
     job.updated = Date.now();
     await saveJob(env, job);

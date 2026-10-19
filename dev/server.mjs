@@ -96,7 +96,25 @@ function fakeIdToken(email, name) {
   return head + "." + body + "." + sig;
 }
 
-const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` };
+// ---- Workers AI mock (chat translation): set NO_AI=1 to test the fallbacks
+const AI = {
+  async run(model, input) {
+    ops.ai = (ops.ai || 0) + 1;
+    if (model.includes("m2m100")) return { translated_text: "[" + input.target_lang + "] " + input.text };
+    const sys = input.messages[0].content, text = input.messages[1].content;
+    const to = /into Vietnamese/.test(sys) ? "vi" : "en";
+    return { choices: [{ message: { role: "assistant", content: "[" + to + "] " + text } }] };
+  },
+};
+// ---- R2 mock (case files): set R2=1 to store case files in a bucket instead of KV
+const r2 = new Map();
+const FILES = {
+  async put(k, v) { r2.set(k, await toBuffer(v)); return {}; },
+  async get(k) { const b = r2.get(k); return b ? { body: new Response(b).body } : null; },
+  async head(k) { return r2.has(k) ? { key: k, size: r2.get(k).length } : null; },
+  async delete(k) { r2.delete(k); },
+};
+const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` , ...(process.env.NO_AI ? {} : { AI }), ...(process.env.R2 ? { FILES } : {}) };
 
 http.createServer(async (req, res) => {
   if (req.url === "/__test/ops") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(ops)); for (const k in ops) ops[k] = 0; return; }

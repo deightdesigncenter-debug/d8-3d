@@ -20,7 +20,10 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - Gửi ca mới: mã tham chiếu, dịch vụ, răng (FDI/Universal), vật liệu, màu, ngày cần, yêu cầu, link file và file tải lên.
 - File được nén gzip trong trình duyệt khi có lợi, chia phần 20 MB, lưu KV khóa `jf:<ca>:<file>:<phần>`, tự xóa sau 60 ngày. Tối đa 300 MB mỗi ca.
 - Trạng thái: Đã nhận → (Cần bổ sung) → Đang thiết kế → Chờ duyệt → Đã duyệt → Đã giao (hoặc Đã hủy).
-- Khách xem link 3D, bấm **Duyệt thiết kế**, nhắn tin, tải file hoàn chỉnh. Mã ca dạng `D8-YYMMDD-XXXX`.
+- Khách xem link 3D, bấm **Duyệt thiết kế**, nhắn tin, tải file hoàn chỉnh (từng file hoặc cả ca dạng ZIP). Mã ca dạng `D8-YYMMDD-XXXX`.
+- Phiếu chỉ định có thêm ô riêng theo dịch vụ (implant, All-on-X, máng, hàm tháo lắp…), lưu ở `rx` của ca.
+- **Dùng thử miễn phí:** 2 ca đầu của mỗi khách tự được đánh dấu `trial` (tổng giá trị đến 50 USD; hằng số `TRIAL_CASES`, `TRIAL_CREDIT_USD` trong `_worker.js`).
+- Danh sách ca của khách đọc từ chỉ mục `own:<email>` (không tốn lượt "list" của KV).
 
 ## Quản trị (`/admin`)
 
@@ -28,6 +31,18 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - **Link xem 3D**: tạo link gửi bác sĩ như trước (QR, tin nhắn tiếng Anh kèm bản tiếng Việt).
 - **Tin nhắn**: tin từ form Liên hệ trên trang web, tự xóa sau 180 ngày.
 - **Khách hàng**: các tài khoản đã đăng nhập, lab, quốc gia, số điện thoại, số ca.
+- **Báo giá & thanh toán** trong từng ca (giá USD, Chưa báo giá / Miễn phí (dùng thử) / Chờ thanh toán / Đã thanh toán); hiện số tiền dùng thử đã dùng / 50 USD của khách. Khách thấy giá và trạng thái trong cổng.
+- **Xuất CSV** (mở bằng Excel): ca hàng, khách hàng, tin nhắn.
+
+## Dịch tin nhắn Anh ↔ Việt
+
+- Dưới mỗi tin của bên kia có nút **Dịch / Translate**. Bản dịch lưu luôn vào tin nhắn nên lần sau mở không phải dịch lại. Quản trị viết tiếng Việt rồi bấm **Dịch sang tiếng Anh**: khách nhận bản tiếng Anh, quản trị vẫn thấy bản gốc tiếng Việt.
+- Dùng **Cloudflare Workers AI** (binding tên `AI` trong Settings → Bindings của dự án Pages). Mô hình: `@cf/google/gemma-4-26b-a4b-it`, dự phòng `@cf/meta/llama-3.1-8b-instruct-fp8`, cuối cùng `@cf/meta/m2m100-1.2b`. Gói miễn phí 10.000 neuron/ngày (khoảng hơn 1.000 lượt dịch tin ngắn).
+- Chưa gắn binding `AI` thì nút Dịch dùng trình dịch có sẵn của Chrome (nếu có), nếu không thì mở Google Dịch ở thẻ mới.
+
+## Liên hệ WhatsApp
+
+Số WhatsApp của Danny Do (`D8.WA` trong `shell.js`): +84 70 323 3263, link `https://wa.me/84703233263` kèm lời chào theo ngôn ngữ trang. Có ở thanh trên cùng, nút nổi trên trang chủ, mục Liên hệ, chân trang, trang đăng nhập và tin nhắn trong ca.
 
 ## Chuyển HTML sang STL (`/stl`)
 
@@ -58,7 +73,7 @@ Tách các lớp lưới 3D trong file HTML của exocad thành file STL, xử l
 ## Cài đặt trên Cloudflare (dự án Pages `d8-3d`)
 
 - **Build:** repo này, nhánh `main`, build command để trống, output `public`.
-- **Bindings:** KV namespace, biến `CASES`, kho `d8-3d-cases`.
+- **Bindings:** KV namespace, biến `CASES`, kho `d8-3d-cases`. Tùy chọn: **Workers AI** tên `AI` (dịch tin nhắn); **R2 bucket** tên `FILES` (lưu file ca, 10 GB miễn phí; khi có, file mới lưu vào R2, file cũ trong KV vẫn tải được). Với R2, đặt Lifecycle rule xóa object có tiền tố `jf:` sau 60 ngày.
 - **Variables and secrets:** `UPLOAD_PASSWORD` (mật khẩu quản trị; cũng dùng làm khóa ký cookie phiên, đổi mật khẩu sẽ đăng xuất mọi người). Tùy chọn: `ADMIN_EMAILS` (danh sách email quản trị, cách nhau bằng dấu phẩy), `GOOGLE_CLIENT_ID`.
 - **Custom domain:** `3d.d8designcenter.com` (cần bản ghi CNAME `3d` trỏ về `d8-3d.pages.dev` khi đã có tên miền).
 - **Google Auth Platform:** thêm địa chỉ trang web vào *Authorized JavaScript origins* của OAuth client; trang Branding cần link trang chủ, `/privacy`, `/terms`.
@@ -72,6 +87,7 @@ cd dev
 node server.mjs ../public 8788 mat-khau-thu
 # http://localhost:8788/  ·  /portal  ·  /admin
 # đăng nhập Google giả lập: lấy token ở /__test/idtoken?email=...&name=... rồi POST /api/auth/google
+# R2=1 node server.mjs ...   giả lập R2;  NO_AI=1 ... tắt Workers AI giả lập;  /__test/ops đếm lượt dùng KV
 ```
 
 ## Giới hạn gói miễn phí (Cloudflare KV)

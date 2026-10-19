@@ -20,6 +20,23 @@
     out: '<svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 5.5 15 9l-4 3.5M15 9H7"/></svg>',
   };
   const stChip = (s) => `<span class="st st-${esc(s)}">${esc(D8.statusLabel(s))}</span>`;
+  const money = (n) => "US$" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const PAY_LABEL = { "": "Chưa báo giá", trial: "Miễn phí (dùng thử)", due: "Chờ thanh toán", paid: "Đã thanh toán" };
+  const payChip = (x) => (typeof x.price === "number" || x.pay === "due" || x.pay === "paid")
+    ? `<span class="pay ${x.pay === "due" || x.pay === "paid" ? "pay-" + x.pay : ""}">${typeof x.price === "number" ? esc(money(x.price)) + " · " : ""}${esc(PAY_LABEL[x.pay || ""])}</span>` : "";
+  const TRIAL_CREDIT = 50;
+  // free-trial credit used by a customer: sum of the prices of their trial cases
+  const trialUse = (owner) => {
+    const t = jobs.filter((x) => x.owner === owner && x.trial);
+    return { cases: t.length, used: t.reduce((s, x) => s + (typeof x.price === "number" ? x.price : 0), 0) };
+  };
+  function csvDownload(name, rows) {
+    const cell = (v) => { let s = v == null ? "" : String(v); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const blob = new Blob(["\ufeff" + rows.map((r) => r.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  }
+  const today = () => new Date().toISOString().slice(0, 10);
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -156,7 +173,7 @@
       return `<a class="pt-row" href="#jobs/${esc(x.id)}">
         <div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span><span class="owner">${esc(x.owner)}</span></div>
         <span class="meta">Gửi ${esc(D8.fmtDate(x.created, true))} · cập nhật ${esc(D8.ago(x.updated))}${x.storedMB ? " · " + x.storedMB + " MB" : ""}</span>
-        <span class="right">${stChip(x.status)}${nr ? '<span class="new client">Khách vừa nhắn</span>' : ""}</span></a>`;
+        <span class="right">${stChip(x.status)}${x.trial ? '<span class="badge-trial">Dùng thử</span>' : ""}${payChip(x)}${nr ? '<span class="new client">Khách vừa nhắn</span>' : ""}</span></a>`;
     }).join("") : `<div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">${jobs.length ? "Không có ca nào khớp" : "Chưa có ca nào"}</h2>
       <p>${jobs.length ? "Thử bộ lọc khác hoặc xóa ô tìm kiếm." : "Khi khách đăng nhập cổng khách hàng và gửi ca, ca sẽ hiện ở đây."}</p></div>`;
   }
@@ -180,7 +197,7 @@
 
   function drawCase(j) {
     const seen = adminSeen(); seen[j.id] = j.updated; const ks = Object.keys(seen); if (ks.length > 500) delete seen[ks[0]]; store.set("d8-admin-seen", seen); updateJobCount();
-    setBand(j.title, j.id + " · gửi " + D8.fmtDate(j.created, true), { back: true, right: stChip(j.status) });
+    setBand(j.title, j.id + " · gửi " + D8.fmtDate(j.created, true), { back: true, right: stChip(j.status) + (j.trial ? ' <span class="badge-trial" style="background:var(--cream);color:var(--navy)">Dùng thử</span>' : "") });
     const st = j.status, idx = st === "needs_info" ? 0 : STEPS.indexOf(st);
     const steps = STEPS.map((s, i) => {
       const cls = st === "cancelled" ? "" : i < idx || (i === idx && s === "delivered") ? "done" : i === idx ? "cur" : "";
@@ -200,15 +217,22 @@
       <small>Dùng được đến ${esc(D8.fmtDate(p.expires))}</small></div>
       <a class="btn small" href="${esc(p.url)}" target="_blank" rel="noopener">Mở</a>
       <button class="iconbtn del rm" type="button" data-unlink="${esc(p.id)}" title="Gỡ link khỏi ca" aria-label="Gỡ link">${ICON.x}</button></div>`).join("");
-    const thread = (j.thread || []).map((m) => {
-      if (m.by === "system") return `<div class="sys">${esc(D8.fmtDate(m.at, true))} · ${stChip(String(m.text).replace(/^status:/, ""))}</div>`;
-      const mine = m.by === "admin";
-      return `<div class="bub ${mine ? "me" : "them"}">${mine ? "" : `<b>${esc(m.name || "Khách")}</b>`}${esc(m.text)}<small>${esc(D8.fmtDate(m.at, true))}</small></div>`;
-    }).join("");
+    const thread = D8.threadHtml(j, "admin", "vi");
     const det = [["Dịch vụ", D8.svcLabel(j.service)], ["Răng", j.teeth ? j.teeth + " (" + (j.numbering === "UNS" ? "Universal" : "FDI") + ")" : ""],
       ["Vật liệu", j.material], ["Màu răng", j.shade], ["Cần trước", j.neededBy ? D8.fmtDate(Date.parse(j.neededBy + "T12:00:00")) : ""],
       ["Ngày gửi", D8.fmtDate(j.created, true)], ["Đã duyệt", j.approvedAt ? D8.fmtDate(j.approvedAt, true) : ""]]
-      .filter((r) => r[1]).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
+      .filter((r) => r[1]).concat(D8.rxRows(j.rx)).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
+    const tu = trialUse(j.owner);
+    const left = TRIAL_CREDIT - tu.used;
+    const billing = `<section class="card"><h2 class="h-caps" style="margin-bottom:6px">Báo giá &amp; thanh toán</h2>
+      <p class="sub">Khách thấy giá và trạng thái thanh toán trong cổng khách hàng.</p>
+      <form id="billForm" style="display:grid;gap:12px">
+        <div><label class="field-label" for="billPrice">Giá ca (USD)</label><input class="input" id="billPrice" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.price === "number" ? j.price : ""}" placeholder="VD: 35"></div>
+        <div><label class="field-label" for="billPay">Thanh toán</label><select class="input" id="billPay">${Object.entries(PAY_LABEL).map(([k, l]) => `<option value="${k}"${(j.pay || "") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
+        <label class="check" style="margin:0"><input type="checkbox" id="billTrial"${j.trial ? " checked" : ""}> Ca dùng thử miễn phí</label>
+        ${tu.cases ? `<p class="hint" style="margin:0">Khách này có ${tu.cases} ca dùng thử, đã dùng ${esc(money(tu.used))} / ${money(TRIAL_CREDIT)}${left < 0 ? ` (vượt ${esc(money(-left))}: thương lượng hoặc tính ở ca thứ 2)` : ` (còn ${esc(money(left))})`}.</p>` : ""}
+        <button class="btn btn-primary small" type="submit" style="justify-self:start">Lưu báo giá</button>
+      </form></section>`;
 
     show("p-case");
     $("p-case").innerHTML = `
@@ -224,7 +248,9 @@
       ${st === "approved" ? `<div class="pt-alert ok">${ICON.check}<div>Khách đã duyệt lúc ${esc(D8.fmtDate(j.approvedAt || j.updated, true))}. Xuất file hoàn chỉnh rồi tải lên ở mục Giao file.</div></div>` : ""}
       <div class="pt-grid">
         <div>
-          <section class="card"><h2 class="h-caps">File của khách</h2><p class="sub">Bấm để tải về máy. File tự xóa sau 60 ngày.</p>
+          <section class="card"><div class="card-head-row"><h2 class="h-caps">File của khách</h2>
+            ${files.length > 1 ? `<button class="btn small" type="button" id="zipAll">${ICON.dl}Tải tất cả (.zip)</button>` : ""}</div>
+            <p class="sub">Bấm để tải về máy. File tự xóa sau 60 ngày.</p>
             ${ins.length ? `<ul class="files">${ins.map(fileRow).join("")}</ul>` : '<p class="muted" style="margin:0">Khách chưa tải file nào lên.</p>'}
             ${(j.links || []).length ? `<p class="grp" style="margin-top:18px">Link file khách gửi</p><div class="links">${j.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(l)}</a>`).join("")}</div>` : ""}
           </section>
@@ -250,21 +276,26 @@
               <p class="error" id="outErr" hidden></p>
               <div style="margin-top:12px"><button class="btn btn-primary small" type="button" id="outBtn" disabled>Tải lên &amp; giao</button></div></div>
           </section>
-          <section class="card"><h2 class="h-caps">Tin nhắn với khách</h2><p class="sub">Khách thấy tin nhắn trong cổng khách hàng. Nên viết tiếng Anh.</p>
+          <section class="card"><h2 class="h-caps">Tin nhắn với khách</h2><p class="sub">Khách thấy tin nhắn trong cổng khách hàng. Bấm <b>Dịch</b> dưới tin của khách để xem tiếng Việt; viết tiếng Việt rồi bấm <b>Dịch sang tiếng Anh</b> trước khi gửi.</p>
+            <div class="thread-tools"><button type="button" data-tr-all hidden>Dịch tất cả</button></div>
             <div class="thread" id="thread">${thread || '<p class="muted" style="margin:0">Chưa có tin nhắn.</p>'}</div>
             <form class="compose" id="composeForm">
               <div class="tpl">${TEMPLATES.map((t, i) => `<button type="button" data-tpl="${i}">${esc(t[0])}</button>`).join("")}</div>
               <label class="sr-only" for="composer">Tin nhắn</label>
-              <textarea class="input" id="composer" maxlength="4000" placeholder="Viết tin nhắn cho khách…"></textarea>
-              <div class="compose-foot"><p class="hint">Ctrl + Enter để gửi.</p><button class="btn btn-primary small" type="submit" id="sendMsg">Gửi</button></div>
+              <textarea class="input" id="composer" maxlength="4000" placeholder="Viết tin nhắn cho khách (tiếng Việt hoặc tiếng Anh)…"></textarea>
+              <p class="compose-orig" id="composeOrig" hidden></p>
+              <div class="compose-foot"><p class="hint">Ctrl + Enter để gửi.</p>
+                <div class="compose-tr"><button class="btn small" type="button" id="toEn">Dịch sang tiếng Anh</button><button class="btn btn-primary small" type="submit" id="sendMsg">Gửi</button></div></div>
               <p class="error" id="msgErr" hidden></p>
             </form>
           </section>
         </div>
         <aside><section class="card"><h2 class="h-caps" style="margin-bottom:16px">Thông tin ca</h2><dl class="dl">${det}</dl>
-          ${j.notes ? `<p class="grp" style="margin-top:20px">Yêu cầu của khách</p><p class="notes">${esc(j.notes)}</p>` : ""}</section></aside>
+          ${j.notes ? `<p class="grp" style="margin-top:20px">Yêu cầu của khách</p><p class="notes">${esc(j.notes)}</p>` : ""}</section>
+          ${billing}</aside>
       </div>`;
     const th = $("thread"); th.scrollTop = th.scrollHeight;
+    D8.wireThread(th, j, "vi");
     wireCase(j);
   }
 
@@ -278,7 +309,27 @@
   }
 
   function wireCase(j) {
-    const redraw = (job) => { current = job; drawCase(job); const i = jobs.findIndex((x) => x.id === job.id); if (i >= 0) Object.assign(jobs[i], { status: job.status, updated: job.updated, lastBy: job.lastBy }); };
+    const redraw = (job) => {
+      current = job;
+      const i = jobs.findIndex((x) => x.id === job.id);
+      if (i >= 0) Object.assign(jobs[i], { status: job.status, updated: job.updated, lastBy: job.lastBy, trial: !!job.trial, price: typeof job.price === "number" ? job.price : null, pay: job.pay || "" });
+      drawCase(job);
+    };
+    const zip = $("zipAll");
+    if (zip) zip.addEventListener("click", async () => {
+      zip.disabled = true;
+      try { await D8.downloadZip((j.files || []).map((f) => ({ name: f.name, url: `/api/jobs/${j.id}/files/${f.fid}` })), j.id + ".zip", (i, n) => { zip.textContent = "Đang gom file " + i + "/" + n + "…"; }); }
+      catch (err) { D8.toast(err.message); }
+      zip.disabled = false; zip.innerHTML = ICON.dl + "Tải tất cả (.zip)";
+    });
+    $("billForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const raw = $("billPrice").value.trim();
+      try {
+        redraw((await api(`/api/jobs/${j.id}/billing`, { method: "POST", body: { price: raw === "" ? null : Number(raw), pay: $("billPay").value, trial: $("billTrial").checked } })).job);
+        D8.toast("Đã lưu báo giá.");
+      } catch (err) { D8.toast(err.message); }
+    });
     $("statForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       try { redraw((await api(`/api/jobs/${j.id}/status`, { method: "POST", body: { status: $("statSel").value } })).job); D8.toast("Đã cập nhật trạng thái."); }
@@ -351,15 +402,27 @@
       } catch (ex) { busy = false; btn.disabled = false; prog.hidden = true; err.textContent = ex.message; err.hidden = false; }
     });
 
-    // messages
+    // messages (write in Vietnamese, translate to English, send English with the Vietnamese kept as the original)
     const form = $("composeForm"), box = $("composer");
-    document.querySelectorAll("#p-case [data-tpl]").forEach((b) => b.addEventListener("click", () => { box.value = TEMPLATES[+b.dataset.tpl][1]; box.focus(); }));
+    let orig = "";
+    const showOrig = () => { const o = $("composeOrig"); o.hidden = !orig; o.innerHTML = orig ? "<b>Bản gốc</b>" + esc(orig) : ""; };
+    $("toEn").addEventListener("click", async () => {
+      const text = box.value.trim(); if (!text) return box.focus();
+      const b = $("toEn"); b.disabled = true; b.textContent = "Đang dịch…";
+      try {
+        const r = await D8.translate({ text, to: "en" });
+        if (r.opened) D8.toast("Đã mở Google Dịch ở thẻ mới. Dán bản tiếng Anh vào ô tin nhắn.");
+        else if (r.text) { orig = text; box.value = r.text; showOrig(); }
+      } catch (err) { D8.toast(err.message); }
+      b.disabled = false; b.textContent = "Dịch sang tiếng Anh";
+    });
+    document.querySelectorAll("#p-case [data-tpl]").forEach((b) => b.addEventListener("click", () => { box.value = TEMPLATES[+b.dataset.tpl][1]; orig = ""; showOrig(); box.focus(); }));
     box.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); form.requestSubmit(); } });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = box.value.trim(); if (!text) return box.focus();
       $("sendMsg").disabled = true; $("msgErr").hidden = true;
-      try { redraw((await api(`/api/jobs/${j.id}/messages`, { method: "POST", body: { text } })).job); }
+      try { redraw((await api(`/api/jobs/${j.id}/messages`, { method: "POST", body: orig ? { text, original: orig, originalLang: "vi" } : { text } })).job); }
       catch (err) { $("sendMsg").disabled = false; $("msgErr").textContent = err.message; $("msgErr").hidden = false; }
     });
   }
@@ -385,6 +448,25 @@
     $("custBody").querySelectorAll("[data-owner]").forEach((a) => a.addEventListener("click", () => { jobFilter = "all"; jobQuery = a.dataset.owner; $("jobQ").value = jobQuery; }));
   }
   $("custQ").addEventListener("input", drawCustomers);
+
+  /* ------------------------------------------------------------ CSV exports (open in Excel) */
+  const userName = (email) => (users.find((u) => u.email === email) || {}).name || "";
+  $("jobCsv").addEventListener("click", async () => {
+    await loadJobs(true);
+    if (!users.length) { try { users = (await api("/api/admin/users")).users || []; } catch {} }
+    csvDownload("D8-ca-hang-" + today() + ".csv", [["Mã ca", "Ngày gửi", "Khách", "Email", "Tên ca", "Dịch vụ", "Trạng thái", "Dùng thử", "Giá (USD)", "Thanh toán", "Cập nhật"],
+      ...jobs.map((x) => [x.id, new Date(x.created).toLocaleString("vi-VN"), x.ownerName || userName(x.owner), x.owner, x.title, D8.svcLabel(x.service),
+        D8.statusLabel(x.status), x.trial ? "Có" : "", typeof x.price === "number" ? x.price : "", PAY_LABEL[x.pay || ""], new Date(x.updated).toLocaleString("vi-VN")])]);
+  });
+  $("custCsv").addEventListener("click", () => {
+    const per = {}; jobs.forEach((x) => { per[x.owner] = (per[x.owner] || 0) + 1; });
+    csvDownload("D8-khach-hang-" + today() + ".csv", [["Tên", "Email", "Lab / phòng khám", "Quốc gia", "Điện thoại", "Số ca", "Đăng nhập lần đầu", "Lần gần nhất"],
+      ...users.map((u) => [u.name, u.email, u.practice, u.country, u.phone, per[u.email] || 0, u.created ? new Date(u.created).toLocaleString("vi-VN") : "", u.last ? new Date(u.last).toLocaleString("vi-VN") : ""])]);
+  });
+  $("msgCsv").addEventListener("click", () => {
+    csvDownload("D8-tin-nhan-" + today() + ".csv", [["Ngày", "Tên", "Email", "Lab / phòng khám", "Quốc gia", "Chủ đề", "Nội dung"],
+      ...messages.map((m) => [new Date(m.created).toLocaleString("vi-VN"), m.name, m.email, m.practice, m.country, m.service, m.message])]);
+  });
 
   /* ------------------------------------------------------------ 3D links (exocad HTML) */
   const MAX_INPUT = 100 * 1024 * 1024;

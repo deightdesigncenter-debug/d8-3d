@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta name="d8-version" content="2026-10-19.1">
+<meta name="d8-version" content="2026-10-19.2">
 <title>Quản trị | D.EIGHT</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-19.1">
-<link rel="stylesheet" href="/case.css?v=2026-10-19.1">
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.2">
+<link rel="stylesheet" href="/case.css?v=2026-10-19.2">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -130,8 +130,8 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-19.1" defer></script>
-<script src="/admin.js?v=2026-10-19.1" defer></script>
+<script src="/shell.js?v=2026-10-19.2" defer></script>
+<script src="/admin.js?v=2026-10-19.2" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
@@ -175,7 +175,8 @@
     <section class="panel" id="p-jobs" hidden>
       <div class="pt-tools">
         <div class="pt-filters" id="jobFilters" role="group" aria-label="Lọc theo trạng thái"></div>
-        <input class="input pt-search" type="search" id="jobQ" placeholder="Tìm mã ca, tên ca, email khách" aria-label="Tìm ca">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input pt-search" type="search" id="jobQ" placeholder="Tìm mã ca, tên ca, email khách" aria-label="Tìm ca">
+          <button class="btn small" type="button" id="jobCsv">Xuất CSV</button></div>
       </div>
       <div class="pt-list" id="jobList"></div>
       <p class="error" id="jobErr" hidden></p>
@@ -262,6 +263,7 @@
           </div>
           <div class="msg-tools">
             <button class="btn small" id="msgReadAll" hidden>Đánh dấu đã đọc hết</button>
+            <button class="btn small" id="msgCsv">Xuất CSV</button>
             <button class="btn small" id="msgReload">Tải lại</button>
           </div>
         </div>
@@ -275,7 +277,8 @@
       <section class="card">
         <div class="card-head">
           <div><h2 class="h-caps">Khách hàng</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tài khoản đã đăng nhập cổng khách hàng bằng Google. Bấm vào khách để xem các ca của họ.</p></div>
-          <input class="input pt-search" type="search" id="custQ" placeholder="Tìm tên, email, lab" aria-label="Tìm khách hàng">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input pt-search" type="search" id="custQ" placeholder="Tìm tên, email, lab" aria-label="Tìm khách hàng">
+            <button class="btn small" type="button" id="custCsv">Xuất CSV</button></div>
         </div>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Khách hàng</th><th>Lab / phòng khám</th><th>Quốc gia</th><th>Điện thoại</th><th class="num">Số ca</th><th>Đăng nhập lần đầu</th><th>Lần gần nhất</th></tr></thead>
           <tbody id="custBody"></tbody></table></div>

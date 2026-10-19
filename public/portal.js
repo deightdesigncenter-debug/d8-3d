@@ -29,12 +29,15 @@
 
   let user = null;
   let filter = "all", query = "";
+  let caseCount = null;        // number of cases this customer has sent (for the free-trial banner)
+  const GIFT = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="7" width="13" height="8.5" rx="1"/><path d="M1.5 4.5h15V7h-15zM9 4.5v11M9 4.5C8 2 5.5 1.8 5.3 3.3 5.1 4.6 7.4 4.5 9 4.5Zm0 0c1-2.5 3.5-2.7 3.7-1.2.2 1.3-2.1 1.2-3.7 1.2Z"/></svg>';
+  const trialBanner = () => `<div class="pt-trial">${GIFT}<div>${T("p.trial")}</div></div>`;
   let current = null;          // case currently shown
   let draft = freshDraft();    // new-case form state (survives language switches)
   let busy = false;
   const recent = new Map();    // cases created in this tab (the KV list can lag by up to a minute)
 
-  function freshDraft() { return { title: "", service: "", teeth: "", numbering: "FDI", material: "", shade: "", neededBy: "", notes: "", links: [""], files: [] }; }
+  function freshDraft() { return { title: "", service: "", teeth: "", numbering: "FDI", material: "", shade: "", neededBy: "", notes: "", links: [""], files: [], rx: {} }; }
 
   /* ------------------------------------------------------------ chrome */
   function band(inner) { return `<section class="pt-band"><div class="wrap">${inner}</div></section>`; }
@@ -91,7 +94,9 @@
           <p class="hint">${esc(T("p.si.new"))}</p>
           <p class="pt-fine">${T("p.si.fine")}</p>
           <div class="pt-or">${esc(T("p.si.or"))}</div>
-          <p style="margin:14px 0 0"><a class="btn small" href="/#contact">${esc(T("p.si.contact"))}</a></p>
+          <p style="margin:14px 0 0;display:flex;gap:10px;flex-wrap:wrap"><a class="btn small" href="/#contact">${esc(T("p.si.contact"))}</a>
+            <a class="btn small" href="${esc(D8.waLink())}" target="_blank" rel="noopener">${D8.ICON_CHAT.replace("<svg ", '<svg width="16" height="16" ')}WhatsApp · Danny Do</a></p>
+          <div class="pt-trial" style="margin:22px 0 0">${GIFT}<div>${T("p.trial")}</div></div>
         </div>
       </section>`);
     const el = document.getElementById("gbtn");
@@ -105,6 +110,7 @@
     let items;
     try { items = (await D8.api("/api/my/jobs")).items || []; }
     catch (err) { if (err.status === 401) { user = null; return renderSignIn(); } return failed(err.message); }
+    caseCount = items.length;
     const known = new Set(items.map((x) => x.id));
     for (const [id, j] of recent) if (!known.has(id)) items.unshift(j); else recent.delete(id);
     drawList(items);
@@ -128,7 +134,7 @@
       return `<a class="pt-row" href="#/case/${esc(x.id)}">
         <div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
         <span class="meta">${esc(T("p.sent").replace("{d}", D8.fmtDate(x.created)))} · ${esc(T("p.updated").replace("{t}", D8.ago(x.updated)))}</span>
-        <span class="right">${stChip(x.status)}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
+        <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
     }).join("");
     const empty = !items.length
       ? `<div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">${esc(T("p.empty.h"))}</h2><p>${esc(T("p.empty.p"))}</p>
@@ -136,11 +142,11 @@
       : `<div class="pt-empty"><p style="margin:0">${esc(T("p.nomatch"))}</p></div>`;
     page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><h1>${esc(T("p.list.h"))}</h1><p class="serif">${esc(T("p.list.hi").replace("{name}", first))}</p></div>
       <a class="btn btn-cream" href="#/new">${ICON.plus}${esc(T("p.new"))}</a>`), `
+      ${items.length < 2 ? trialBanner() : ""}
       ${items.length ? `<div class="pt-tools"><div class="pt-filters" role="group" aria-label="Filter">${["all", "active", "review", "done"].map((f) =>
         `<button type="button" data-f="${f}" aria-pressed="${filter === f}">${esc(T("p.f." + f))}<b>${counts[f]}</b></button>`).join("")}</div>
         <input class="input pt-search" type="search" id="q" value="${esc(query)}" placeholder="${esc(T("p.search"))}" aria-label="${esc(T("p.search"))}"></div>` : ""}
-      <div class="pt-list">${shown.length ? rows : empty}</div>
-      ${items.length ? `<p class="pt-note">${esc(T("p.lag"))}</p>` : ""}`);
+      <div class="pt-list">${shown.length ? rows : empty}</div>`);
     view.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { filter = b.dataset.f; drawList(items); }));
     const q = document.getElementById("q");
     if (q) q.addEventListener("input", () => { query = q.value; const pos = q.selectionStart; drawList(items); const n = document.getElementById("q"); n.focus(); n.setSelectionRange(pos, pos); });
@@ -206,20 +212,18 @@
     };
     const canUpload = CLIENT_UPLOAD.includes(st);
 
-    const thread = (j.thread || []).map((m) => {
-      if (m.by === "system") {
-        const s = String(m.text).replace(/^status:/, "");
-        return `<div class="sys">${esc(D8.fmtDate(m.at, true))} · ${stChip(s)}</div>`;
-      }
-      const mine = m.by === "client";
-      return `<div class="bub ${mine ? "me" : "them"}">${mine ? "" : `<b>${esc(m.name || "D.EIGHT")}</b>`}${esc(m.text)}<small>${esc(D8.fmtDate(m.at, true))}</small></div>`;
-    }).join("");
+    const readLang = D8.lang === "vi" ? "vi" : "en";
+    const thread = D8.threadHtml(j, "client", readLang);
 
     const det = [
       ["p.dt.service", svcLabel(j.service)], ["p.dt.teeth", j.teeth ? j.teeth + " (" + (j.numbering === "UNS" ? "Universal" : "FDI") + ")" : ""],
       ["p.dt.material", j.material], ["p.dt.shade", j.shade], ["p.dt.needed", j.neededBy ? D8.fmtDate(Date.parse(j.neededBy + "T12:00:00")) : ""],
       ["p.dt.sent", D8.fmtDate(j.created, true)],
-    ].filter((r) => r[1]).map(([k, v]) => `<div><dt>${esc(T(k))}</dt><dd>${esc(v)}</dd></div>`).join("");
+    ].filter((r) => r[1]).map(([k, v]) => [T(k), v]).concat(D8.rxRows(j.rx))
+      .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
+    const bill = j.trial || typeof j.price === "number" || j.pay === "due" || j.pay === "paid"
+      ? `<div><dt>${esc(T("bill.price"))}</dt><dd>${typeof j.price === "number" ? esc("US$" + j.price.toLocaleString("en-US", { maximumFractionDigits: 2 })) + " " : ""}${
+          j.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span> ` : ""}${j.pay === "due" || j.pay === "paid" ? `<span class="pay pay-${j.pay}">${esc(T("bill." + j.pay))}</span>` : ""}</dd></div>` : "";
 
     page(band(`<div><a class="pt-back" href="#/">${ICON.back}${esc(T("p.back"))}</a>
         <h1>${esc(j.title)}</h1><p class="muted" style="margin:8px 0 0;color:var(--steel-200)">${esc(j.id)} · ${esc(T("p.c.sent").replace("{d}", D8.fmtDate(j.created)))}</p></div>
@@ -234,7 +238,8 @@
             ${previews}${approveBox}
           </section>
           <section class="card" aria-labelledby="flH">
-            <h2 class="h-caps" id="flH">${esc(T("p.fl.h"))}</h2>
+            <div class="card-head-row"><h2 class="h-caps" id="flH">${esc(T("p.fl.h"))}</h2>
+              ${files.length > 1 ? `<button class="btn small" type="button" id="zipAll">${ICON.dl}${esc(T("zip.btn"))}</button>` : ""}</div>
             ${outs.length ? `<p class="grp">${esc(T("p.fl.out"))}</p><ul class="files">${outs.map(fileRow).join("")}</ul>` : ""}
             <p class="grp">${esc(T("p.fl.in"))}</p>
             ${ins.length ? `<ul class="files">${ins.map(fileRow).join("")}</ul>` : `<p class="muted" style="margin:0 0 6px">${esc(T("p.fl.none"))}</p>`}
@@ -246,7 +251,8 @@
           </section>
           <section class="card" aria-labelledby="msH" id="messages">
             <h2 class="h-caps" id="msH">${esc(T("p.ms.h"))}</h2>
-            <p class="sub">${esc(T("p.ms.sub"))}</p>
+            <p class="sub">${esc(T("p.ms.sub"))} <a href="${esc(D8.waLink(T("p.ms.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">${esc(T("p.ms.wa"))}</a></p>
+            <div class="thread-tools"><button type="button" data-tr-all hidden>${esc(T("tr.all"))}</button></div>
             <div class="thread" id="thread">${thread || `<p class="muted" style="margin:0">${esc(T("p.ms.none"))}</p>`}</div>
             <form class="compose" id="composeForm">
               <label class="sr-only" for="composer">${esc(T("p.ms.ph"))}</label>
@@ -259,7 +265,7 @@
         <aside>
           <section class="card" aria-labelledby="dtH">
             <h2 class="h-caps" id="dtH" style="margin-bottom:16px">${esc(T("p.dt.h"))}</h2>
-            <dl class="dl">${det}</dl>
+            <dl class="dl">${det}${bill}</dl>
             ${j.notes ? `<p class="grp" style="margin-top:20px">${esc(T("p.dt.notes"))}</p><p class="notes">${esc(j.notes)}</p>` : ""}
             ${(j.links || []).length ? `<p class="grp" style="margin-top:20px">${esc(T("p.dt.links"))}</p><div class="links">${j.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(l)}</a>`).join("")}</div>` : ""}
           </section>
@@ -268,6 +274,7 @@
 
     const th = document.getElementById("thread");
     th.scrollTop = th.scrollHeight;
+    D8.wireThread(th, j, readLang);
     wireCase(j);
   }
 
@@ -291,6 +298,15 @@
   const sameFile = (a, b) => a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
 
   function wireCase(j) {
+    const zip = document.getElementById("zipAll");
+    if (zip) zip.addEventListener("click", async () => {
+      zip.disabled = true;
+      try {
+        await D8.downloadZip((j.files || []).map((f) => ({ name: f.name, url: `/api/jobs/${j.id}/files/${f.fid}` })), j.id + ".zip",
+          (i, n) => { zip.textContent = T("zip.busy").replace("{i}", i).replace("{n}", n); });
+      } catch (err) { D8.toast(err.message); }
+      zip.disabled = false; zip.innerHTML = ICON.dl + esc(T("zip.btn"));
+    });
     // approve (two-step, no browser dialog)
     const ap = document.getElementById("approve");
     if (ap) {
@@ -361,6 +377,7 @@
     const d = draft;
     const opt = (v) => `<option value="${esc(v)}"${d.service === v ? " selected" : ""}>${esc(svcLabel(v))}</option>`;
     page(band(`<div><a class="pt-back" href="#/">${ICON.back}${esc(T("p.back"))}</a><h1>${esc(T("p.nf.h"))}</h1><p class="serif">${esc(T("p.nf.serif"))}</p></div>`), `
+      <div id="trialSlot">${caseCount !== null && caseCount < 2 ? trialBanner() : ""}</div>
       <form class="form-grid" id="newForm" novalidate>
         <div class="card">
           <fieldset class="fs"><legend><span class="n">1</span><span class="h-caps">${T("p.nf.s1")}</span></legend>
@@ -370,6 +387,7 @@
                 <p class="hint">${esc(T("p.nf.refh"))}</p></div>
               <div class="full"><label class="field-label" for="nService">${esc(T("p.nf.service"))}</label>
                 <select class="input" id="nService" data-k="service"><option value="">${esc(T("p.nf.choose"))}</option>${SERVICES.map(opt).join("")}</select></div>
+              <div class="full row2" id="rxBox" style="gap:18px 16px"></div>
               <div><label class="field-label" for="nTeeth">${esc(T("p.nf.teeth"))}</label>
                 <input class="input" id="nTeeth" data-k="teeth" maxlength="120" value="${esc(d.teeth)}" placeholder="${esc(T("p.nf.teethph"))}"></div>
               <div><span class="field-label" id="numL">${esc(T("p.nf.num"))}</span>
@@ -405,6 +423,19 @@
 
     const form = document.getElementById("newForm");
     form.querySelectorAll("[data-k]").forEach((el) => el.addEventListener("input", () => { d[el.dataset.k] = el.value; }));
+    const rxBox = document.getElementById("rxBox");
+    const drawRx = () => {
+      rxBox.innerHTML = D8.rxFields(d.service, d.rx);
+      rxBox.style.display = rxBox.innerHTML ? "" : "none";
+      rxBox.querySelectorAll("[data-rx]").forEach((el) => el.addEventListener("input", () => { d.rx[el.dataset.rx] = el.value; }));
+    };
+    document.getElementById("nService").addEventListener("change", drawRx);
+    drawRx();
+    if (caseCount === null) D8.api("/api/my/jobs").then((r) => {
+      caseCount = (r.items || []).length;
+      const slot = document.getElementById("trialSlot");
+      if (slot && caseCount < 2) slot.innerHTML = trialBanner();
+    }).catch(() => {});
     form.querySelectorAll('input[name="numbering"]').forEach((r) => r.addEventListener("change", () => { d.numbering = r.value; }));
     const list = document.getElementById("nList");
     const redraw = () => pickedList(list, d.files, (i) => { d.files.splice(i, 1); redraw(); });
@@ -436,7 +467,9 @@
       let job;
       try {
         job = (await D8.api("/api/my/jobs", { method: "POST", body: { title: d.title, service: d.service, teeth: d.teeth, numbering: d.numbering,
-          material: d.material, shade: d.shade, neededBy: d.neededBy, notes: d.notes, links: linkList } })).job;
+          material: d.material, shade: d.shade, neededBy: d.neededBy, notes: d.notes, links: linkList,
+          rx: Object.fromEntries((D8.RX[d.service] || []).map(([k]) => [k, (d.rx[k] || "").trim()]).filter(([, v]) => v)) } })).job;
+      caseCount = (caseCount || 0) + 1;
       } catch (ex) { busy = false; btn.disabled = false; prog.hidden = true; return fail(ex.message); }
       recent.set(job.id, { id: job.id, title: job.title, status: job.status, created: job.created, updated: job.updated, lastBy: "client" });
       let upErr = "";

@@ -79,6 +79,10 @@
     "sh.privacy": ["Privacy policy", "Chính sách bảo mật"],
     "sh.terms": ["Terms of service", "Điều khoản dịch vụ"],
     "sh.menu": ["Menu", "Menu"],
+    "sh.promo": ["Free trial: your first 2 cases, up to US$50 in total", "Dùng thử: 2 ca đầu miễn phí, tổng đến 50 USD"],
+    "sh.promo.s": ["2 free trial cases", "2 ca dùng thử miễn phí"],
+    "sh.wa": ["WhatsApp · Danny Do", "WhatsApp · Danny Do"],
+    "sh.wa.msg": ["Hi Danny, I'd like to know more about D.EIGHT's dental design services.", "Chào Danny, tôi muốn tìm hiểu dịch vụ thiết kế nha khoa của D.EIGHT."],
     "sh.gis.load": ["Google sign-in could not load. Check your connection or ad blocker, then reload the page.", "Không tải được nút đăng nhập Google. Kiểm tra mạng hoặc trình chặn quảng cáo rồi tải lại trang."],
     "sh.gis.cfg": ["Google sign-in is not configured yet.", "Chưa cấu hình đăng nhập Google."],
   });
@@ -135,6 +139,179 @@
                  "Splints & trays", "Aligner & ortho", "Digital models", "Trial case", "Something else"];
   D8.svcLabel = (v) => (v ? D8.t("svc." + v, v) : "");
   D8.statusLabel = (s) => D8.t("st." + s, s);
+  // WhatsApp contact
+  D8.WA = { number: "84703233263", display: "+84 70 323 3263", name: "Danny Do" };
+  D8.waLink = (text) => "https://wa.me/" + D8.WA.number + "?text=" + encodeURIComponent(text || D8.t("sh.wa.msg"));
+  D8.ICON_CHAT = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 2.2a7.8 7.8 0 0 0-6.7 11.8L2.2 17.8l3.9-1.1A7.8 7.8 0 1 0 10 2.2Z"/><path d="M7.1 6.3c.3-.3.8-.3 1 .1l.7 1.4c.1.3 0 .6-.2.8l-.5.5a5 5 0 0 0 2.8 2.8l.5-.5c.2-.2.5-.3.8-.2l1.4.7c.4.2.4.7.1 1-.6.7-1.5 1-2.4.7a7.4 7.4 0 0 1-4.9-4.9c-.3-.9 0-1.8.7-2.4Z"/></svg>';
+  D8.addDict({
+    "tr.btn": ["Translate", "Dịch"],
+    "tr.to.en": ["Translate to English", "Dịch sang tiếng Anh"],
+    "tr.to.vi": ["Translate to Vietnamese", "Dịch sang tiếng Việt"],
+    "tr.busy": ["Translating…", "Đang dịch…"],
+    "tr.label": ["Translated", "Bản dịch"],
+    "tr.hide": ["Hide translation", "Ẩn bản dịch"],
+    "tr.show": ["Show translation", "Xem bản dịch"],
+    "tr.opened": ["Opened Google Translate in a new tab.", "Đã mở Google Dịch ở thẻ mới."],
+    "zip.btn": ["Download all (.zip)", "Tải tất cả (.zip)"],
+    "zip.busy": ["Preparing {i}/{n}…", "Đang gom file {i}/{n}…"],
+  });
+
+  // Extra prescription fields per service (stored on the case as rx: {key: value}).
+  const ARCH = ["Upper", "Lower", "Both"];
+  D8.RX = {
+    "Implant restorations": [["retention", ["Screw-retained crown", "Cement-retained crown", "Custom abutment + crown", "Ti-base crown", "Implant bridge"]], ["implant_system"], ["scan_body"]],
+    "All-on-X & bars": [["arch", ARCH], ["prosthesis", ["Hybrid bridge", "Bar", "Bar + overlay", "Provisional (PMMA)"]], ["implant_system"], ["mua"]],
+    "Surgical guides": [["support", ["Tooth-supported", "Tissue-supported", "Bone-supported"]], ["implant_system"], ["sleeve"], ["sites"]],
+    "Crown & bridge": [["restoration", ["Full contour", "Cutback", "Coping / framework", "Veneer", "Inlay / onlay", "Post and core"]], ["cement_gap"]],
+    "Wax-up & smile design": [["arch", ARCH], ["photo", ["Photo attached", "No photo"]]],
+    "Dentures & partials": [["arch", ARCH], ["base", ["Hard acrylic", "Flexible", "Metal framework"]], ["teeth_library"]],
+    "Splints & trays": [["appliance", ["Night guard", "Michigan splint", "Kois deprogrammer", "Sleep appliance", "Retainer", "Bleach tray", "Custom impression tray"]], ["arch", ARCH], ["thickness"]],
+    "Aligner & ortho": [["arch", ARCH], ["goals"]],
+    "Digital models": [["model", ["Dies", "Articulated model", "Ortho model", "Implant model with gingiva"]], ["arch", ARCH]],
+  };
+  D8.addDict({
+    "rx.retention": ["Restoration type", "Loại phục hình"], "rx.implant_system": ["Implant system & platform", "Hệ implant & kết nối"],
+    "rxp.implant_system": ["e.g. brand, line, platform size", "VD: hãng, dòng, kích thước kết nối"],
+    "rx.scan_body": ["Scan body", "Scan body"], "rxp.scan_body": ["Brand and type", "Hãng và loại"],
+    "rx.arch": ["Arch", "Hàm"], "rx.prosthesis": ["Prosthesis", "Loại phục hình"],
+    "rx.mua": ["MUA angles / heights", "Góc / chiều cao MUA"], "rxp.mua": ["e.g. 17° posterior, straight anterior", "VD: 17° phía sau, thẳng phía trước"],
+    "rx.support": ["Guide support", "Kiểu tựa máng"], "rx.sleeve": ["Guided kit / sleeve", "Bộ khoan / ống dẫn"], "rxp.sleeve": ["e.g. kit name, sleeve Ø", "VD: tên bộ khoan, đường kính ống"],
+    "rx.sites": ["Implant sites", "Vị trí implant"], "rxp.sites": ["e.g. 36, 46", "VD: 36, 46"],
+    "rx.restoration": ["Restoration type", "Loại phục hình"], "rx.cement_gap": ["Cement gap / min. thickness", "Khoảng xi măng / độ dày tối thiểu"],
+    "rxp.cement_gap": ["e.g. 0.05 mm / 0.8 mm", "VD: 0,05 mm / 0,8 mm"],
+    "rx.photo": ["Smile photo", "Ảnh nụ cười"], "rx.base": ["Base", "Nền hàm"], "rx.teeth_library": ["Teeth library / mould", "Thư viện răng / khuôn răng"],
+    "rx.appliance": ["Appliance", "Loại khí cụ"], "rx.thickness": ["Thickness", "Độ dày"], "rxp.thickness": ["e.g. 2.0 mm", "VD: 2,0 mm"],
+    "rx.goals": ["Treatment goals", "Mục tiêu điều trị"], "rx.model": ["Model type", "Loại mẫu"],
+    "rx.choose": ["Choose…", "Chọn…"],
+    "rxo.Upper": ["Upper", "Hàm trên"], "rxo.Lower": ["Lower", "Hàm dưới"], "rxo.Both": ["Both", "Cả hai hàm"],
+    "rxo.Screw-retained crown": ["Screw-retained crown", "Mão bắt vít"], "rxo.Cement-retained crown": ["Cement-retained crown", "Mão gắn xi măng"],
+    "rxo.Custom abutment + crown": ["Custom abutment + crown", "Abutment cá nhân + mão"], "rxo.Ti-base crown": ["Ti-base crown", "Mão trên Ti-base"],
+    "rxo.Implant bridge": ["Implant bridge", "Cầu trên implant"], "rxo.Hybrid bridge": ["Hybrid bridge", "Cầu hybrid"], "rxo.Bar": ["Bar", "Thanh bar"],
+    "rxo.Bar + overlay": ["Bar + overlay", "Bar + phần phủ"], "rxo.Provisional (PMMA)": ["Provisional (PMMA)", "Tạm (PMMA)"],
+    "rxo.Tooth-supported": ["Tooth-supported", "Tựa răng"], "rxo.Tissue-supported": ["Tissue-supported", "Tựa mô"], "rxo.Bone-supported": ["Bone-supported", "Tựa xương"],
+    "rxo.Full contour": ["Full contour", "Nguyên khối"], "rxo.Cutback": ["Cutback", "Cắt lớp"], "rxo.Coping / framework": ["Coping / framework", "Sườn"],
+    "rxo.Veneer": ["Veneer", "Veneer"], "rxo.Inlay / onlay": ["Inlay / onlay", "Inlay / onlay"], "rxo.Post and core": ["Post and core", "Chốt và cùi"],
+    "rxo.Photo attached": ["Photo attached", "Có ảnh kèm theo"], "rxo.No photo": ["No photo", "Không có ảnh"],
+    "rxo.Hard acrylic": ["Hard acrylic", "Nhựa cứng"], "rxo.Flexible": ["Flexible", "Nhựa dẻo"], "rxo.Metal framework": ["Metal framework", "Khung kim loại"],
+    "rxo.Night guard": ["Night guard", "Máng chống nghiến"], "rxo.Michigan splint": ["Michigan splint", "Máng Michigan"], "rxo.Kois deprogrammer": ["Kois deprogrammer", "Máng Kois"],
+    "rxo.Sleep appliance": ["Sleep appliance", "Khí cụ ngủ ngáy"], "rxo.Retainer": ["Retainer", "Hàm duy trì"], "rxo.Bleach tray": ["Bleach tray", "Máng tẩy trắng"],
+    "rxo.Custom impression tray": ["Custom impression tray", "Khay lấy dấu cá nhân"], "rxo.Dies": ["Dies", "Die"], "rxo.Articulated model": ["Articulated model", "Mẫu lên càng"],
+    "rxo.Ortho model": ["Ortho model", "Mẫu chỉnh nha"], "rxo.Implant model with gingiva": ["Implant model with gingiva", "Mẫu implant có nướu"],
+    "tr.orig": ["Original", "Bản gốc"], "tr.all": ["Translate all", "Dịch tất cả"],
+    "bill.price": ["Price", "Giá"], "bill.trial": ["Free trial", "Dùng thử miễn phí"], "bill.due": ["Awaiting payment", "Chờ thanh toán"], "bill.paid": ["Paid", "Đã thanh toán"],
+  });
+  // [label, value] rows for a case's extra prescription fields, in the current language
+  D8.rxRows = (rx) => Object.entries(rx || {}).map(([k, v]) => [D8.t("rx." + k, k.replace(/_/g, " ")), D8.t("rxo." + v, v)]);
+  // form controls for a service's extra fields; values from `vals`
+  D8.rxFields = (service, vals) => (D8.RX[service] || []).map(([k, opts]) => {
+    const id = "rx_" + k, v = (vals || {})[k] || "";
+    const ctl = opts ? `<select class="input" id="${id}" data-rx="${k}"><option value="">${D8.esc(D8.t("rx.choose"))}</option>${opts.map((o) => `<option value="${D8.esc(o)}"${o === v ? " selected" : ""}>${D8.esc(D8.t("rxo." + o, o))}</option>`).join("")}</select>`
+      : `<input class="input" id="${id}" data-rx="${k}" maxlength="160" value="${D8.esc(v)}" placeholder="${D8.esc(D8.t("rxp." + k, ""))}">`;
+    return `<div><label class="field-label" for="${id}">${D8.esc(D8.t("rx." + k))}</label>${ctl}</div>`;
+  }).join("");
+
+  // Chat thread (portal and admin). me = "client" | "admin"; to = language the viewer reads.
+  D8.threadHtml = (job, me, to) => (job.thread || []).map((m) => {
+    if (m.by === "system") { const s = String(m.text).replace(/^status:/, ""); return `<div class="sys">${D8.esc(D8.fmtDate(m.at, true))} · <span class="st st-${D8.esc(s)}">${D8.esc(D8.statusLabel(s))}</span></div>`; }
+    const mine = m.by === me, tr = m.tr && m.tr[to];
+    const name = mine ? "" : `<b>${D8.esc(m.name || (m.by === "admin" ? "D.EIGHT" : ""))}</b>`;
+    const trBlock = tr && tr !== m.text ? `<div class="bub-tr"><span>${D8.esc(D8.t(mine ? "tr.orig" : "tr.label"))}</span>${D8.esc(tr)}</div>` : "";
+    const canTr = !mine && !tr && m.lang !== to;
+    return `<div class="bub ${mine ? "me" : "them"}">${name}<div class="bub-text">${D8.esc(m.text)}</div>${trBlock}<small>${D8.esc(D8.fmtDate(m.at, true))}${canTr
+      ? `<span class="tr-wrap"> · <button type="button" class="tr-btn" data-tr="${m.at}">${D8.esc(D8.t("tr.btn"))}</button></span>` : ""}</small></div>`;
+  }).join("");
+  D8.wireThread = (root, job, to) => {
+    const one = async (b) => {
+      const at = +b.dataset.tr, m = (job.thread || []).find((x) => x.at === at);
+      if (!m || b.disabled) return;
+      b.disabled = true; b.textContent = D8.t("tr.busy");
+      try {
+        const r = await D8.translate({ jobId: job.id, at, text: m.text, to });
+        if (r.opened) { D8.toast(D8.t("tr.opened")); b.disabled = false; b.textContent = D8.t("tr.btn"); return false; }
+        m.tr = { ...(m.tr || {}), [to]: r.text };
+        const bub = b.closest(".bub"), div = document.createElement("div");
+        div.className = "bub-tr"; div.innerHTML = `<span>${D8.esc(D8.t("tr.label"))}</span>`; div.appendChild(document.createTextNode(r.text));
+        bub.insertBefore(div, bub.querySelector("small"));
+        b.closest(".tr-wrap").remove();
+        return true;
+      } catch (err) { b.disabled = false; b.textContent = D8.t("tr.btn"); D8.toast(err.message); return false; }
+    };
+    root.querySelectorAll("[data-tr]").forEach((b) => b.addEventListener("click", () => one(b)));
+    const all = root.parentElement && root.parentElement.querySelector("[data-tr-all]");
+    const btns = root.querySelectorAll("[data-tr]");
+    if (all) {
+      all.hidden = btns.length < 2;
+      all.onclick = async () => { all.disabled = true; for (const b of root.querySelectorAll("[data-tr]")) { if ((await one(b)) === false) break; } all.hidden = true; };
+    }
+  };
+
+  // Translate a case message (kept on the message for both sides) or a draft. Falls back to the browser's
+  // built-in translator (Chrome) and finally to Google Translate in a new tab if server translation is off.
+  // Uses Chrome's on-device translator only when its language pack is already installed (no waiting for downloads).
+  const within = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+  async function deviceTranslate(text, to) {
+    try {
+      if ("Translator" in self) {
+        const from = to === "vi" ? "en" : "vi";
+        const a = await within(self.Translator.availability({ sourceLanguage: from, targetLanguage: to }), 1500);
+        if (a === "available") { const t = await within(self.Translator.create({ sourceLanguage: from, targetLanguage: to }), 2000); return await within(t.translate(text), 4000); }
+      }
+    } catch {}
+    return "";
+  }
+  D8.translate = async function ({ jobId, at, text, to }) {
+    try {
+      const r = jobId ? await D8.api(`/api/jobs/${encodeURIComponent(jobId)}/translate`, { method: "POST", body: { at, to } })
+                      : await D8.api("/api/translate", { method: "POST", body: { text, to } });
+      return { text: r.text, saved: !!jobId };
+    } catch (err) {
+      if (!(err.data && err.data.code === "no_ai") && err.status !== 0) throw err;
+      const t = await deviceTranslate(text, to);
+      if (t) return { text: t, saved: false };
+      window.open("https://translate.google.com/?sl=auto&tl=" + to + "&op=translate&text=" + encodeURIComponent(text), "_blank", "noopener");
+      return { text: "", opened: true };
+    }
+  };
+
+  // Download several files as one ZIP (stored, no extra compression), built in the browser.
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (u8) => { let c = 0xffffffff; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  D8.downloadZip = async function (entries, zipName, onProgress) {
+    const enc = new TextEncoder(), parts = [], central = [], used = new Set();
+    let offset = 0;
+    const d = new Date(), dosTime = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+      dosDate = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    for (let i = 0; i < entries.length; i++) {
+      onProgress && onProgress(i + 1, entries.length);
+      const res = await fetch(entries[i].url, { headers: D8.authHeaders(), credentials: "same-origin" });
+      if (!res.ok) { let m = ""; try { m = (await res.json()).error; } catch {} throw new Error((m || "Error " + res.status) + " (" + entries[i].name + ")"); }
+      const data = new Uint8Array(await res.arrayBuffer());
+      let name = entries[i].name.replace(/[\\/:*?"<>|]+/g, "_") || "file";
+      if (used.has(name.toLowerCase())) { const dot = name.lastIndexOf("."); let k = 2; let nn; do { nn = dot > 0 ? name.slice(0, dot) + " (" + k + ")" + name.slice(dot) : name + " (" + k + ")"; k++; } while (used.has(nn.toLowerCase())); name = nn; }
+      used.add(name.toLowerCase());
+      const nb = enc.encode(name), crc = crc32(data);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+      lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+      lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, nb.length, true);
+      parts.push(lh.buffer, nb, data);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+      ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
+      ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, nb.length, true); ch.setUint32(42, offset, true);
+      central.push(ch.buffer, nb);
+      offset += 30 + nb.length + data.length;
+    }
+    const cdSize = central.reduce((t, x) => t + (x.byteLength || x.length), 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    const blob = new Blob([...parts, ...central, end.buffer], { type: "application/zip" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = zipName;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  };
   D8.locale = () => (D8.lang === "vi" ? "vi-VN" : "en-GB");
   D8.fmtDate = (ts, time) => {
     if (!ts) return "";
@@ -303,6 +480,8 @@
     close: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4l10 10M14 4 4 14"/></svg>',
     globe: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="9" cy="9" r="7"/><path d="M2 9h14M9 2c2 2 3 4.3 3 7s-1 5-3 7c-2-2-3-4.3-3-7s1-5 3-7Z"/></svg>',
     mail: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2.5 5l6.5 5 6.5-5"/></svg>',
+    chat: D8.ICON_CHAT,
+    gift: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="7" width="13" height="8.5" rx="1"/><path d="M1.5 4.5h15V7h-15zM9 4.5v11M9 4.5C8 2 5.5 1.8 5.3 3.3 5.1 4.6 7.4 4.5 9 4.5Zm0 0c1-2.5 3.5-2.7 3.7-1.2.2 1.3-2.1 1.2-3.7 1.2Z"/></svg>',
   };
 
   function viewSwitch() {
@@ -363,8 +542,10 @@
     host.className = "sh" + (page === "home" ? " sh-home" : "") + (showSub ? " sh-has-sub" : "");
     host.innerHTML = `
       <div class="sh-top"><div class="wrap sh-top-in">
-        <span class="sh-tag">${L("sh.top.tag")}</span>
+        ${isAdminPage ? `<span class="sh-tag">${L("sh.top.tag")}</span>`
+          : `<a class="sh-promo" href="${home}#trial">${ICON.gift}<span class="l">${L("sh.promo")}</span><span class="s">${L("sh.promo.s")}</span></a>`}
         <div class="sh-top-r">
+          ${isAdminPage ? "" : `<a href="${esc(D8.waLink())}" target="_blank" rel="noopener" class="sh-wa">${ICON.chat}<span>${L("sh.wa")}</span></a>`}
           <a href="mailto:d.eightdesigncenter@gmail.com">${ICON.mail}<span>d.eightdesigncenter@gmail.com</span></a>
           ${langSwitch()}
         </div>
@@ -488,6 +669,7 @@
           <a href="${home}#work">${L("sh.work")}</a><a href="${home}#about">${L("sh.about")}</a><a href="${home}#faq">${L("sh.faq")}</a></div>
         <div><h4>${L("sh.foot.customers")}</h4>
           <a href="/portal">${L("sh.portal")}</a><a href="/portal#/new">${L("sh.send")}</a><a href="${home}#contact">${L("sh.contact")}</a>
+          <a href="${esc(D8.waLink())}" target="_blank" rel="noopener">${L("sh.wa")}</a>
           <a href="mailto:d.eightdesigncenter@gmail.com">d.eightdesigncenter@gmail.com</a></div>
         <div><h4>${L("sh.foot.legal")}</h4>
           <a href="/privacy">${L("sh.privacy")}</a><a href="/terms">${L("sh.terms")}</a></div>

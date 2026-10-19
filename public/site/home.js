@@ -78,6 +78,11 @@
     });
   });
 
+  /* ---------------- WhatsApp links carry a greeting in the page language ---------------- */
+  const setWa = () => { if (window.D8 && D8.waLink) document.querySelectorAll(".wa-link").forEach((a) => { a.href = D8.waLink(); }); };
+  setWa();
+  document.addEventListener("d8:lang", setWa);
+
   /* ---------------- links that preset the contact topic ---------------- */
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-topic]");

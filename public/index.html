@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-19.1">
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.2">
 <link rel="preload" as="image" href="/site/hero-full-mouth.webp" fetchpriority="high">
 <style>
   :root { --wrap: 1200px; }
@@ -235,6 +235,24 @@
   .js .reveal { opacity: 0; transform: translateY(16px); transition: opacity .7s ease, transform .7s ease; }
   .js .reveal.in { opacity: 1; transform: none; }
 
+  /* ---------- free trial offer ---------- */
+  .offer { background: var(--white); border-bottom: 1px solid var(--line); }
+  .offer-in { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 56px; align-items: center; }
+  .offer-fig { position: relative; display: flex; align-items: center; gap: 26px; padding: 40px 44px; border-radius: 22px; overflow: hidden; color: var(--cream);
+               background: radial-gradient(120% 120% at 85% 15%, #0B3F86 0%, var(--navy) 55%, var(--navy-800) 100%); }
+  .offer-fig .num { font-family: var(--f-display); font-weight: 300; font-size: clamp(64px, 9vw, 120px); line-height: .9; letter-spacing: -.02em; }
+  .offer-fig .num sup { font-size: .38em; font-weight: 500; vertical-align: top; position: relative; top: .25em; margin-right: 4px; letter-spacing: 0; }
+  .offer-fig .cap { font-family: var(--f-display); font-weight: 600; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--steel-200); line-height: 1.7; }
+  .offer-fig .cap b { display: block; color: var(--cream); font-size: 15px; letter-spacing: .1em; }
+  .offer-fig .mark { position: absolute; right: -50px; bottom: -40px; width: 200px; opacity: .08; }
+  .offer h2 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(24px, 3.2vw, 40px); line-height: 1.18; color: var(--navy); }
+  .offer .serif { margin: 8px 0 0; color: var(--steel); font-size: clamp(26px, 3.4vw, 40px); }
+  .offer p.intro { margin: 18px 0 0; font-size: 16px; line-height: 1.7; color: var(--muted); max-width: 560px; }
+  .offer ul { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px 10px; }
+  .offer .btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+  .btn-wa { background: var(--white); border-color: var(--navy); color: var(--navy); }
+  .offer .fine { margin: 16px 0 0; font-size: 13px; color: var(--muted); }
+
   @media (max-width: 1080px) {
     .why { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 36px; }
     .why > div:nth-child(3) { padding-left: 0; border-left: 0; }
@@ -243,11 +261,14 @@
     .lineup { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 900px) {
+    .offer-in { grid-template-columns: 1fr; gap: 32px; }
     .slide-art, .slide-art.narrow { width: 92vw; right: 4vw; top: 30%; }
     .stage-copy { bottom: 110px; }
     .portal-band, .about, .contact { grid-template-columns: 1fr; gap: 40px; }
   }
   @media (max-width: 640px) {
+    .offer-fig { padding: 30px 26px; gap: 18px; }
+    .offer .btns .btn { flex: 1 1 100%; }
     .section { padding: 72px 0; }
     .section.tight { padding: 56px 0; }
     .stage { min-height: 600px; }
@@ -276,8 +297,8 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/home-dict.js?v=2026-10-19.1"></script>
-<script src="/shell.js?v=2026-10-19.1" defer></script>
+<script src="/site/home-dict.js?v=2026-10-19.2"></script>
+<script src="/shell.js?v=2026-10-19.2" defer></script>
 </head>
 <body data-page="home" data-title-key="title">
 <div id="d8-header"></div>
@@ -339,6 +360,29 @@
       </div>
     </div></div>
     <a class="scroll-cue" href="#services" aria-label="Scroll down"></a>
+  </section>
+
+  <!-- ============ FREE TRIAL ============ -->
+  <section class="section tight offer" id="trial" aria-labelledby="trTitle">
+    <div class="wrap offer-in">
+      <div class="offer-fig reveal" aria-hidden="true">
+        <span class="num"><sup>US$</sup>50</span>
+        <span class="cap" data-i="tr.cap"><b>Free</b>across your first<br>2 cases</span>
+        <img class="mark" src="/brand/symbol-reversed.svg" alt="">
+      </div>
+      <div class="reveal">
+        <span class="eyebrow" style="color:var(--steel)" data-i="tr.eyebrow">Free trial</span>
+        <h2 id="trTitle" data-i="tr.h">Try D.EIGHT on us</h2>
+        <p class="serif" data-i="tr.serif">Your first 2 cases, up to US$50 in total</p>
+        <p class="intro" data-i="tr.p">Send real work and judge the fit, the communication and the turnaround for yourself. Your first two cases are free, up to US$50 in total, whatever the case type.</p>
+        <ul><li class="chip" data-i="tr.c1">Any case type</li><li class="chip" data-i="tr.c2">Same designers, same 24-hour turnaround</li><li class="chip" data-i="tr.c3">No commitment</li></ul>
+        <div class="btns">
+          <a class="btn btn-primary" href="/portal#/new" data-i="tr.b">Start your free trial</a>
+          <a class="btn btn-wa wa-link" href="https://wa.me/84703233263" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2.2a7.8 7.8 0 0 0-6.7 11.8L2.2 17.8l3.9-1.1A7.8 7.8 0 1 0 10 2.2Z"/><path d="M7.1 6.3c.3-.3.8-.3 1 .1l.7 1.4c.1.3 0 .6-.2.8l-.5.5a5 5 0 0 0 2.8 2.8l.5-.5c.2-.2.5-.3.8-.2l1.4.7c.4.2.4.7.1 1-.6.7-1.5 1-2.4.7a7.4 7.4 0 0 1-4.9-4.9c-.3-.9 0-1.8.7-2.4Z"/></svg><span data-i="tr.wa">Ask on WhatsApp</span></a>
+        </div>
+        <p class="fine" data-i="tr.fine">For new customers. Sign in with Google and send your first case to start.</p>
+      </div>
+    </div>
   </section>
 
   <!-- ============ LINEUP ============ -->
@@ -535,6 +579,7 @@
         <p class="serif" data-i="fq.serif">Before you send the first case</p>
       </div>
       <div class="faq reveal">
+        <details><summary><span data-i="fq.q0">Can I try D.EIGHT before committing?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a0">Yes. Your first two cases are free, up to US$50 in total, whatever the case type. Sign in to the customer portal and send your first case to start.</div></details>
         <details><summary><span data-i="fq.q1">What do you need to start a case?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a1">Intraoral or model scans (STL or PLY) and your Rx: tooth numbers, material, cement gap and any implant or library details. For surgical guides, add the DICOM/CBCT data.</div></details>
         <details><summary><span data-i="fq.q2">How fast is delivery?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a2">Designs are delivered within 24 hours of receiving a complete case. If a large full-arch or guide case needs more time, we confirm the timing when you send it.</div></details>
         <details><summary><span data-i="fq.q3">How do revisions work?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a3">Each case includes two free revisions before final export. Changes requested after approval are quoted by scope.</div></details>
@@ -554,8 +599,10 @@
           <span class="eyebrow steel" data-i="ct.eyebrow">Contact</span>
           <h2 id="ctTitle" data-i="ct.h">Send a case or ask a question</h2>
           <p class="serif" data-i="ct.serif">We'll take it from here</p>
-          <p data-i="ct.p">Tell us about your lab or practice and the work you send out. Already ready to send files? Use the customer portal.</p>
+          <p data-i="ct.p">Tell us about your lab or practice and the work you send out. Prefer to chat? Message Danny on WhatsApp. Ready to send files? Use the customer portal.</p>
           <ul class="contact-list">
+            <li><span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2.2a7.8 7.8 0 0 0-6.7 11.8L2.2 17.8l3.9-1.1A7.8 7.8 0 1 0 10 2.2Z"/><path d="M7.1 6.3c.3-.3.8-.3 1 .1l.7 1.4c.1.3 0 .6-.2.8l-.5.5a5 5 0 0 0 2.8 2.8l.5-.5c.2-.2.5-.3.8-.2l1.4.7c.4.2.4.7.1 1-.6.7-1.5 1-2.4.7a7.4 7.4 0 0 1-4.9-4.9c-.3-.9 0-1.8.7-2.4Z"/></svg></span>
+              <div><small data-i="ct.wa">WhatsApp · Danny Do</small><a class="wa-link" href="https://wa.me/84703233263" target="_blank" rel="noopener">+84 70 323 3263</a></div></li>
             <li><span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2.5 5l6.5 5 6.5-5"/></svg></span>
               <div><small data-i="ct.email">Email</small><a href="mailto:d.eightdesigncenter@gmail.com">d.eightdesigncenter@gmail.com</a></div></li>
             <li><span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 16s5.5-4.6 5.5-9A5.5 5.5 0 0 0 3.5 7c0 4.4 5.5 9 5.5 9Z"/><circle cx="9" cy="7" r="2"/></svg></span>
@@ -588,7 +635,7 @@
                   <option value="Splints &amp; trays" data-i="t.splint">Splints &amp; trays</option>
                   <option value="Aligner &amp; ortho" data-i="t.ortho">Aligner &amp; ortho</option>
                   <option value="Digital models" data-i="t.models">Digital models</option>
-                  <option value="Trial case" data-i="t.trial">Trial case</option>
+                  <option value="Free trial case" data-i="t.trial">Free trial case</option>
                   <option value="Price list" data-i="t.price">Price list</option>
                   <option value="Something else" data-i="t.other">Something else</option>
                 </select>
@@ -614,11 +661,11 @@
   </section>
 </main>
 
-<a class="fab" id="fab" href="#contact" data-i-attr="aria-label:fab" aria-label="Contact D.EIGHT">
-  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M7 9.5h8M7 12h5"/></svg>
+<a class="fab wa-link" id="fab" href="https://wa.me/84703233263" target="_blank" rel="noopener" data-i-attr="aria-label:fab,title:fab" aria-label="Chat with Danny Do on WhatsApp" title="Chat with Danny Do on WhatsApp">
+  <svg width="26" height="26" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2.2a7.8 7.8 0 0 0-6.7 11.8L2.2 17.8l3.9-1.1A7.8 7.8 0 1 0 10 2.2Z"/><path d="M7.1 6.3c.3-.3.8-.3 1 .1l.7 1.4c.1.3 0 .6-.2.8l-.5.5a5 5 0 0 0 2.8 2.8l.5-.5c.2-.2.5-.3.8-.2l1.4.7c.4.2.4.7.1 1-.6.7-1.5 1-2.4.7a7.4 7.4 0 0 1-4.9-4.9c-.3-.9 0-1.8.7-2.4Z"/></svg>
 </a>
 
 <div id="d8-footer"></div>
-<script src="/site/home.js?v=2026-10-19.1" defer></script>
+<script src="/site/home.js?v=2026-10-19.2" defer></script>
 </body>
 </html>
