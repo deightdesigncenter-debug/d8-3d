@@ -21,7 +21,18 @@
     spark: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5l-1.6-4.4L4 8.5l4.4-1.6L10 2.5Z"/><path d="M15.5 13.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z"/></svg>',
     cam: '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6.5h3l1.5-2h5l1.5 2h3v9.5H3z"/><circle cx="10" cy="11" r="3"/></svg>',
     info: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M10 9v5M10 6v.5"/></svg>',
+    card: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="4.5" width="16" height="11" rx="2"/><path d="M2 8.5h16M5 12.5h3"/></svg>',
+    wallet: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6.5A2 2 0 0 1 5 4.5h9.5v2"/><rect x="3" y="6.5" width="14" height="9.5" rx="2"/><path d="M13 11.25h1.5"/></svg>',
+    lock: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
   };
+  const money = (n) => "US$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  let payCfg = {};             // which payment providers are switched on (from /api/config)
+  // Back from PayPal or Stripe: /portal?pay=paypal|stripe|cancel&case=<id>
+  let payBack = null;
+  {
+    const q = new URLSearchParams(location.search), id = q.get("case") || "";
+    if (q.get("pay") && ID_RE.test(id)) { payBack = { via: q.get("pay"), id }; history.replaceState(null, "", location.pathname + "#/case/" + id); }
+  }
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -43,11 +54,17 @@
 
   /* ------------------------------------------------------------ chrome */
   function band(inner) { return `<section class="pt-band"><div class="wrap">${inner}</div></section>`; }
-  function page(bandHtml, body) {
+  let animKey = null; // fade new screens in once per route, not on every refresh
+  function page(bandHtml, body, isLoading) {
     view.innerHTML = bandHtml + `<div class="pt-main"><div class="wrap">${body}</div></div>`;
     D8.markSub && D8.markSub();
+    const key = location.hash || "#/";
+    if (!isLoading && key !== animKey) { animKey = key; D8.animIn(view.querySelector(".pt-main")); }
   }
-  function loading() { page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><h1>&nbsp;</h1></div>`), `<div class="pt-loading"><div class="spin" aria-hidden="true"></div>${esc(T("p.loading"))}</div>`); }
+  function loading(kind) {
+    const body = kind === "case" ? D8.skel.page() : kind === "form" ? D8.skel.form() : D8.skel.rows(3);
+    page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><span class="sk sk-line h28" style="margin:14px 0 0;width:min(420px,70vw)"></span></div>`), body, true);
+  }
   function failed(msg) {
     page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><h1>${esc(T("p.list.h"))}</h1></div>`),
       `<div class="pt-empty"><h2 class="h-caps">${esc(msg || T("p.err.load"))}</h2><p></p><button class="btn btn-primary" type="button" id="retry">${esc(T("p.retry"))}</button></div>`);
@@ -136,11 +153,11 @@
       return `<a class="pt-row" href="#/case/${esc(x.id)}">
         <div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
         <span class="meta">${esc(T("p.sent").replace("{d}", D8.fmtDate(x.created)))} · ${esc(T("p.updated").replace("{t}", D8.ago(x.updated)))}</span>
-        <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
+        <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${x.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
     }).join("");
     const empty = !items.length
       ? `<div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">${esc(T("p.empty.h"))}</h2><p>${esc(T("p.empty.p"))}</p>
-         <a class="btn btn-primary" href="#/new">${ICON.plus}${esc(T("p.new"))}</a></div>`
+         <a class="btn btn-primary cta-shine" href="#/new">${ICON.plus}${esc(T("p.new"))}</a></div>`
       : `<div class="pt-empty"><p style="margin:0">${esc(T("p.nomatch"))}</p></div>`;
     page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><h1>${esc(T("p.list.h"))}</h1><p class="serif">${esc(T("p.list.hi").replace("{name}", first))}</p></div>
       <a class="btn btn-cream" href="#/new">${ICON.plus}${esc(T("p.new"))}</a>`), `
@@ -159,14 +176,30 @@
   function stopPoll() { clearInterval(pollT); pollT = null; }
   async function renderCase(id) {
     stopPoll();
-    if (!current || current.id !== id) { current = null; loading(); }
-    try { current = (await D8.api("/api/jobs/" + id)).job; }
+    if (!current || current.id !== id) { current = null; loading("case"); }
+    try { [current] = await Promise.all([D8.api("/api/jobs/" + id).then((r) => r.job), D8.config().then((c) => { payCfg = (c && c.pay) || {}; })]); }
     catch (err) {
       if (err.status === 401) { user = null; return renderSignIn(); }
       return failed(err.status === 404 ? T("p.err.nf") : err.message);
     }
     drawCase(current);
     pollT = setInterval(refreshCase, 60000);
+    if (payBack && payBack.id === id) {
+      const pb = payBack; payBack = null;
+      if (pb.via === "cancel") D8.toast(T("pay.cancel"));
+      else checkPay(true);
+    } else if (current.pay === "due" && current.payOpen) checkPay(false);
+  }
+  // Ask the server to check with PayPal / Stripe (the server never trusts the return URL alone).
+  async function checkPay(loud) {
+    const id = current && current.id;
+    if (!id) return;
+    try {
+      const out = await D8.api(`/api/jobs/${id}/pay/check`, { method: "POST" });
+      if (!current || current.id !== id) return;
+      if (out.job.updated !== current.updated || out.job.pay !== current.pay || out.job.payHeld !== current.payHeld) { current = out.job; drawCase(current); }
+      if (loud) D8.toast(T(out.paid ? "pay.ok" : out.job.payHeld ? "pay.held" : "pay.wait"));
+    } catch (err) { if (loud) D8.toast(err.message); }
   }
   async function refreshCase() {
     if (document.hidden || !current || busy) return;
@@ -223,15 +256,31 @@
       ["p.dt.sent", D8.fmtDate(j.created, true)],
     ].filter((r) => r[1]).map(([k, v]) => [T(k), v]).concat(D8.rxRows(j.rx))
       .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
-    const bill = j.trial || typeof j.price === "number" || j.pay === "due" || j.pay === "paid"
-      ? `<div><dt>${esc(T("bill.price"))}</dt><dd>${typeof j.price === "number" ? esc("US$" + j.price.toLocaleString("en-US", { maximumFractionDigits: 2 })) + " " : ""}${
-          j.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span> ` : ""}${j.pay === "due" || j.pay === "paid" ? `<span class="pay pay-${j.pay}">${esc(T("bill." + j.pay))}</span>` : ""}</dd></div>` : "";
+    // Customers never see a price list or the case price, only a free trial or the amount they are asked to pay.
+    const paidLine = j.pay === "paid" && j.paid ? T("pay.paidline").replace("{amt}", money(j.paid.amount)).replace("{via}", D8.t("pay.via." + j.paid.via, j.paid.via)).replace("{d}", D8.fmtDate(j.paid.at)) : "";
+    const bill = j.trial || j.pay === "due" || j.pay === "paid"
+      ? `<div><dt>${esc(T("bill.pay"))}</dt><dd>${j.trial && j.pay !== "due" && j.pay !== "paid" ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${
+          j.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>${typeof j.amount === "number" ? " " + esc(money(j.amount)) : ""}` : ""}${
+          j.pay === "paid" ? `<span class="pay pay-paid">${esc(T("bill.paid"))}</span>${paidLine ? `<small class="paid-line">${esc(paidLine)}</small>` : ""}` : ""}</dd></div>` : "";
+    let payBox = "";
+    if (j.pay === "due") {
+      const btns = [];
+      if (payCfg.paypal) btns.push(`<button class="btn btn-primary cta-shine" type="button" data-pay="paypal">${ICON.wallet}${esc(T("pay.pp"))}</button>`);
+      if (payCfg.stripe) btns.push(`<button class="btn${payCfg.paypal ? "" : " btn-primary cta-shine"}" type="button" data-pay="stripe">${ICON.card}${esc(T("pay.card"))}</button>`);
+      const amt = typeof j.amount === "number" && j.amount > 0;
+      payBox = `<section class="pay-card" aria-labelledby="payH">
+        <div class="pay-amt"><span class="eyebrow" id="payH">${esc(T("pay.due.h"))}</span><b>${esc(amt ? money(j.amount) : T("pay.tbd"))}</b><small>${esc(T("pay.for").replace("{id}", j.id))}</small></div>
+        <div class="pay-act">${amt && btns.length
+          ? `<div class="btns">${btns.join("")}</div><p class="hint">${ICON.lock}<span>${esc(T("pay.safe"))}</span></p>`
+          : `<p class="hint">${esc(T("pay.none"))} <a href="${esc(D8.waLink(T("pay.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">WhatsApp · Danny Do</a></p>`}
+          ${j.payHeld ? `<p class="hint">${esc(T("pay.held"))}</p>` : ""}</div></section>`;
+    }
 
     page(band(`<div><a class="pt-back" href="#/">${ICON.back}${esc(T("p.back"))}</a>
         <h1>${esc(j.title)}</h1><p class="muted" style="margin:8px 0 0;color:var(--on-brand-2)">${esc(j.id)} · ${esc(T("p.c.sent").replace("{d}", D8.fmtDate(j.created)))}</p></div>
         <div>${stChip(st)}</div>`), `
       <ol class="pt-steps" aria-label="Progress">${steps}</ol>
-      ${alerts.join("")}
+      ${alerts.join("")}${payBox}
       <div class="pt-grid">
         <div>
           <section class="card" aria-labelledby="pvH">
@@ -307,15 +356,26 @@
       } catch (err) { D8.toast(err.message); }
       zip.disabled = false; zip.innerHTML = ICON.dl + esc(T("zip.btn"));
     });
+    // pay: the server creates the PayPal order / Stripe Checkout session and we go there
+    view.querySelectorAll("[data-pay]").forEach((b) => b.addEventListener("click", async () => {
+      const all = view.querySelectorAll("[data-pay]");
+      all.forEach((x) => { x.disabled = true; });
+      D8.busy(b, true);
+      try {
+        const out = await D8.api(`/api/jobs/${j.id}/pay`, { method: "POST", body: { via: b.dataset.pay } });
+        if (out.url) { location.href = out.url; return; }
+        if (out.job) { current = out.job; drawCase(current); D8.toast(T("pay.ok")); }
+      } catch (err) { D8.busy(b, false); all.forEach((x) => { x.disabled = false; }); D8.toast(err.message); }
+    }));
     // approve (two-step, no browser dialog)
     const ap = document.getElementById("approve");
     if (ap) {
       let armed = false, t;
       ap.addEventListener("click", async () => {
         if (!armed) { armed = true; ap.textContent = T("p.ap.sure"); t = setTimeout(() => { armed = false; ap.innerHTML = ICON.check + esc(T("p.ap.ok")); }, 4000); return; }
-        clearTimeout(t); ap.disabled = true;
+        clearTimeout(t); D8.busy(ap, true);
         try { current = (await D8.api(`/api/jobs/${j.id}/approve`, { method: "POST" })).job; D8.toast(T("p.ap.done")); drawCase(current); }
-        catch (err) { ap.disabled = false; D8.toast(err.message); }
+        catch (err) { D8.busy(ap, false); D8.toast(err.message); }
       });
       document.getElementById("askChanges").addEventListener("click", () => {
         const c = document.getElementById("composer");
@@ -346,12 +406,12 @@
     wireDrop("addFiles", (fs) => { fs.forEach((f) => { if (!adding.some((x) => sameFile(x, f))) adding.push(f); }); redraw(); });
     if (btn) btn.addEventListener("click", async () => {
       const prog = document.getElementById("addProg"), err = document.getElementById("addErr");
-      err.hidden = true; prog.hidden = false; btn.disabled = true; busy = true;
+      err.hidden = true; prog.hidden = false; D8.busy(btn, true); busy = true;
       try {
         const out = await D8.uploadJobFiles(j.id, adding, { onProgress: (p) => { prog.querySelector("i").style.width = p.pct + "%"; prog.querySelector("p").textContent = p.text; } });
         busy = false; current = out.job; drawCase(current);
       } catch (e) {
-        busy = false; btn.disabled = false; prog.hidden = true; err.textContent = e.message; err.hidden = false;
+        busy = false; D8.busy(btn, false); prog.hidden = true; err.textContent = e.message; err.hidden = false;
       }
     });
     // messages
@@ -362,12 +422,13 @@
       const text = box.value.trim();
       if (!text) return box.focus();
       const err = document.getElementById("msgErr");
-      err.hidden = true; send.disabled = true;
+      err.hidden = true; D8.busy(send, true);
       try {
         current = (await D8.api(`/api/jobs/${j.id}/messages`, { method: "POST", body: { text } })).job;
         drawCase(current);
         const c = document.getElementById("composer"); c && c.focus();
-      } catch (ex) { send.disabled = false; err.textContent = ex.message; err.hidden = false; }
+        D8.done(document.getElementById("sendMsg"), T("p.ms.sent"));
+      } catch (ex) { D8.busy(send, false); err.textContent = ex.message; err.hidden = false; }
     });
   }
 
@@ -513,7 +574,7 @@
         if (warns.length) return showWarns(warns);
       }
       document.getElementById("nWarn").hidden = true;
-      btn.disabled = true; busy = true; prog.hidden = false;
+      D8.busy(btn, true); busy = true; prog.hidden = false;
       const bar = prog.querySelector("i"), txt = prog.querySelector("p");
       bar.style.width = "2%"; txt.textContent = T("p.nf.creating");
       let job;
@@ -522,7 +583,7 @@
           material: d.material, shade: d.shade, neededBy: d.neededBy, notes: d.notes, links: linkList,
           rx: Object.fromEntries((D8.RX[d.service] || []).map(([k]) => [k, (d.rx[k] || "").trim()]).filter(([, v]) => v)) } })).job;
       caseCount = (caseCount || 0) + 1;
-      } catch (ex) { busy = false; btn.disabled = false; prog.hidden = true; return fail(ex.message); }
+      } catch (ex) { busy = false; D8.busy(btn, false); prog.hidden = true; return fail(ex.message); }
       recent.set(job.id, { id: job.id, title: job.title, status: job.status, created: job.created, updated: job.updated, lastBy: "client" });
       let upErr = "";
       if (d.files.length) {
@@ -589,7 +650,7 @@
   /* ------------------------------------------------------------ profile */
   async function renderProfile() {
     current = null;
-    loading();
+    loading("form");
     let p;
     try { p = (await D8.api("/api/my/profile")).profile || {}; }
     catch (err) { if (err.status === 401) { user = null; return renderSignIn(); } return failed(err.message); }
@@ -614,12 +675,11 @@
     document.getElementById("pfForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const btn = document.getElementById("pfSave"), err = document.getElementById("pfErr");
-      btn.disabled = true; err.hidden = true;
+      D8.busy(btn, true); err.hidden = true;
       try {
         await D8.api("/api/my/profile", { method: "POST", body: { practice: document.getElementById("pfPractice").value, country: document.getElementById("pfCountry").value, phone: document.getElementById("pfPhone").value } });
-        D8.toast(T("p.pf.saved"));
-      } catch (ex) { err.textContent = ex.message; err.hidden = false; }
-      btn.disabled = false;
+        D8.done(btn, T("p.pf.ok"));
+      } catch (ex) { D8.busy(btn, false); err.textContent = ex.message; err.hidden = false; }
     });
   }
 })();

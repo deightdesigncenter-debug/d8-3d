@@ -479,6 +479,13 @@ body[data-page="home"] #d8-header { min-height: 0; }
 .btn[aria-busy="true"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
   border: 2px solid var(--spin-c, var(--navy)); border-right-color: transparent; animation: d8-spin .7s var(--ease-io) infinite; }
 .btn.small[aria-busy="true"]::after { width: 14px; height: 14px; margin: -7px 0 0 -7px; }
+/* a busy button keeps its own colours instead of the grey disabled look */
+.btn[aria-busy="true"]:disabled { cursor: progress; background: transparent; border-color: var(--navy); }
+.btn-primary[aria-busy="true"]:disabled { background: var(--brand); border-color: var(--brand); }
+.btn-ok[aria-busy="true"]:disabled { background: var(--ok-fill); border-color: var(--ok-fill); }
+.btn-cream[aria-busy="true"]:disabled { background: var(--c-cream); border-color: var(--c-cream); }
+.btn-secondary[aria-busy="true"]:disabled { background: var(--steel); border-color: var(--steel); }
+.btn-light[aria-busy="true"]:disabled { border-color: var(--steel); }
 .btn-primary, .btn-ok, .btn-light, .btn-danger.armed { --spin-c: var(--on-brand); }
 .btn-cream, .btn-secondary { --spin-c: var(--c-navy); }
 @keyframes d8-spin { to { transform: rotate(360deg); } }

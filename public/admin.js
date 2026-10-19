@@ -50,6 +50,11 @@
   let current = null;         // job open in the detail panel
   let busy = false;
   const aiTried = new Set(); // cases whose summary was requested automatically in this visit
+  const payChecked = new Set(); // cases whose open payments were checked with PayPal/Stripe in this visit
+  let payCfg = {};
+  D8.config().then((c) => { payCfg = (c && c.pay) || {}; });
+  const VIA = { paypal: "PayPal", stripe: "Thẻ (Stripe)", manual: "Chuyển khoản / thủ công" };
+  const TRY_STATE = { open: "đang chờ khách trả", held: "PayPal đang giữ tiền để xét duyệt", paid: "đã trả", dead: "đã hủy / hết hạn" };
 
   /* ------------------------------------------------------------ band + panels */
   const BANDS = {
@@ -67,9 +72,12 @@
     $("bandEyebrow").hidden = !!opts.back;
     $("bandRight").innerHTML = opts.right || "";
   }
-  function show(id) {
+  let animKey = null; // fade a screen in once per route, not on every refresh
+  function show(id, isLoading) {
     $("booting").hidden = true;
     document.querySelectorAll(".panel").forEach((p) => { p.hidden = p.id !== id; });
+    const key = location.hash || "#jobs";
+    if (!isLoading && key !== animKey) { animKey = key; D8.animIn($(id)); }
   }
 
   /* ------------------------------------------------------------ sign in */
@@ -155,7 +163,7 @@
       $("jobErr").hidden = true;
       if (!$("p-jobs").hidden) drawJobs();
       updateJobCount();
-    } catch (err) { if (!quiet) { $("jobErr").textContent = err.message; $("jobErr").hidden = false; } }
+    } catch (err) { if (!quiet) { $("jobErr").textContent = err.message; $("jobErr").hidden = false; if (!jobsAt) { jobsAt = -1; drawJobs(); } } }
   }
   const adminSeen = () => store.get("d8-admin-seen", {});
   const needsReply = (x, seen) => x.lastBy === "client" && OPEN.includes(x.status) && (seen[x.id] || 0) < x.updated;
@@ -167,6 +175,7 @@
     const filters = [["open", "Đang mở"], ...STATUSES.map((s) => [s, D8.statusLabel(s)]), ["all", "Tất cả"]];
     $("jobFilters").innerHTML = filters.map(([f, l]) => `<button type="button" data-f="${f}" aria-pressed="${jobFilter === f}">${esc(l)}<b>${count(f)}</b></button>`).join("");
     $("jobFilters").querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { jobFilter = b.dataset.f; drawJobs(); }));
+    if (!jobsAt && !jobs.length) { $("jobList").innerHTML = D8.skel.rows(4); return; }
     const q = jobQuery.toLowerCase();
     const shown = jobs.filter((x) => (jobFilter === "all" || (jobFilter === "open" ? OPEN.includes(x.status) : x.status === jobFilter)) &&
       (!q || (x.id + " " + x.title + " " + x.owner).toLowerCase().includes(q)));
@@ -184,8 +193,8 @@
   /* ------------------------------------------------------------ case detail */
   async function openCase(id) {
     setBand(id, "", { back: true });
-    if (!current || current.id !== id) { show("p-case"); $("p-case").innerHTML = '<div class="pt-loading"><div class="spin"></div>Đang tải ca…</div>'; }
-    try { current = (await api("/api/jobs/" + id)).job; }
+    if (!current || current.id !== id) { show("p-case", true); $("p-case").innerHTML = D8.skel.page(); }
+    try { [current] = await Promise.all([api("/api/jobs/" + id).then((r) => r.job), D8.config()]); }
     catch (err) { $("p-case").innerHTML = `<div class="pt-empty"><h2 class="h-caps">Không mở được ca</h2><p>${esc(err.message)}</p><a class="btn" href="#jobs">Về danh sách ca</a></div>`; return; }
     drawCase(current);
   }
@@ -226,10 +235,18 @@
       .filter((r) => r[1]).concat(D8.rxRows(j.rx)).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
     const tu = trialUse(j.owner);
     const left = TRIAL_CREDIT - tu.used;
+    const tries = (j.payTries || []).filter((t) => t.state !== "paid");
+    const openTry = tries.some((t) => t.state === "open" || t.state === "held");
+    const online = [payCfg.paypal ? "PayPal" : "", payCfg.stripe ? "Stripe" : ""].filter(Boolean);
     const billing = `<section class="card"><h2 class="h-caps" style="margin-bottom:6px">Báo giá &amp; thanh toán</h2>
-      <p class="sub">Khách thấy giá và trạng thái thanh toán trong cổng khách hàng.</p>
+      <p class="sub">Giá ca chỉ admin thấy. Khách chỉ thấy số tiền cần trả khi bạn chọn <b>Chờ thanh toán</b>, và trả qua ${online.length ? esc(online.join(" hoặc ")) : "PayPal/Stripe (chưa gắn khóa API)"}.</p>
+      ${j.pay === "paid" && j.paid ? `<div class="ai-ok" style="margin:0 0 14px">Đã nhận ${esc(money(j.paid.amount))} qua ${esc(VIA[j.paid.via] || j.paid.via)} lúc ${esc(D8.fmtDate(j.paid.at, true))}${j.paid.ref ? ` · mã ${esc(j.paid.ref)}` : ""}</div>` : ""}
+      ${tries.length ? `<ul class="pay-tries">${tries.map((t) => `<li>${esc(VIA[t.via] || t.via)} · ${esc(money(t.amount))} · ${esc(D8.fmtDate(t.at, true))} · <b>${esc(TRY_STATE[t.state] || t.state)}</b></li>`).join("")}</ul>
+        ${openTry ? `<button class="btn small" type="button" id="payCheck" style="margin:0 0 14px">Kiểm tra thanh toán</button>` : ""}` : ""}
       <form id="billForm" style="display:grid;gap:12px">
         <div><label class="field-label" for="billPrice">Giá ca (USD)</label><input class="input" id="billPrice" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.price === "number" ? j.price : ""}" placeholder="VD: 35"></div>
+        <div><label class="field-label" for="billDue">Số tiền khách cần trả (USD)</label><input class="input" id="billDue" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.due === "number" ? j.due : ""}" placeholder="Để trống = bằng giá ca">
+          <p class="hint" style="margin:6px 0 0">Dùng khi chỉ thu một phần, ví dụ phần vượt quá US$50 dùng thử.</p></div>
         <div><label class="field-label" for="billPay">Thanh toán</label><select class="input" id="billPay">${Object.entries(PAY_LABEL).map(([k, l]) => `<option value="${k}"${(j.pay || "") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
         <label class="check" style="margin:0"><input type="checkbox" id="billTrial"${j.trial ? " checked" : ""}> Ca dùng thử miễn phí</label>
         ${tu.cases ? `<p class="hint" style="margin:0">Khách này có ${tu.cases} ca dùng thử, đã dùng ${esc(money(tu.used))} / ${money(TRIAL_CREDIT)}${left < 0 ? ` (vượt ${esc(money(-left))}: thương lượng hoặc tính ở ca thứ 2)` : ` (còn ${esc(money(left))})`}.</p>` : ""}
@@ -329,16 +346,32 @@
     });
     $("billForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const raw = $("billPrice").value.trim();
+      const raw = $("billPrice").value.trim(), rawDue = $("billDue").value.trim();
+      const b = e.submitter || $("billForm").querySelector("[type=submit]");
+      D8.busy(b, true);
       try {
-        redraw((await api(`/api/jobs/${j.id}/billing`, { method: "POST", body: { price: raw === "" ? null : Number(raw), pay: $("billPay").value, trial: $("billTrial").checked } })).job);
-        D8.toast("Đã lưu báo giá.");
-      } catch (err) { D8.toast(err.message); }
+        redraw((await api(`/api/jobs/${j.id}/billing`, { method: "POST", body: { price: raw === "" ? null : Number(raw), due: rawDue === "" ? null : Number(rawDue), pay: $("billPay").value, trial: $("billTrial").checked } })).job);
+        D8.done($("billForm").querySelector("[type=submit]"), "Đã lưu");
+      } catch (err) { D8.busy(b, false); D8.toast(err.message); }
     });
+    const pc = $("payCheck");
+    const runPayCheck = async (loud) => {
+      if (pc) D8.busy(pc, true);
+      try {
+        const out = await api(`/api/jobs/${j.id}/pay/check`, { method: "POST" });
+        if (current && current.id === j.id && (out.job.updated !== current.updated || out.job.pay !== current.pay || JSON.stringify(out.job.payTries) !== JSON.stringify(current.payTries))) redraw(out.job);
+        else if (pc && pc.isConnected) D8.busy(pc, false);
+        if (loud) D8.toast(out.paid ? "Khách đã thanh toán." : "Chưa có thanh toán mới.");
+      } catch (err) { if (pc && pc.isConnected) D8.busy(pc, false); if (loud) D8.toast(err.message); }
+    };
+    if (pc) pc.addEventListener("click", () => runPayCheck(true));
+    if (pc && j.pay === "due" && !payChecked.has(j.id)) { payChecked.add(j.id); runPayCheck(false); }
     $("statForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      try { redraw((await api(`/api/jobs/${j.id}/status`, { method: "POST", body: { status: $("statSel").value } })).job); D8.toast("Đã cập nhật trạng thái."); }
-      catch (err) { D8.toast(err.message); }
+      const b = e.submitter || $("statForm").querySelector("[type=submit]");
+      D8.busy(b, true);
+      try { redraw((await api(`/api/jobs/${j.id}/status`, { method: "POST", body: { status: $("statSel").value } })).job); D8.done($("statForm").querySelector("[type=submit]"), "Đã cập nhật"); }
+      catch (err) { D8.busy(b, false); D8.toast(err.message); }
     });
     document.querySelectorAll("#p-case [data-del]").forEach((b) => armed(b, async () => redraw((await api(`/api/jobs/${j.id}/files/${b.dataset.del}`, { method: "DELETE" })).job)));
     document.querySelectorAll("#p-case [data-unlink]").forEach((b) => armed(b, async () => redraw((await api(`/api/jobs/${j.id}/previews`, { method: "POST", body: { linkId: b.dataset.unlink, remove: true } })).job)));
@@ -454,14 +487,15 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = box.value.trim(); if (!text) return box.focus();
-      $("sendMsg").disabled = true; $("msgErr").hidden = true;
-      try { redraw((await api(`/api/jobs/${j.id}/messages`, { method: "POST", body: orig ? { text, original: orig, originalLang: "vi" } : { text } })).job); }
-      catch (err) { $("sendMsg").disabled = false; $("msgErr").textContent = err.message; $("msgErr").hidden = false; }
+      D8.busy($("sendMsg"), true); $("msgErr").hidden = true;
+      try { redraw((await api(`/api/jobs/${j.id}/messages`, { method: "POST", body: orig ? { text, original: orig, originalLang: "vi" } : { text } })).job); D8.done($("sendMsg"), "Đã gửi"); }
+      catch (err) { D8.busy($("sendMsg"), false); $("msgErr").textContent = err.message; $("msgErr").hidden = false; }
     });
   }
 
   /* ------------------------------------------------------------ customers */
   async function loadCustomers() {
+    if (!users.length) $("custBody").innerHTML = D8.skel.tableRows(7, 4);
     try {
       const [u] = await Promise.all([api("/api/admin/users"), jobs.length ? null : loadJobs(true)]);
       users = u.users || [];
@@ -718,12 +752,13 @@
   const SEEN_KEY = "d8-seen-messages";
   let seenMsgs = (() => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || "[]")); } catch { return new Set(); } })();
   const saveSeen = () => { try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seenMsgs].slice(-500))); } catch {} };
-  let messages = [];
+  let messages = [], msgsLoaded = false;
   const removedMsgs = new Set();
   async function refreshMessages(quiet) {
+    if (!msgsLoaded && !quiet) $("msgList").innerHTML = `<li style="list-style:none">${D8.skel.rows(2)}</li>`;
     try {
       const data = await api("/api/messages");
-      messages = data.items.filter((m) => !removedMsgs.has(m.id));
+      messages = data.items.filter((m) => !removedMsgs.has(m.id)); msgsLoaded = true;
       renderMessages();
       $("msgError").hidden = true;
     } catch (err) { if (!quiet) { $("msgError").textContent = err.message; $("msgError").hidden = false; } }

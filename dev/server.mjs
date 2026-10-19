@@ -122,10 +122,81 @@ const FILES = {
   async head(k) { return r2.has(k) ? { key: k, size: r2.get(k).length } : null; },
   async delete(k) { r2.delete(k); },
 };
-const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` , ...(process.env.NO_AI ? {} : { AI }), ...(process.env.R2 ? { FILES } : {}) };
+// ---- PayPal / Stripe mocks: PAY=1 (both), PAY=paypal or PAY=stripe (one provider)
+const PAY = process.env.PAY || "";
+const payEnv = {
+  ...(PAY === "1" || PAY === "paypal" ? { PAYPAL_CLIENT_ID: "test-client", PAYPAL_CLIENT_SECRET: "test-secret", PAYPAL_API: `http://localhost:${PORT}/__mock/paypal` } : {}),
+  ...(PAY === "1" || PAY === "stripe" ? { STRIPE_SECRET_KEY: "sk_test_mock", STRIPE_API: `http://localhost:${PORT}/__mock/stripe` } : {}),
+};
+const ppOrders = new Map(), stSessions = new Map();
+const rid = (p) => p + crypto.randomBytes(6).toString("hex").toUpperCase();
+function sendJson(res, status, obj) { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); }
+function redirect(res, to) { res.writeHead(302, { Location: to }); res.end(); }
+async function payMock(req, res) {
+  const u = new URL(req.url, `http://localhost:${PORT}`);
+  const p = u.pathname;
+  const chunks = []; for await (const c of req) chunks.push(c);
+  const raw = Buffer.concat(chunks).toString();
+  ops.pay = (ops.pay || 0) + 1;
+  // PayPal
+  if (p === "/__mock/paypal/v1/oauth2/token") {
+    if (req.headers.authorization !== "Basic " + Buffer.from("test-client:test-secret").toString("base64")) return sendJson(res, 401, { error: "invalid_client" });
+    return sendJson(res, 200, { access_token: "A21-test", expires_in: 32400 });
+  }
+  if (p.startsWith("/__mock/paypal/v2/") && req.headers.authorization !== "Bearer A21-test") return sendJson(res, 401, { name: "AUTHENTICATION_FAILURE" });
+  if (p === "/__mock/paypal/v2/checkout/orders" && req.method === "POST") {
+    const b = JSON.parse(raw), ctx = b.payment_source.paypal.experience_context, id = rid("PP");
+    ppOrders.set(id, { id, intent: b.intent, status: "PAYER_ACTION_REQUIRED", purchase_units: b.purchase_units.map((x) => ({ ...x })), ret: ctx.return_url, cancel: ctx.cancel_url });
+    return sendJson(res, 200, { id, status: "PAYER_ACTION_REQUIRED", links: [{ rel: "self", href: "x" }, { rel: "payer-action", href: `http://localhost:${PORT}/__mock/paypal/checkout?token=${id}` }] });
+  }
+  if (p === "/__mock/paypal/checkout") {
+    const o = ppOrders.get(u.searchParams.get("token")); if (!o) return sendJson(res, 404, {});
+    const act = u.searchParams.get("act") || "approve";
+    if (act === "cancel") return redirect(res, o.cancel + "&token=" + o.id);
+    o.status = "APPROVED"; o.pending = act === "pending";
+    return redirect(res, o.ret + "&token=" + o.id + "&PayerID=TESTPAYER");
+  }
+  if (p === "/__mock/paypal/tamper") { const o = ppOrders.get(u.searchParams.get("token")); o.purchase_units[0].amount.value = u.searchParams.get("value"); return sendJson(res, 200, {}); }
+  let m;
+  if ((m = p.match(/^\/__mock\/paypal\/v2\/checkout\/orders\/(\w+)(\/capture)?$/))) {
+    const o = ppOrders.get(m[1]);
+    if (!o) return sendJson(res, 404, { name: "RESOURCE_NOT_FOUND" });
+    const view = () => ({ id: o.id, status: o.status, purchase_units: o.purchase_units });
+    if (!m[2]) return sendJson(res, 200, view());
+    if (o.status === "COMPLETED") return sendJson(res, 422, { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "ORDER_ALREADY_CAPTURED" }] });
+    if (o.status !== "APPROVED") return sendJson(res, 422, { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "ORDER_NOT_APPROVED" }] });
+    o.status = "COMPLETED";
+    const pu = o.purchase_units[0];
+    pu.payments = { captures: [{ id: rid("CAP"), status: o.pending ? "PENDING" : "COMPLETED", amount: { ...pu.amount }, custom_id: pu.custom_id }] };
+    return sendJson(res, 201, view());
+  }
+  // Stripe
+  if (p.startsWith("/__mock/stripe/v1/") && req.headers.authorization !== "Bearer sk_test_mock") return sendJson(res, 401, { error: { message: "Invalid API Key" } });
+  if (p === "/__mock/stripe/v1/checkout/sessions" && req.method === "POST") {
+    const f = new URLSearchParams(raw), id = rid("cs_test_");
+    stSessions.set(id, { id, object: "checkout.session", status: "open", payment_status: "unpaid", currency: f.get("line_items[0][price_data][currency]"),
+      amount_total: +f.get("line_items[0][price_data][unit_amount]") * +f.get("line_items[0][quantity]"), client_reference_id: f.get("client_reference_id"),
+      customer_email: f.get("customer_email"), success_url: f.get("success_url"), cancel_url: f.get("cancel_url"), payment_intent: null,
+      url: `http://localhost:${PORT}/__mock/stripe/pay?sid=${id}`, metadata: { case: f.get("metadata[case]") } });
+    return sendJson(res, 200, stSessions.get(id));
+  }
+  if (p === "/__mock/stripe/pay") {
+    const s = stSessions.get(u.searchParams.get("sid")); if (!s) return sendJson(res, 404, {});
+    if (u.searchParams.get("act") === "cancel") return redirect(res, s.cancel_url);
+    s.status = "complete"; s.payment_status = "paid"; s.payment_intent = rid("pi_");
+    return redirect(res, s.success_url.replace("{CHECKOUT_SESSION_ID}", s.id));
+  }
+  if (p === "/__mock/stripe/tamper") { const s = stSessions.get(u.searchParams.get("sid")); s.amount_total = +u.searchParams.get("amount"); return sendJson(res, 200, {}); }
+  if ((m = p.match(/^\/__mock\/stripe\/v1\/checkout\/sessions\/(\w+)$/))) {
+    const s = stSessions.get(m[1]); return s ? sendJson(res, 200, s) : sendJson(res, 404, { error: { message: "No such checkout.session" } });
+  }
+  return sendJson(res, 404, { error: "mock: not found" });
+}
+const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` , ...(process.env.NO_AI ? {} : { AI }), ...(process.env.R2 ? { FILES } : {}), ...payEnv };
 
 http.createServer(async (req, res) => {
   if (req.url === "/__test/ops") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(ops)); for (const k in ops) ops[k] = 0; return; }
+  if (req.url.startsWith("/__mock/")) return payMock(req, res);
   if (req.url === "/__test/jwks") { res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "max-age=3600" }); res.end(JSON.stringify(jwks)); return; }
   const tk = req.url.match(/^\/__test\/idtoken\?email=([^&]+)&name=(.*)$/);
   if (tk) { res.end(fakeIdToken(decodeURIComponent(tk[1]), decodeURIComponent(tk[2]))); return; }

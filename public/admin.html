@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>try{var t=localStorage.getItem("d8-theme");if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <meta name="robots" content="noindex, nofollow">
-<meta name="d8-version" content="2026-10-19.3">
+<meta name="d8-version" content="2026-10-19.4">
 <title>Quản trị | D.EIGHT</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -15,8 +15,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-19.2">
-<link rel="stylesheet" href="/case.css?v=2026-10-19.3">
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.4">
+<link rel="stylesheet" href="/case.css?v=2026-10-19.4">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -104,6 +104,9 @@
   .msg-who span { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
   .msg-when { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
   .chip.new { background: var(--err-fill); color: var(--on-brand); }
+  .pay-tries { margin: 0 0 12px; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+  .pay-tries li { padding: 6px 0; border-top: 1px solid var(--line); }
+  .pay-tries b { color: var(--ink); font-weight: 600; }
   .msg-email { display: inline-block; margin-top: 8px; font-weight: 500; word-break: break-all; }
   .msg-body { margin: 12px 0 0; padding: 14px 16px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
   .msg-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
@@ -131,8 +134,8 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-19.3" defer></script>
-<script src="/admin.js?v=2026-10-19.3" defer></script>
+<script src="/shell.js?v=2026-10-19.4" defer></script>
+<script src="/admin.js?v=2026-10-19.4" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>

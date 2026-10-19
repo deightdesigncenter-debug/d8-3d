@@ -238,6 +238,7 @@
     "rxo.Ortho model": ["Ortho model", "Mẫu chỉnh nha"], "rxo.Implant model with gingiva": ["Implant model with gingiva", "Mẫu implant có nướu"],
     "tr.orig": ["Original", "Bản gốc"], "tr.in.vi": ["Vietnamese version", "Bản tiếng Việt"], "tr.in.en": ["English version", "Bản tiếng Anh"], "tr.all": ["Translate all", "Dịch tất cả"], "tr.auto": ["Always translate", "Luôn dịch"],
     "bill.price": ["Price", "Giá"], "bill.trial": ["Free trial", "Dùng thử miễn phí"], "bill.due": ["Awaiting payment", "Chờ thanh toán"], "bill.paid": ["Paid", "Đã thanh toán"],
+    "pay.via.paypal": ["PayPal", "PayPal"], "pay.via.stripe": ["card (Stripe)", "thẻ (Stripe)"], "pay.via.manual": ["bank transfer", "chuyển khoản"],
   });
   // [label, value] rows for a case's extra prescription fields, in the current language
   D8.rxRows = (rx) => Object.entries(rx || {}).map(([k, v]) => [D8.t("rx." + k, k.replace(/_/g, " ")), D8.t("rxo." + v, v)]);
@@ -251,7 +252,12 @@
 
   // Chat thread (portal and admin). me = "client" | "admin"; to = language the viewer reads.
   D8.threadHtml = (job, me, to) => (job.thread || []).map((m) => {
-    if (m.by === "system") { const s = String(m.text).replace(/^status:/, ""); return `<div class="sys">${D8.esc(D8.fmtDate(m.at, true))} · <span class="st st-${D8.esc(s)}">${D8.esc(D8.statusLabel(s))}</span></div>`; }
+    if (m.by === "system") {
+      const pay = /^pay:paid:(\w+)$/.exec(m.text);
+      if (pay) return `<div class="sys">${D8.esc(D8.fmtDate(m.at, true))} · <span class="pay pay-paid">${D8.esc(D8.t("bill.paid") + " · " + D8.t("pay.via." + pay[1], pay[1]))}</span></div>`;
+      const s = String(m.text).replace(/^status:/, "");
+      return `<div class="sys">${D8.esc(D8.fmtDate(m.at, true))} · <span class="st st-${D8.esc(s)}">${D8.esc(D8.statusLabel(s))}</span></div>`;
+    }
     const mine = m.by === me, tr = m.tr && m.tr[to];
     const name = mine ? "" : `<b>${D8.esc(m.name || (m.by === "admin" ? "D.EIGHT" : ""))}</b>`;
     const trBlock = tr && tr !== m.text ? `<div class="bub-tr"><span>${D8.esc(D8.t(mine ? "tr.in." + to : "tr.label"))}</span>${D8.esc(tr)}</div>` : "";

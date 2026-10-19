@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-19.3"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-19.4"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -96,7 +96,9 @@ async function handleApi(request, env, url) {
     return submitContact(request, env);
   }
   if (path === "/api/config" && method === "GET") {
-    return json({ googleClientId: conf(env).clientId, trialCases: TRIAL_CASES, trialCredit: TRIAL_CREDIT_USD, translate: !!env.AI, fileStore: activeStore(env) },
+    const pc = payConf(env);
+    return json({ googleClientId: conf(env).clientId, trialCases: TRIAL_CASES, trialCredit: TRIAL_CREDIT_USD, translate: !!env.AI, fileStore: activeStore(env),
+      pay: { paypal: !!pc.paypal, stripe: !!pc.stripe } },
       200, { "Cache-Control": "public, max-age=300" });
   }
   if (path === "/api/auth/google" && method === "POST") return googleSignIn(request, env, url);
@@ -420,6 +422,128 @@ async function listUsers(env) {
   return json({ users });
 }
 
+/* ------------------------------------------------- Payments (PayPal, Stripe) */
+// Prices are set by D.EIGHT per case and never shown to customers until the case is marked
+// "due". The customer is sent to PayPal or Stripe Checkout; when they come back (or whenever
+// the case is opened later) the server asks the provider directly and only then marks it paid.
+// Secrets: PAYPAL_CLIENT_ID + PAYPAL_CLIENT_SECRET (+ PAYPAL_ENV=live), STRIPE_SECRET_KEY.
+const PAY_TRIES_MAX = 5;
+function payConf(env) {
+  const paypal = env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET ? {
+    id: String(env.PAYPAL_CLIENT_ID), secret: String(env.PAYPAL_CLIENT_SECRET),
+    base: env.PAYPAL_API || (String(env.PAYPAL_ENV || "").toLowerCase() === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com"),
+  } : null;
+  const stripe = env.STRIPE_SECRET_KEY ? { key: String(env.STRIPE_SECRET_KEY), base: env.STRIPE_API || "https://api.stripe.com" } : null;
+  return { paypal, stripe };
+}
+// What the customer is asked to pay: the "due" amount if D.EIGHT set one, otherwise the case price.
+function amountDue(job) {
+  const a = typeof job.due === "number" ? job.due : job.price;
+  return typeof a === "number" && a > 0 ? Math.round(a * 100) / 100 : 0;
+}
+function payError(message, status = 502) { const e = new Error(message); e.status = status; return e; }
+async function paypalToken(pp) {
+  const r = await fetch(pp.base + "/v1/oauth2/token", { method: "POST",
+    headers: { Authorization: "Basic " + btoa(pp.id + ":" + pp.secret), "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials" });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.access_token) throw payError("PayPal is not available right now. Please try again later.");
+  return d.access_token;
+}
+async function paypalCall(pp, token, method, path, body, headers) {
+  const r = await fetch(pp.base + path, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", ...(headers || {}) },
+    body: body ? JSON.stringify(body) : undefined });
+  return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+}
+function stripeForm(obj, prefix, out = []) {
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? prefix + "[" + k + "]" : k;
+    if (v && typeof v === "object") stripeForm(v, key, out);
+    else if (v !== undefined && v !== null) out.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(v)));
+  }
+  return out.join("&");
+}
+async function stripeCall(st, method, path, form, idem) {
+  const headers = { Authorization: "Bearer " + st.key };
+  if (form) headers["Content-Type"] = "application/x-www-form-urlencoded";
+  if (idem) headers["Idempotency-Key"] = idem;
+  const r = await fetch(st.base + path, { method, headers, body: form ? stripeForm(form) : undefined });
+  return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
+}
+async function startPayment(env, job, via, origin, amount) {
+  const cfg = payConf(env);
+  const back = (state) => origin + "/portal?pay=" + state + "&case=" + encodeURIComponent(job.id);
+  if (via === "paypal") {
+    const pp = cfg.paypal, token = await paypalToken(pp);
+    const r = await paypalCall(pp, token, "POST", "/v2/checkout/orders", {
+      intent: "CAPTURE",
+      purchase_units: [{ reference_id: job.id, custom_id: job.id, invoice_id: job.id + "-" + Date.now().toString(36),
+        description: "D.EIGHT dental CAD design, case " + job.id, amount: { currency_code: "USD", value: amount.toFixed(2) } }],
+      payment_source: { paypal: { experience_context: { brand_name: "D.EIGHT DESIGN CENTER", user_action: "PAY_NOW", shipping_preference: "NO_SHIPPING",
+        return_url: back("paypal"), cancel_url: back("cancel") } } },
+    }, { "PayPal-Request-Id": crypto.randomUUID() });
+    const link = (r.data.links || []).find((l) => l.rel === "payer-action" || l.rel === "approve");
+    if (!r.ok || !r.data.id || !link) throw payError("PayPal could not start the payment. Please try again.");
+    return { id: r.data.id, url: link.href };
+  }
+  const r = await stripeCall(cfg.stripe, "POST", "/v1/checkout/sessions", {
+    mode: "payment", client_reference_id: job.id, customer_email: job.owner,
+    success_url: back("stripe") + "&sid={CHECKOUT_SESSION_ID}", cancel_url: back("cancel"),
+    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: Math.round(amount * 100), product_data: { name: "D.EIGHT dental CAD design · " + job.id } } }],
+    metadata: { case: job.id }, payment_intent_data: { metadata: { case: job.id }, description: "D.EIGHT case " + job.id },
+  }, job.id + "-" + Date.now());
+  if (!r.ok || !r.data.id || !r.data.url) throw payError("Card payment could not start. Please try again.");
+  return { id: r.data.id, url: r.data.url };
+}
+function markPaid(job, t, via, ref, amount) {
+  const now = Date.now();
+  if (t) t.state = "paid";
+  job.pay = "paid";
+  job.paid = { via, ref: String(ref || "").slice(0, 80), amount: Math.round(amount * 100) / 100, at: now };
+  job.updated = now;
+  job.thread.push({ by: "system", name: "", text: "pay:paid:" + via, at: now });
+}
+// Ask the providers about every recent attempt. Mutates the job; returns true if anything changed.
+async function syncPayment(env, job) {
+  const tries = job.payTries || [];
+  if (job.pay === "paid" || !tries.some((t) => t.state === "open" || t.state === "held")) return false;
+  const cfg = payConf(env);
+  let changed = false, token = null;
+  for (const t of tries) {
+    if (t.state !== "open" && t.state !== "held") continue;
+    try {
+      if (t.via === "paypal" && cfg.paypal) {
+        token = token || await paypalToken(cfg.paypal);
+        const path = "/v2/checkout/orders/" + encodeURIComponent(t.id);
+        let o = await paypalCall(cfg.paypal, token, "GET", path);
+        if (!o.ok) { if (o.status === 404) { t.state = "dead"; changed = true; } continue; }
+        if (o.data.status === "APPROVED") {
+          o = await paypalCall(cfg.paypal, token, "POST", path + "/capture", null, { "PayPal-Request-Id": t.id + "-capture", Prefer: "return=representation" });
+          if (!o.ok) o = await paypalCall(cfg.paypal, token, "GET", path); // e.g. captured a moment ago
+          if (!o.ok) continue;
+        }
+        if (o.data.status === "VOIDED") { t.state = "dead"; changed = true; continue; }
+        if (o.data.status !== "COMPLETED") continue;
+        const pu = (o.data.purchase_units || [])[0] || {};
+        const cap = ((pu.payments || {}).captures || [])[0];
+        const mine = cap && (pu.custom_id === job.id || pu.reference_id === job.id || cap.custom_id === job.id);
+        if (!mine || !cap.amount || cap.amount.currency_code !== "USD" || Math.abs(Number(cap.amount.value) - t.amount) > 0.005) continue;
+        if (cap.status === "COMPLETED") { markPaid(job, t, "paypal", cap.id, Number(cap.amount.value)); return true; }
+        if (cap.status === "PENDING" && t.state !== "held") { t.state = "held"; changed = true; }
+      } else if (t.via === "stripe" && cfg.stripe) {
+        const s = await stripeCall(cfg.stripe, "GET", "/v1/checkout/sessions/" + encodeURIComponent(t.id));
+        if (!s.ok) { if (s.status === 404) { t.state = "dead"; changed = true; } continue; }
+        const d = s.data;
+        if (d.status === "expired") { t.state = "dead"; changed = true; continue; }
+        if (d.payment_status === "paid" && d.client_reference_id === job.id && d.currency === "usd" && d.amount_total === Math.round(t.amount * 100)) {
+          markPaid(job, t, "stripe", typeof d.payment_intent === "string" ? d.payment_intent : (d.payment_intent && d.payment_intent.id) || d.id, d.amount_total / 100);
+          return true;
+        }
+      }
+    } catch { /* provider unreachable: checked again next time the case is opened */ }
+  }
+  return changed;
+}
+
 /* --------------------------------------------------------- Customer jobs */
 
 function cleanRx(rx) {
@@ -572,7 +696,7 @@ async function listOwnJobs(env, email) {
   rows.forEach((r, i) => {
     const m = r && r.metadata;
     if (m) items.push({ id: ids[i], owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
-      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "" });
+      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, pay: m.py || "" });
   });
   items.sort((a, b) => b.updated - a.updated);
   return json({ items });
@@ -595,15 +719,20 @@ async function listJobs(env, owner) {
   return json({ items });
 }
 
-// The case as sent to the browser. Internal AI notes (job.ai) go only to D.EIGHT.
+// The case as sent to the browser. Internal AI notes (job.ai), the price and payment
+// attempts go only to D.EIGHT; the customer sees just the amount once it is due.
 async function jobView(env, job, forAdmin = false) {
   const previews = [];
   for (const pid of job.previews || []) {
     const m = await env.CASES.get("meta:" + pid, "json");
     if (m && m.e > Date.now()) previews.push({ id: pid, label: m.l || "", expires: m.e, url: "/v/" + pid });
   }
-  const { ai, ...rest } = job;
-  return forAdmin ? { ...rest, ai: ai || null, previews } : { ...rest, previews };
+  const { ai, payTries, price, due, ...rest } = job;
+  if (forAdmin) return { ...rest, price: typeof price === "number" ? price : null, due: typeof due === "number" ? due : null, payTries: payTries || [], ai: ai || null, previews };
+  const amount = job.pay === "paid" && job.paid ? job.paid.amount : job.pay === "due" ? amountDue(job) || null : null;
+  const payOpen = job.pay === "due" && (payTries || []).some((t) => t.state === "open" || t.state === "held");
+  const held = payOpen && (payTries || []).some((t) => t.state === "held");
+  return { ...rest, amount, payOpen, payHeld: held, previews };
 }
 
 async function handleJobs(request, env, url, who) {
@@ -729,10 +858,42 @@ async function handleJobs(request, env, url, who) {
     const price = b.price === null || b.price === "" || b.price === undefined ? null : Math.round(Number(b.price) * 100) / 100;
     if (price !== null && !(price >= 0 && price <= 100000)) return json({ error: "Giá không hợp lệ." }, 400);
     if (!PAY_STATES.includes(b.pay)) return json({ error: "Trạng thái thanh toán không hợp lệ." }, 400);
-    job.price = price; job.pay = b.pay; job.trial = !!b.trial;
+    const due = b.due === null || b.due === "" || b.due === undefined ? null : Math.round(Number(b.due) * 100) / 100;
+    if (due !== null && !(due >= 0 && due <= 100000)) return json({ error: "Số tiền cần thu không hợp lệ." }, 400);
+    job.price = price; job.due = due; job.trial = !!b.trial;
+    if (b.pay === "paid" && job.pay !== "paid") {
+      // marked paid by hand (bank transfer, Payoneer...): unless a provider confirms it first
+      if (!(await syncPayment(env, job)) || job.pay !== "paid") markPaid(job, null, "manual", "", amountDue(job));
+    } else if (b.pay !== "paid") { job.pay = b.pay; delete job.paid; }
     job.updated = Date.now(); job.lastBy = "admin";
     await saveJob(env, job);
     return json({ job: await jobView(env, job, by === "admin") });
+  }
+
+  // customer starts a payment: returns the PayPal / Stripe page to send them to
+  if (sub === "/pay" && method === "POST") {
+    if (by !== "client") return json({ error: "Only the customer can pay for this case." }, 403);
+    let b; try { b = await request.json(); } catch { b = {}; }
+    const via = b.via === "paypal" || b.via === "stripe" ? b.via : "";
+    if (!via || !payConf(env)[via]) return json({ error: "This payment method is not available." }, 400);
+    if (await syncPayment(env, job)) await saveJob(env, job);   // an earlier attempt may already have gone through
+    if (job.pay === "paid") return json({ paid: true, job: await jobView(env, job) });
+    const amount = amountDue(job);
+    if (job.pay !== "due" || !amount) return json({ error: "There is nothing to pay on this case yet." }, 409);
+    const recent = (job.payTries || []).filter((t) => Date.now() - t.at < 10 * 60 * 1000).length;
+    if (recent >= PAY_TRIES_MAX) return json({ error: "Too many payment attempts. Please wait a few minutes and try again." }, 429);
+    let out;
+    try { out = await startPayment(env, job, via, url.origin, amount); }
+    catch (err) { return json({ error: err.message }, err.status || 502); }
+    job.payTries = [{ via, id: out.id, amount, at: Date.now(), state: "open" }, ...(job.payTries || []).filter((t) => t.state !== "dead")].slice(0, PAY_TRIES_MAX);
+    await saveJob(env, job);
+    return json({ url: out.url });
+  }
+
+  // after the provider's page, or when the case is opened: ask the provider what happened
+  if (sub === "/pay/check" && method === "POST") {
+    if (await syncPayment(env, job)) await saveJob(env, job);
+    return json({ paid: job.pay === "paid", job: await jobView(env, job, by === "admin") });
   }
 
   if (sub === "/approve" && method === "POST") {

@@ -31,7 +31,7 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - **Link xem 3D**: tạo link gửi bác sĩ như trước (QR, tin nhắn tiếng Anh kèm bản tiếng Việt).
 - **Tin nhắn**: tin từ form Liên hệ trên trang web, tự xóa sau 180 ngày.
 - **Khách hàng**: các tài khoản đã đăng nhập, lab, quốc gia, số điện thoại, số ca.
-- **Báo giá & thanh toán** trong từng ca (giá USD, Chưa báo giá / Miễn phí (dùng thử) / Chờ thanh toán / Đã thanh toán); hiện số tiền dùng thử đã dùng / 50 USD của khách. Khách thấy giá và trạng thái trong cổng.
+- **Báo giá & thanh toán** trong từng ca: giá ca (USD), số tiền khách cần trả (để trống = bằng giá ca, dùng khi chỉ thu phần vượt dùng thử), trạng thái Chưa báo giá / Miễn phí (dùng thử) / Chờ thanh toán / Đã thanh toán; hiện số tiền dùng thử đã dùng / 50 USD của khách. **Giá chỉ admin thấy**: khách chỉ thấy số tiền khi ca ở trạng thái Chờ thanh toán (hoặc số đã trả).
 - **Xuất CSV** (mở bằng Excel): ca hàng, khách hàng, tin nhắn.
 
 ## Dịch tin nhắn Anh ↔ Việt
@@ -76,6 +76,23 @@ Tách các lớp lưới 3D trong file HTML của exocad thành file STL, xử l
 | `public/brand/`, `public/site/`, `public/icons/` | Logo SVG, ảnh trang chủ, biểu tượng |
 | `dev/server.mjs` | Bộ giả lập Cloudflare Pages + KV + Google (khóa thử) để chạy trên máy, không được triển khai |
 
+## Thanh toán PayPal / Stripe
+
+- Khi admin chọn **Chờ thanh toán**, ca của khách hiện khung "Payment due" với nút **Pay with PayPal** và/hoặc **Pay by card** (Stripe Checkout). Nút nào hiện tùy khóa API đã gắn; chưa gắn khóa nào thì khung chỉ báo số tiền và link WhatsApp.
+- Luồng: máy chủ tạo đơn PayPal (Orders v2) hoặc phiên Stripe Checkout với số tiền tính ở máy chủ → khách trả trên trang PayPal/Stripe → quay về `/portal?pay=...&case=...` → máy chủ hỏi thẳng PayPal/Stripe (capture đơn PayPal, đọc phiên Stripe), kiểm tra mã ca, số tiền, USD rồi mới đánh dấu **Đã thanh toán** và ghi vào chat. Khách đóng tab giữa chừng thì lần sau mở ca (khách hoặc admin) hệ thống tự kiểm tra lại; admin có nút **Kiểm tra thanh toán**.
+- Lưu trên ca: `payTries` (tối đa 5 lần thử gần nhất, chỉ admin thấy) và `paid` (cách trả, mã giao dịch, số tiền, thời gian). Không bao giờ lưu thông tin thẻ.
+- Admin vẫn có thể chọn Đã thanh toán bằng tay (chuyển khoản, Payoneer…), ghi là "Chuyển khoản / thủ công".
+- **Biến bí mật (Cloudflare → Settings → Variables and secrets, loại Secret):**
+  - PayPal: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` (tạo REST app ở developer.paypal.com → Apps & Credentials). Mặc định chạy **sandbox** để thử; khi dùng thật thêm `PAYPAL_ENV` = `live` và dùng khóa Live.
+  - Stripe: `STRIPE_SECRET_KEY` (`sk_test_...` để thử, `sk_live_...` khi dùng thật). Stripe chỉ mở tài khoản cho doanh nghiệp ở quốc gia được hỗ trợ.
+- Thử trên máy: `PAY=1 node server.mjs ...` bật PayPal + Stripe giả lập (`PAY=paypal` hoặc `PAY=stripe` cho một bên).
+
+## Giao diện sáng / tối và hiệu ứng
+
+- Nút mặt trời / mặt trăng ở thanh trên cùng (trên điện thoại nằm cả trong menu). Lần đầu theo cài đặt sáng/tối của máy; lựa chọn lưu ở `localStorage` khóa `d8-theme`. Mỗi trang có đoạn script nhỏ trong `<head>` đặt `html[data-theme]` trước khi vẽ để không bị nháy.
+- Màu tối khai báo bằng biến CSS trong `brand.css` (`html[data-theme="dark"]`). Mảng màu thương hiệu (dải navy, nút chính) dùng `--brand`, `--band`, `--on-brand` nên giữ màu navy/kem ở cả hai chế độ.
+- Hiệu ứng: 200–300 ms, đường cong ease-out (không dùng linear), chỉ CSS `transform`/`opacity`: nút nhấn (scale nhẹ), nút gửi có vòng xoay rồi dấu tick (`D8.busy`, `D8.done`), khung xương khi tải (`D8.skel`), khối nội dung hiện dần khi cuộn, parallax nhẹ ở ảnh đầu trang và ảnh giữa trang, menu điện thoại trượt, chuyển trang mờ dần (View Transitions), nút chính lóe sáng mỗi 8 giây (`.cta-shine`, `.cta-ring`). Tất cả tắt khi máy bật "giảm chuyển động" (`prefers-reduced-motion`).
+
 ## Giao diện thương hiệu
 
 - Màu: navy `#05316E`, steel `#8FACCB`, kem `#FCFDF6`, ink `#0B1B33`.
@@ -87,7 +104,7 @@ Tách các lớp lưới 3D trong file HTML của exocad thành file STL, xử l
 
 - **Build:** repo này, nhánh `main`, build command để trống, output `public`.
 - **Bindings:** KV namespace, biến `CASES`, kho `d8-3d-cases`. Tùy chọn: **Workers AI** tên `AI` (dịch tin nhắn); **R2 bucket** tên `FILES` (lưu file ca, 10 GB miễn phí; khi có, file mới lưu vào R2, file cũ trong KV vẫn tải được). Với R2, đặt Lifecycle rule xóa object có tiền tố `jf:` sau 60 ngày.
-- **Variables and secrets:** `UPLOAD_PASSWORD` (mật khẩu quản trị; cũng dùng làm khóa ký cookie phiên, đổi mật khẩu sẽ đăng xuất mọi người). Tùy chọn: `ADMIN_EMAILS` (danh sách email quản trị, cách nhau bằng dấu phẩy), `GOOGLE_CLIENT_ID`.
+- **Variables and secrets:** `UPLOAD_PASSWORD` (mật khẩu quản trị; cũng dùng làm khóa ký cookie phiên, đổi mật khẩu sẽ đăng xuất mọi người). Tùy chọn: `ADMIN_EMAILS` (danh sách email quản trị, cách nhau bằng dấu phẩy), `GOOGLE_CLIENT_ID`, thanh toán `PAYPAL_CLIENT_ID` + `PAYPAL_CLIENT_SECRET` (+ `PAYPAL_ENV=live`), `STRIPE_SECRET_KEY` (xem mục Thanh toán).
 - **Custom domain:** `3d.d8designcenter.com` (cần bản ghi CNAME `3d` trỏ về `d8-3d.pages.dev` khi đã có tên miền).
 - **Google Auth Platform:** thêm địa chỉ trang web vào *Authorized JavaScript origins* của OAuth client; trang Branding cần link trang chủ, `/privacy`, `/terms`.
 
@@ -101,6 +118,7 @@ node server.mjs ../public 8788 mat-khau-thu
 # http://localhost:8788/  ·  /portal  ·  /admin
 # đăng nhập Google giả lập: lấy token ở /__test/idtoken?email=...&name=... rồi POST /api/auth/google
 # R2=1 node server.mjs ...   giả lập R2;  NO_AI=1 ... tắt Workers AI giả lập;  /__test/ops đếm lượt dùng KV
+# PAY=1 node server.mjs ...  giả lập PayPal + Stripe (trang thanh toán giả tự quay về cổng khách hàng)
 ```
 
 ## Giới hạn gói miễn phí (Cloudflare KV)

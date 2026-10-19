@@ -248,3 +248,20 @@ select.input { appearance: none; -webkit-appearance: none; padding-right: 40px; 
 .tr-auto { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: 13px; color: var(--muted); cursor: pointer; }
 .tr-auto input { accent-color: var(--navy); }
 .tr-auto[hidden], .thread-tools button[hidden] { display: none; }
+.pt-band .sk { background: rgba(214, 225, 231, .12); }
+.pt-band .sk::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .1), transparent); }
+/* payment due (customer portal) */
+.pay-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px 32px; align-items: center; margin: 0 0 26px; padding: 24px 28px;
+  border-radius: var(--radius); border: 1px solid var(--warn-bd); background: var(--warn-bg2); }
+.pay-amt .eyebrow { color: var(--warn-fg); }
+.pay-amt b { display: block; margin: 8px 0 4px; font-family: var(--f-display); font-weight: 500; font-size: clamp(26px, 3vw, 34px); letter-spacing: .04em; color: var(--ink); }
+.pay-amt small { color: var(--muted); font-size: 13px; }
+.pay-act .btns { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.pay-act .hint { display: flex; gap: 6px; align-items: center; justify-content: flex-end; margin: 10px 0 0; font-size: 12.5px; text-align: right; }
+.pay-act .hint svg { flex: 0 0 auto; }
+.paid-line { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+@media (max-width: 760px) {
+  .pay-card { grid-template-columns: minmax(0, 1fr); padding: 20px; }
+  .pay-act .btns .btn { flex: 1 1 100%; }
+  .pay-act .hint { justify-content: flex-start; text-align: left; }
+}
