@@ -17,178 +17,204 @@
 <meta name="theme-color" content="#05316E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-18.4">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.1">
 <link rel="preload" as="image" href="/site/hero-full-mouth.webp" fetchpriority="high">
 <style>
-  :root { --wrap: 1160px; }
-  html { scroll-behavior: smooth; scroll-padding-top: 84px; }
-  section[id] { scroll-margin-top: 84px; }
+  :root { --wrap: 1200px; }
+  html { scroll-behavior: smooth; scroll-padding-top: 96px; }
+  section[id] { scroll-margin-top: 96px; }
+  .eyebrow.steel { color: var(--steel); }
 
-  /* ---------- header ---------- */
-  .site-header { position: sticky; top: 0; z-index: 20; background: rgba(252, 253, 246, .94);
-                 -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px); }
-  .site-header .d8-header-in { gap: 20px; }
-  .site-nav { display: flex; align-items: center; gap: 2px; margin-left: auto; }
-  .site-nav a.link {
-    display: inline-flex; align-items: center; height: 38px; padding: 0 12px; border-radius: 999px; text-decoration: none; white-space: nowrap;
-    font-family: var(--f-display); font-weight: 600; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--navy);
-    transition: background .15s;
-  }
-  .site-nav a.link:hover { background: var(--steel-100); }
-  .site-nav a.link.active { background: var(--steel-200); }
-  .site-nav .btn { margin-left: 10px; }
-  .menu-btn { display: none; margin-left: auto; width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--navy);
-              background: transparent; color: var(--navy); cursor: pointer; align-items: center; justify-content: center; }
-  .menu-btn svg { width: 18px; height: 18px; }
+  /* ---------- full-screen hero (Lexus-style stage, D.EIGHT colours) ---------- */
+  .stage { position: relative; height: 100vh; height: 100svh; min-height: 620px; overflow: hidden; color: var(--cream);
+           background: radial-gradient(120% 90% at 72% 42%, #0B3F86 0%, var(--navy) 46%, var(--navy-800) 100%); }
+  .stage-ring { position: absolute; border-radius: 50%; border: 1px solid rgba(143, 172, 203, .16); pointer-events: none; }
+  .stage-ring.r1 { width: 980px; height: 980px; right: -300px; top: -220px; }
+  .stage-ring.r2 { width: 720px; height: 720px; right: -170px; top: -90px; border-color: rgba(143, 172, 203, .1); }
+  .slide { position: absolute; inset: 0; opacity: 0; visibility: hidden; transition: opacity .9s ease, visibility 0s linear .9s; }
+  .slide.on { opacity: 1; visibility: visible; transition: opacity .9s ease; }
+  .slide-art { position: absolute; right: max(0vw, calc((100vw - var(--wrap)) / 2 - 80px)); top: 47%; width: min(62vw, 940px);
+               transform: translateY(-54%) scale(1.04); transition: transform 7s ease-out; pointer-events: none; }
+  .slide.on .slide-art { transform: translateY(-54%) scale(1); }
+  .slide-art img { width: 100%; height: auto;
+                   -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 62%, transparent 100%);
+                   mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 62%, transparent 100%); }
+  .slide::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+                  background: linear-gradient(90deg, rgba(4, 37, 82, .82) 0%, rgba(4, 37, 82, .55) 32%, rgba(4, 37, 82, 0) 58%),
+                              linear-gradient(0deg, rgba(4, 37, 82, .7) 0%, rgba(4, 37, 82, 0) 34%); }
+  .btn-cream { background: var(--cream); border-color: var(--cream); color: var(--navy); }
+  .btn-cream:hover { background: var(--white); border-color: var(--white); }
+  .slide-art.narrow { width: min(46vw, 640px); }
+  .stage-copy { position: absolute; left: 0; right: 0; bottom: 120px; z-index: 2; }
+  .stage-copy .chip { background: rgba(143, 172, 203, .18); color: var(--steel-200); }
+  .stage h1, .stage .h1 { margin: 22px 0 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase;
+             letter-spacing: .1em; font-size: clamp(34px, 5.2vw, 76px); line-height: 1.04; color: var(--cream); max-width: 12ch; }
+  .stage p.lede { margin: 20px 0 0; max-width: 520px; font-size: 16.5px; line-height: 1.7; color: #DCE5EE; }
+  .stage-btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+  .stage .btn-light:hover { background: rgba(252, 253, 246, .1); }
+  .stage-ctrl { position: absolute; left: 0; right: 0; bottom: 44px; z-index: 3; }
+  .stage-ctrl .wrap { display: flex; align-items: center; gap: 22px; }
+  .dots { display: flex; gap: 10px; }
+  .dots button { position: relative; width: 56px; height: 18px; border: 0; background: none; cursor: pointer; padding: 0; }
+  .dots button::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 2px; background: rgba(252, 253, 246, .28); }
+  .dots button i { position: absolute; left: 0; top: 8px; height: 2px; width: 0; background: var(--cream); }
+  .dots button.on i { animation: fill var(--dur, 6.5s) linear forwards; }
+  .stage.paused .dots button.on i { animation-play-state: paused; }
+  @keyframes fill { to { width: 100%; } }
+  .stage-count { font-family: var(--f-display); font-weight: 600; font-size: 11px; letter-spacing: .16em; color: var(--steel); }
+  .stage-arrows { display: flex; gap: 8px; margin-left: auto; }
+  .stage-arrows button { width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid rgba(252, 253, 246, .45); background: transparent; color: var(--cream); cursor: pointer;
+                         display: flex; align-items: center; justify-content: center; }
+  .stage-arrows button:hover { background: rgba(252, 253, 246, .12); }
+  .scroll-cue { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 3; width: 24px; height: 38px; border: 1.5px solid rgba(252, 253, 246, .6);
+                border-radius: 14px; display: block; }
+  .scroll-cue::after { content: ""; position: absolute; left: 50%; top: 8px; width: 3px; height: 7px; margin-left: -1.5px; border-radius: 2px; background: var(--cream); animation: cue 1.8s ease-in-out infinite; }
+  @keyframes cue { 0% { opacity: 0; transform: translateY(0); } 30% { opacity: 1; } 80% { opacity: 0; transform: translateY(10px); } 100% { opacity: 0; } }
 
   /* ---------- section scaffolding ---------- */
-  .section { padding: 96px 0; }
-  .section.tight { padding: 72px 0; }
-  .sec-head { max-width: 720px; margin-bottom: 44px; }
+  .section { padding: 110px 0; }
+  .section.tight { padding: 80px 0; }
+  .sec-head { max-width: 760px; margin-bottom: 48px; }
   .sec-head .eyebrow { color: var(--steel); margin-bottom: 14px; }
-  .sec-head h2 { margin: 0; font-family: var(--f-display); font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-                 font-size: clamp(22px, 2.8vw, 32px); line-height: 1.2; color: var(--navy); }
-  .sec-head .serif { margin: 8px 0 0; color: var(--steel); font-size: clamp(28px, 3.8vw, 44px); }
-  .sec-head p.intro { margin: 18px 0 0; font-size: 16px; line-height: 1.7; color: var(--muted); max-width: 620px; }
+  .sec-head h2 { margin: 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .1em;
+                 font-size: clamp(24px, 3.2vw, 40px); line-height: 1.18; color: var(--navy); }
+  .sec-head .serif { margin: 10px 0 0; color: var(--steel); font-size: clamp(28px, 3.8vw, 46px); }
+  .sec-head p.intro { margin: 18px 0 0; font-size: 16px; line-height: 1.7; color: var(--muted); max-width: 640px; }
   .navy-band { background: var(--navy); color: var(--cream); }
   .navy-band .sec-head h2 { color: var(--cream); }
   .paper-band { background: var(--paper); }
+  .white-band { background: var(--white); }
+  .btn-line { display: inline-flex; align-items: center; gap: 10px; height: 46px; padding: 0 26px; border: 1px solid currentColor; border-radius: 999px; text-decoration: none; color: var(--navy);
+              font-family: var(--f-display); font-weight: 600; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; transition: background .15s, color .15s; }
+  .btn-line:hover { background: var(--navy); color: var(--cream); }
+  .btn-line.light { color: var(--cream); }
+  .btn-line.light:hover { background: var(--cream); color: var(--navy); }
 
-  /* ---------- hero ---------- */
-  .hero { position: relative; overflow: hidden; background: var(--navy); color: var(--cream); }
-  .hero-in { display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr); gap: 40px; align-items: center;
-             padding-top: 72px; padding-bottom: 80px; position: relative; z-index: 1; }
-  .hero .chip { background: rgba(143, 172, 203, .18); color: var(--steel-200); }
-  .hero h1 { margin: 22px 0 0; font-family: var(--f-display); font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
-             font-size: clamp(30px, 4.6vw, 56px); line-height: 1.08; color: var(--cream); max-width: 12ch; }
-  .hero .tagline { height: clamp(44px, 5.6vw, 70px); width: auto; margin: 16px 0 0 -2px; }
-  .hero p.lede { margin: 24px 0 0; max-width: 520px; font-size: 16.5px; line-height: 1.7; color: #DCE5EE; }
-  .hero-btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
-  .facts { display: flex; margin: 44px 0 0; padding: 0; list-style: none; }
-  .facts li { padding: 0 16px; border-left: 1px solid rgba(143, 172, 203, .35); }
-  .facts li:first-child { padding-left: 0; border-left: 0; }
-  .facts b { display: block; font-family: var(--f-display); font-weight: 700; font-size: 20px; letter-spacing: .02em; color: var(--cream); line-height: 1.1; white-space: nowrap; }
-  .facts span { display: block; margin-top: 6px; font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--steel); white-space: nowrap; }
-  .hero-visual { position: relative; margin: 0; }
-  .hero-visual img { width: 112%; max-width: none; height: auto; margin-left: -4%; }
-  .hero-visual figcaption { position: absolute; left: 6%; bottom: -6px; }
-  .hero-visual .chip { background: var(--cream); color: var(--navy); box-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
-  .hero-ring { position: absolute; right: -180px; top: -160px; width: 620px; height: 620px; border-radius: 50%;
-               border: 1px solid rgba(143, 172, 203, .18); pointer-events: none; }
-  .hero-ring::after { content: ""; position: absolute; inset: 70px; border-radius: 50%; border: 1px solid rgba(143, 172, 203, .12); }
+  /* ---------- lineup (tabs like a model range) ---------- */
+  .tabs { display: flex; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { position: relative; flex: 0 0 auto; background: none; border: 0; cursor: pointer; padding: 16px 26px 18px; color: var(--muted);
+                 font-family: var(--f-display); font-weight: 600; font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; }
+  .tabs button[aria-selected="true"] { color: var(--navy); }
+  .tabs button[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--navy); }
+  .tabs button:focus-visible { outline: 2px solid var(--navy); outline-offset: -4px; border-radius: 6px; }
+  .lineup { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 40px; }
+  .model { display: flex; flex-direction: column; text-decoration: none; color: inherit; }
+  .model .pic { position: relative; border-radius: 16px; overflow: hidden; background: var(--navy); aspect-ratio: 16 / 9; }
+  .model .pic img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s ease; }
+  .model:hover .pic img { transform: scale(1.04); }
+  .model .pic.icon { display: flex; align-items: center; justify-content: center; background: linear-gradient(140deg, var(--navy) 0%, var(--navy-90) 100%); }
+  .model .pic.icon svg { width: 76px; height: 76px; color: var(--steel); }
+  .model h3 { margin: 20px 0 6px; font-family: var(--f-display); font-weight: 600; font-size: 18px; letter-spacing: .02em; color: var(--navy); }
+  .model p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.65; }
+  .model .more { margin-top: 12px; font-family: var(--f-display); font-weight: 600; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--navy);
+                 display: inline-flex; align-items: center; gap: 8px; }
+  .model .more::after { content: "→"; transition: transform .2s; }
+  .model:hover .more::after { transform: translateX(4px); }
+  .lineup-foot { margin-top: 44px; }
 
-  /* software strip */
-  .tools { border-bottom: 1px solid var(--line); background: var(--cream); }
-  .tools-in { display: flex; align-items: center; gap: 14px 24px; flex-wrap: wrap; padding-top: 22px; padding-bottom: 22px; }
-  .tools .eyebrow { color: var(--muted); }
-  .tools ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
-  .tools li { height: 32px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line);
-              background: var(--white); font-size: 13px; font-weight: 500; color: var(--navy); }
-
-  /* ---------- services ---------- */
-  .services { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
-  .service { margin: 0 !important; padding: 28px; display: flex; flex-direction: column; transition: transform .2s, box-shadow .2s, border-color .2s, opacity .6s; }
-  .service:hover { transform: translateY(-3px); border-color: var(--steel-300); box-shadow: 0 2px 4px rgba(11, 27, 51, .04), 0 18px 40px rgba(11, 27, 51, .08); }
-  .service .num { font-family: var(--f-display); font-weight: 700; font-size: 13px; letter-spacing: .1em; color: var(--steel); }
-  .service h3 { margin: 18px 0 10px; }
-  .service p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.65; }
+  /* ---------- full-bleed editorial ---------- */
+  .editorial { position: relative; min-height: min(80vh, 760px); display: flex; align-items: flex-end; overflow: hidden; color: var(--cream); background: var(--navy-800); }
+  .editorial > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 40%; }
+  .editorial::before { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(4, 37, 82, .1) 0%, rgba(4, 37, 82, .25) 45%, rgba(4, 37, 82, .92) 100%); }
+  .editorial .wrap { position: relative; z-index: 2; padding-top: 140px; padding-bottom: 96px; }
+  .editorial h2 { margin: 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(30px, 5vw, 68px); line-height: 1.06; max-width: 14ch; }
+  .editorial p { margin: 18px 0 30px; max-width: 520px; color: #DCE5EE; font-size: 16px; line-height: 1.7; }
 
   /* ---------- why ---------- */
-  .why { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-top: 1px solid rgba(143, 172, 203, .3); }
-  .why > div { padding: 32px 28px 8px 0; }
-  .why > div + div { padding-left: 28px; border-left: 1px solid rgba(143, 172, 203, .3); }
-  .why .ic { width: 44px; height: 44px; border-radius: 50%; background: rgba(143, 172, 203, .16); color: var(--steel);
-             display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
-  .why h3 { margin: 0 0 10px; font-family: var(--f-display); font-weight: 700; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--cream); line-height: 1.4; }
-  .why p { margin: 0; color: #C9D6E4; font-size: 14.5px; line-height: 1.7; }
+  .why { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .why > div { padding: 8px 30px 8px 0; }
+  .why > div + div { padding-left: 30px; border-left: 1px solid var(--line); }
+  .why .ic { width: 46px; height: 46px; border-radius: 50%; background: var(--steel-100); color: var(--navy); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+  .why h3 { margin: 0 0 10px; font-family: var(--f-display); font-weight: 600; font-size: 12.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); line-height: 1.45; }
+  .why p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.7; }
 
   /* ---------- process ---------- */
-  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; list-style: none; margin: 0; padding: 0; }
-  .step { margin: 0 !important; padding: 28px; position: relative; }
-  .step .n { font-family: var(--f-display); font-weight: 700; font-size: 44px; line-height: 1; color: var(--steel); letter-spacing: 0; }
-  .step h3 { margin: 18px 0 10px; }
-  .step p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.65; }
-  .step:not(:last-child)::after { content: ""; position: absolute; top: 46px; right: -17px; width: 14px; height: 14px; z-index: 1;
-    background: no-repeat center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='%238FACCB' stroke-width='2'%3E%3Cpath d='M1 7h11M8 3l4 4-4 4'/%3E%3C/svg%3E"); }
-  .assure { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 24px; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: relative; }
+  .steps::before { content: ""; position: absolute; left: 0; right: 0; top: 23px; height: 1px; background: rgba(143, 172, 203, .4); }
+  .steps li { position: relative; padding-right: 28px; }
+  .steps .n { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%;
+              background: var(--navy); border: 1px solid var(--steel); color: var(--cream); font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .06em; }
+  .steps h3 { margin: 24px 0 10px; font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--cream); }
+  .steps p { margin: 0; color: #C9D6E4; font-size: 14.5px; line-height: 1.7; }
+  .assure { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 52px; }
+  .navy-band .chip { background: rgba(143, 172, 203, .16); color: var(--steel-200); }
 
-  /* ---------- 3D review ---------- */
-  .review { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 56px; align-items: center; }
-  .review ul { list-style: none; margin: 26px 0 0; padding: 0; display: grid; gap: 14px; }
-  .review li { display: flex; gap: 14px; align-items: flex-start; font-size: 15px; line-height: 1.6; }
-  .review li svg { flex: 0 0 auto; margin-top: 3px; color: var(--navy); }
-  .mock { border-radius: 16px; overflow: hidden; background: var(--white); border: 1px solid var(--line);
-          box-shadow: 0 2px 4px rgba(11, 27, 51, .05), 0 30px 60px rgba(11, 27, 51, .12); }
-  .mock-bar { display: flex; gap: 6px; padding: 12px 16px; background: #E3E7E0; }
-  .mock-bar i { width: 9px; height: 9px; border-radius: 50%; background: #C3C9C0; }
-  .mock-head { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: var(--cream); border-bottom: 1px solid var(--line); }
-  .mock-head img { height: 22px; width: auto; }
-  .mock-head .case { flex: 1; min-width: 0; padding-left: 14px; border-left: 1px solid var(--line); }
-  .mock-head .case b { display: block; font-size: 12.5px; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mock-head .eyebrow { font-size: 8.5px; }
-  .mock-head .pill { height: 26px; padding: 0 12px; display: inline-flex; align-items: center; border: 1.5px solid var(--navy); border-radius: 999px;
-                     font-family: var(--f-display); font-weight: 600; font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--navy); white-space: nowrap; }
-  .mock-stage { background: var(--navy); }
-  .mock-stage img { width: 100%; height: auto; }
+  /* ---------- portal band ---------- */
+  .portal-band { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; align-items: center; }
+  .portal-band ul { list-style: none; padding: 0; margin: 26px 0 32px; display: grid; gap: 14px; }
+  .portal-band li { display: flex; gap: 14px; align-items: flex-start; font-size: 15px; line-height: 1.6; }
+  .portal-band li svg { flex: 0 0 auto; margin-top: 3px; color: var(--navy); }
+  .pmock { border-radius: 18px; overflow: hidden; background: var(--white); border: 1px solid var(--line); box-shadow: 0 2px 4px rgba(11, 27, 51, .05), 0 40px 80px rgba(11, 27, 51, .14); }
+  .pmock-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: var(--cream); border-bottom: 1px solid var(--line); }
+  .pmock-head img { height: 22px; width: auto; }
+  .pmock-head .sw { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--steel-100); }
+  .pmock-head .sw span { white-space: nowrap; padding: 5px 9px; border-radius: 999px; font-family: var(--f-display); font-weight: 600; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); }
+  .pmock-head .sw span.on { background: var(--navy); color: var(--cream); }
+  .pmock-body { padding: 18px; display: grid; gap: 10px; }
+  .prow { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; }
+  .prow b { color: var(--navy); font-size: 13.5px; }
+  .prow small { grid-column: 1; color: var(--muted); font-size: 12px; }
+  .prow .st { grid-row: 1 / span 2; grid-column: 2; font-family: var(--f-display); font-weight: 600; font-size: 8.5px; letter-spacing: .12em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px; }
+  .st.review { background: #FFF3DD; color: #8A5A0B; } .st.design { background: var(--steel-200); color: var(--navy); } .st.done { background: #E3F2EA; color: var(--success); }
 
-  /* ---------- work ---------- */
-  .work { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-  .tile { margin: 0; border-radius: var(--radius); overflow: hidden; background: var(--white); border: 1px solid var(--line); box-shadow: var(--shadow); }
+  /* ---------- work carousel ---------- */
+  .rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .rail-arrows { display: flex; gap: 8px; margin-bottom: 48px; }
+  .rail-arrows button { width: 46px; height: 46px; border-radius: 50%; border: 1.5px solid var(--navy); background: transparent; color: var(--navy); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .rail-arrows button:hover { background: var(--navy); color: var(--cream); }
+  .rail { display: grid; grid-auto-flow: column; grid-auto-columns: min(560px, 82vw); gap: 20px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 12px;
+          scrollbar-width: thin; scrollbar-color: var(--steel-300) transparent; }
+  .rail:focus-visible { outline: 2px solid var(--navy); outline-offset: 6px; border-radius: 8px; }
+  .tile { margin: 0; scroll-snap-align: start; border-radius: 16px; overflow: hidden; background: var(--white); border: 1px solid var(--line); }
   .tile img { width: 100%; height: auto; aspect-ratio: 1200 / 525; object-fit: cover; background: var(--navy); }
   .tile figcaption { padding: 18px 22px 20px; }
-  .tile figcaption b { display: block; font-family: var(--f-display); font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); }
+  .tile figcaption b { display: block; font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); }
   .tile figcaption span { display: block; margin-top: 4px; font-size: 13.5px; color: var(--muted); }
 
   /* ---------- about ---------- */
-  .about { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 56px; align-items: start; }
+  .about { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 64px; align-items: start; }
   .about .copy > p { margin: 0 0 16px; font-size: 16px; line-height: 1.75; }
-  .glance { margin: 0 !important; padding: 30px; background: var(--navy); border-color: var(--navy); color: var(--cream); position: relative; overflow: hidden; }
-  .glance .eyebrow { color: var(--steel); }
-  .glance dl { margin: 18px 0 0; display: grid; gap: 0; position: relative; z-index: 1; }
+  .glance { margin: 0 !important; padding: 32px; background: var(--navy); border-color: var(--navy); color: var(--cream); position: relative; overflow: hidden; }
+  .glance dl { margin: 18px 0 0; position: relative; z-index: 1; }
   .glance dl > div { padding: 14px 0; border-top: 1px solid rgba(143, 172, 203, .28); }
   .glance dt { font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--steel); }
   .glance dd { margin: 4px 0 0; font-size: 15px; color: var(--cream); }
   .glance .mark { position: absolute; right: -40px; bottom: -36px; width: 170px; height: auto; opacity: .1; }
 
   /* ---------- faq ---------- */
-  .faq { max-width: 860px; }
+  .faq { max-width: 880px; }
   .faq details { border-top: 1px solid var(--line); }
   .faq details:last-child { border-bottom: 1px solid var(--line); }
-  .faq summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 20px;
-                 padding: 22px 4px; font-weight: 600; font-size: 16.5px; color: var(--navy); }
+  .faq summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 4px; font-weight: 600; font-size: 16.5px; color: var(--navy); }
   .faq summary::-webkit-details-marker { display: none; }
-  .faq summary .pm { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--steel); position: relative; transition: background .2s; }
-  .faq summary .pm::before, .faq summary .pm::after { content: ""; position: absolute; left: 50%; top: 50%; width: 11px; height: 1.6px; background: var(--navy); transform: translate(-50%, -50%); }
-  .faq summary .pm::after { transform: translate(-50%, -50%) rotate(90deg); transition: transform .2s; }
-  .faq details[open] summary .pm { background: var(--navy); border-color: var(--navy); }
-  .faq details[open] summary .pm::before, .faq details[open] summary .pm::after { background: var(--cream); }
-  .faq details[open] summary .pm::after { transform: translate(-50%, -50%) rotate(0deg); }
+  .faq .pm { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--steel); position: relative; transition: background .2s; }
+  .faq .pm::before, .faq .pm::after { content: ""; position: absolute; left: 50%; top: 50%; width: 11px; height: 1.6px; background: var(--navy); transform: translate(-50%, -50%); }
+  .faq .pm::after { transform: translate(-50%, -50%) rotate(90deg); transition: transform .2s; }
+  .faq details[open] .pm { background: var(--navy); border-color: var(--navy); }
+  .faq details[open] .pm::before, .faq details[open] .pm::after { background: var(--cream); }
+  .faq details[open] .pm::after { transform: translate(-50%, -50%) rotate(0deg); }
   .faq summary:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; border-radius: 6px; }
   .faq .ans { padding: 0 60px 24px 4px; color: var(--muted); font-size: 15px; line-height: 1.75; }
 
   /* ---------- contact ---------- */
-  .contact { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); border-radius: 20px; overflow: hidden;
-             border: 1px solid var(--line); box-shadow: 0 2px 4px rgba(11, 27, 51, .04), 0 30px 60px rgba(11, 27, 51, .08); background: var(--white); }
+  .contact { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); border-radius: 20px; overflow: hidden; border: 1px solid var(--line);
+             box-shadow: 0 2px 4px rgba(11, 27, 51, .04), 0 30px 60px rgba(11, 27, 51, .08); background: var(--white); }
   .contact-info { position: relative; overflow: hidden; background: var(--navy); color: var(--cream); padding: 48px 44px; }
-  .contact-info .eyebrow { color: var(--steel); }
-  .contact-info h2 { margin: 14px 0 0; font-family: var(--f-display); font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-                     font-size: clamp(22px, 2.6vw, 30px); line-height: 1.2; color: var(--cream); }
+  .contact-info h2 { margin: 14px 0 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .08em; font-size: clamp(22px, 2.6vw, 30px); line-height: 1.2; color: var(--cream); }
   .contact-info .serif { margin: 8px 0 0; color: var(--steel); font-size: clamp(28px, 3.4vw, 38px); }
   .contact-info p { margin: 22px 0 0; color: #C9D6E4; line-height: 1.7; }
   .contact-list { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 18px; position: relative; z-index: 1; }
   .contact-list li { display: flex; gap: 14px; align-items: center; }
-  .contact-list .ic { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; background: rgba(143, 172, 203, .16); color: var(--steel);
-                      display: flex; align-items: center; justify-content: center; }
+  .contact-list .ic { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; background: rgba(143, 172, 203, .16); color: var(--steel); display: flex; align-items: center; justify-content: center; }
   .contact-list small { display: block; font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--steel); }
   .contact-list a, .contact-list span.v { color: var(--cream); text-decoration: none; font-size: 15px; word-break: break-word; }
-  .contact-list a:hover { text-decoration: underline; text-underline-offset: 4px; }
   .contact-info .mark { position: absolute; right: -60px; bottom: -50px; width: 240px; height: auto; opacity: .08; }
   .contact-form { padding: 44px; }
-  .contact-form h3 { margin: 0 0 4px; }
   .contact-form .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 16px; margin-top: 24px; }
   .contact-form .full { grid-column: 1 / -1; }
-  .contact-form .req { color: var(--error); margin-left: 2px; }
+  .req { color: var(--error); margin-left: 2px; }
   select.input { appearance: none; -webkit-appearance: none; padding-right: 40px; cursor: pointer;
     background: var(--white) no-repeat right 16px center / 12px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%2305316E' stroke-width='1.6'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E"); }
   textarea.input { height: auto; min-height: 140px; padding: 14px 16px; line-height: 1.6; resize: vertical; }
@@ -197,365 +223,389 @@
   .hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
   .thanks { text-align: center; padding: 40px 10px; }
   .thanks:focus { outline: none; }
-  .thanks .ok { width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 50%; background: #EAF4EF; color: var(--success);
-                display: flex; align-items: center; justify-content: center; }
+  .thanks .ok { width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 50%; background: #EAF4EF; color: var(--success); display: flex; align-items: center; justify-content: center; }
   .thanks p { color: var(--muted); max-width: 400px; margin: 10px auto 0; line-height: 1.7; }
 
-  /* ---------- footer ---------- */
-  .site-footer { margin-top: 0; }
-  .site-footer .d8-footer-in { align-items: flex-start; padding-top: 48px; padding-bottom: 32px; }
-  .foot-brand img.tag { height: 26px; width: auto; margin-top: 14px; }
-  .foot-nav { display: flex; flex-wrap: wrap; gap: 10px 26px; }
-  .foot-bottom { border-top: 1px solid rgba(143, 172, 203, .25); }
-  .foot-bottom .wrap { display: flex; justify-content: space-between; gap: 10px 24px; flex-wrap: wrap; padding-top: 18px; padding-bottom: 22px; }
+  .fab { position: fixed; right: 22px; bottom: 22px; z-index: 40; width: 56px; height: 56px; border-radius: 50%; background: var(--navy); color: var(--cream);
+         display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(5, 49, 110, .35); text-decoration: none; transition: transform .2s, opacity .3s; }
+  .fab:hover { transform: translateY(-2px); }
+  .fab.hide { opacity: 0; pointer-events: none; }
 
-  /* ---------- reveal (only when JS runs) ---------- */
-  .js .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+  .js .reveal { opacity: 0; transform: translateY(16px); transition: opacity .7s ease, transform .7s ease; }
   .js .reveal.in { opacity: 1; transform: none; }
 
-  /* ---------- responsive ---------- */
   @media (max-width: 1080px) {
-    .services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .why { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .why { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 36px; }
     .why > div:nth-child(3) { padding-left: 0; border-left: 0; }
-    .why > div:nth-child(n+3) { border-top: 1px solid rgba(143, 172, 203, .3); margin-top: 8px; }
-    .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .step:nth-child(2)::after { display: none; }
+    .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 44px; }
+    .steps::before { display: none; }
+    .lineup { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
-  @media (min-width: 961px) and (max-width: 1180px) {
-    .facts { display: grid; grid-template-columns: repeat(2, max-content); row-gap: 20px; }
-    .facts li:nth-child(3) { padding-left: 0; border-left: 0; }
-  }
-  @media (max-width: 960px) {
-    .site-nav { display: none; position: absolute; left: 0; right: 0; top: 100%; flex-direction: column; align-items: stretch; gap: 4px;
-                padding: 12px 16px 20px; background: var(--cream); border-bottom: 1px solid var(--line); box-shadow: 0 20px 30px rgba(11, 27, 51, .08); }
-    .site-nav.open { display: flex; }
-    .site-nav a.link { height: 46px; padding: 0 14px; font-size: 12px; }
-    .site-nav .btn { margin: 8px 0 0; height: 46px; }
-    .menu-btn { display: inline-flex; }
-    .hero-in { grid-template-columns: 1fr; padding-top: 44px; padding-bottom: 56px; gap: 28px; }
-    .hero-visual { order: -1; max-width: 560px; }
-    .hero-visual img { width: 100%; margin: 0; }
-    .review, .about { grid-template-columns: 1fr; gap: 40px; }
-    .contact { grid-template-columns: 1fr; }
+  @media (max-width: 900px) {
+    .slide-art, .slide-art.narrow { width: 92vw; right: 4vw; top: 30%; }
+    .stage-copy { bottom: 110px; }
+    .portal-band, .about, .contact { grid-template-columns: 1fr; gap: 40px; }
   }
   @media (max-width: 640px) {
-    .section { padding: 64px 0; }
-    .section.tight { padding: 52px 0; }
-    .sec-head { margin-bottom: 32px; }
-    .facts { display: grid; grid-template-columns: repeat(2, max-content); row-gap: 20px; }
-    .facts li:nth-child(3) { padding-left: 0; border-left: 0; }
-    .services, .steps, .work { grid-template-columns: 1fr; }
+    .section { padding: 72px 0; }
+    .section.tight { padding: 56px 0; }
+    .stage { min-height: 600px; }
+    .stage-copy { bottom: 104px; }
+    .stage p.lede { font-size: 15px; }
+    .slide-art, .slide-art.narrow { top: 28%; }
+    .scroll-cue, .stage-count { display: none; }
+    .dots button { width: 36px; }
+    .lineup { grid-template-columns: 1fr; }
     .why { grid-template-columns: 1fr; }
-    .why > div, .why > div + div { padding: 26px 0 14px; border-left: 0; }
-    .why > div + div { border-top: 1px solid rgba(143, 172, 203, .3); margin-top: 0; }
-    .step::after { display: none; }
+    .why > div, .why > div + div { padding: 0; border: 0; }
+    .steps { grid-template-columns: 1fr; }
     .contact-info, .contact-form { padding: 30px 22px; }
     .contact-form .grid { grid-template-columns: 1fr; }
     .form-foot .btn { width: 100%; }
     .faq .ans { padding-right: 4px; }
-    .faq summary { font-size: 15.5px; }
+    .editorial { min-height: 70vh; }
+    .fab { width: 50px; height: 50px; right: 16px; bottom: 16px; }
   }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .js .reveal { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .js .reveal { opacity: 1; transform: none; }
+    .slide, .slide-art { transition: none !important; }
+    .dots button.on i { animation: none; width: 100%; }
+    .scroll-cue::after { animation: none; }
+  }
 </style>
 <script>document.documentElement.classList.add("js");</script>
+<script src="/site/home-dict.js?v=2026-10-19.1"></script>
+<script src="/shell.js?v=2026-10-19.1" defer></script>
 </head>
-<body>
-<header class="d8-header site-header">
-  <div class="wrap d8-header-in">
-    <a class="d8-logo" href="#top" aria-label="D.EIGHT DESIGN CENTER, back to top">
-      <img class="full" src="/brand/logo-horizontal.svg" alt="D.EIGHT DESIGN CENTER" width="127" height="36">
-      <img class="sym" src="/brand/symbol.svg" alt="" width="33" height="30">
-    </a>
-    <button class="menu-btn" id="menuBtn" aria-expanded="false" aria-controls="siteNav" aria-label="Open menu">
-      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 5h14M2 9h14M2 13h14"/></svg>
-    </button>
-    <nav class="site-nav" id="siteNav" aria-label="Main">
-      <a class="link" href="#services">Services</a>
-      <a class="link" href="#process">How it works</a>
-      <a class="link" href="#work">Work</a>
-      <a class="link" href="#about">About</a>
-      <a class="link" href="#faq">FAQ</a>
-      <a class="btn btn-primary small" href="#contact">Send a case</a>
-    </nav>
-  </div>
-</header>
+<body data-page="home" data-title-key="title">
+<div id="d8-header"></div>
 
 <main id="top">
-  <!-- HERO -->
-  <section class="hero" aria-labelledby="heroTitle">
-    <div class="hero-ring" aria-hidden="true"></div>
-    <div class="wrap hero-in">
-      <div>
-        <span class="chip">Remote dental CAD design team</span>
-        <h1 id="heroTitle">From scan to STL in 24 hours</h1>
-        <img class="tagline" src="/brand/tagline.svg" alt="Design to fit" width="324" height="70">
-        <p class="lede">D.EIGHT DESIGN CENTER designs for dental labs and clinics. Send your scans and prescription, and get production-ready STL files back, built to your parameters and your libraries.</p>
-        <div class="hero-btns">
-          <a class="btn btn-secondary" href="#contact">Send a case</a>
-          <a class="btn btn-light" href="#work">See our work</a>
+  <!-- ============ STAGE ============ -->
+  <section class="stage" id="stage" aria-roledescription="carousel" aria-label="D.EIGHT">
+    <div class="stage-ring r1" aria-hidden="true"></div><div class="stage-ring r2" aria-hidden="true"></div>
+
+    <div class="slide on" aria-roledescription="slide" aria-label="1 / 3">
+      <div class="slide-art"><img src="/site/hero-full-mouth.webp" alt="Full-mouth rehabilitation designed in exocad" width="1100" height="557" fetchpriority="high"></div>
+      <div class="stage-copy"><div class="wrap">
+        <span class="chip" data-i="h.chip">Remote dental CAD design team</span>
+        <h1 data-i="s1.t">Design to fit.</h1>
+        <p class="lede" data-i="s1.p">From scan to production-ready STL in 24 hours, for dental labs and clinics.</p>
+        <div class="stage-btns">
+          <a class="btn btn-cream" href="/portal#/new" data-i="b.send">Send a case</a>
+          <a class="btn btn-light" href="#services" data-i="b.services">Explore services</a>
         </div>
-        <ul class="facts">
-          <li><b>24 h</b><span>Turnaround</span></li>
-          <li><b>70+</b><span>Case types</span></li>
-          <li><b>2</b><span>Free revisions</span></li>
-          <li><b>FDI · UNS</b><span>Numbering</span></li>
-        </ul>
+      </div></div>
+    </div>
+
+    <div class="slide" aria-roledescription="slide" aria-label="2 / 3" aria-hidden="true">
+      <div class="slide-art"><img src="/site/hero-mua.webp" alt="All-on-X bridge with multi-unit abutment connections" width="1200" height="611" loading="lazy"></div>
+      <div class="stage-copy"><div class="wrap">
+        <span class="chip" data-i="h.chip">Remote dental CAD design team</span>
+        <p class="h1" data-i="s2.t">All-on-X, precisely.</p>
+        <p class="lede" data-i="s2.p">Full-arch bridges and bars direct to multi-unit abutments, with screw channels routed through each MUA.</p>
+        <div class="stage-btns">
+          <a class="btn btn-cream" href="/portal#/new" data-i="b.send">Send a case</a>
+          <a class="btn btn-light" href="#work" data-i="b.work">See our work</a>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="slide" aria-roledescription="slide" aria-label="3 / 3" aria-hidden="true">
+      <div class="slide-art narrow"><img src="/site/hero-bridge.webp" alt="Final screw-retained full-arch bridge" width="793" height="635" loading="lazy"></div>
+      <div class="stage-copy"><div class="wrap">
+        <span class="chip" data-i="h.chip">Remote dental CAD design team</span>
+        <p class="h1" data-i="s3.t">Approve in 3D.</p>
+        <p class="lede" data-i="s3.p">Review every design in your browser through a private link, then sign it off in the customer portal.</p>
+        <div class="stage-btns">
+          <a class="btn btn-secondary" href="/portal" data-i="po.b">Open the customer portal</a>
+          <a class="btn btn-light" href="#process" data-i="b.how">How it works</a>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="stage-ctrl"><div class="wrap">
+      <div class="dots" role="tablist" aria-label="Slides">
+        <button type="button" role="tab" aria-selected="true" aria-label="1" class="on"><i></i></button>
+        <button type="button" role="tab" aria-selected="false" aria-label="2"><i></i></button>
+        <button type="button" role="tab" aria-selected="false" aria-label="3"><i></i></button>
       </div>
-      <figure class="hero-visual">
-        <img src="/site/hero-full-mouth.webp" alt="Full-mouth rehabilitation designed in exocad: upper and lower teeth set on the scans" width="1100" height="557" fetchpriority="high">
-        <figcaption><span class="chip">Full-mouth rehabilitation · exocad</span></figcaption>
-      </figure>
+      <span class="stage-count" id="stageCount">01 / 03</span>
+      <div class="stage-arrows">
+        <button type="button" id="prevSlide" data-i-attr="aria-label:ctrl.prev" aria-label="Previous slide"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+        <button type="button" id="nextSlide" data-i-attr="aria-label:ctrl.next" aria-label="Next slide"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
+      </div>
+    </div></div>
+    <a class="scroll-cue" href="#services" aria-label="Scroll down"></a>
+  </section>
+
+  <!-- ============ LINEUP ============ -->
+  <section class="section" id="services" aria-labelledby="luTitle">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow" data-i="lu.eyebrow">Services</span>
+        <h2 id="luTitle" data-i="lu.h">The D.EIGHT range</h2>
+        <p class="serif" data-i="lu.serif">One team, every case type</p>
+        <p class="intro" data-i="lu.intro">Implants are our core. Around them we cover fixed, removable and appliance design, more than 70 case types in all, delivered as mill- and print-ready STL.</p>
+      </div>
+      <div class="tabs reveal" role="tablist" aria-label="Service groups">
+        <button type="button" role="tab" id="tab-implant" aria-controls="panel-implant" aria-selected="true" data-i="tab.implant">Implant</button>
+        <button type="button" role="tab" id="tab-fixed" aria-controls="panel-fixed" aria-selected="false" tabindex="-1" data-i="tab.fixed">Fixed</button>
+        <button type="button" role="tab" id="tab-planning" aria-controls="panel-planning" aria-selected="false" tabindex="-1" data-i="tab.planning">Planning</button>
+        <button type="button" role="tab" id="tab-removable" aria-controls="panel-removable" aria-selected="false" tabindex="-1" data-i="tab.removable">Removable &amp; appliances</button>
+      </div>
+
+      <div class="lineup" role="tabpanel" id="panel-implant" aria-labelledby="tab-implant">
+        <a class="model" href="#contact" data-topic="Implant restorations"><div class="pic"><img src="/site/work-custom-abutment.webp" alt="" width="1200" height="525" loading="lazy"></div>
+          <h3 data-i="m.imp.t">Implant crowns &amp; abutments</h3><p data-i="m.imp.p">Screw-retained and cemented implant crowns, custom abutments, Ti-base and I-bar designs, built on your implant libraries.</p><span class="more" data-i="m.more">Send this case</span></a>
+        <a class="model" href="#contact" data-topic="All-on-X &amp; bars"><div class="pic"><img src="/site/work-mua-interface.webp" alt="" width="1200" height="525" loading="lazy"></div>
+          <h3 data-i="m.aox.t">All-on-X &amp; bars</h3><p data-i="m.aox.p">Full-arch hybrid bridges and bars direct to multi-unit abutments, library-accurate at every connection.</p><span class="more" data-i="m.more">Send this case</span></a>
+        <a class="model" href="#contact" data-topic="All-on-X &amp; bars"><div class="pic"><img src="/site/work-screw-retained-bridge.webp" alt="" width="1200" height="525" loading="lazy"></div>
+          <h3 data-i="m.final.t">Final screw-retained bridges</h3><p data-i="m.final.p">Monolithic full-arch prostheses with screw channels routed and checked, ready to mill or print.</p><span class="more" data-i="m.more">Send this case</span></a>
+      </div>
+      <div class="lineup" role="tabpanel" id="panel-fixed" aria-labelledby="tab-fixed" hidden>
+        <a class="model" href="#contact" data-topic="Crown &amp; bridge"><div class="pic"><img src="/site/work-crowns-preps.webp" alt="" width="1200" height="525" loading="lazy"></div>
+          <h3 data-i="m.cb.t">Crown &amp; bridge</h3><p data-i="m.cb.p">Full contour and cutback crowns and bridges, copings, veneers, inlays and onlays, Maryland and cantilever bridges, post and core.</p><span class="more" data-i="m.more">Send this case</span></a>
+        <a class="model" href="#contact" data-topic="Wax-up &amp; smile design"><div class="pic"><img src="/site/work-waxup-gingiva.webp" alt="" width="1200" height="525" loading="lazy"></div>
+          <h3 data-i="m.smile.t">Wax-up &amp; smile design</h3><p data-i="m.smile.p">Diagnostic wax-ups and smile designs set up from the patient's reference photo, with proportions, axis and midline checked.</p><span class="more" data-i="m.more">Send this case</span></a>
+        <a class="model" href="#contact" data-topic="Digital models"><div class="pic icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 40c0-12 9-22 22-22s22 10 22 22"/><path d="M14 40h36v8a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4v-8Z"/><path d="M22 28v12M32 24v16M42 28v12"/></svg></div>
+          <h3 data-i="m.models.t">Digital models</h3><p data-i="m.models.p">Dies, articulated models, wax-up suckdown models, orthodontic models and implant tissue models.</p><span class="more" data-i="m.more">Send this case</span></a>
+      </div>
+      <div class="lineup" role="tabpanel" id="panel-planning" aria-labelledby="tab-planning" hidden>
+        <a class="model" href="#contact" data-topic="Surgical guides"><div class="pic"><img src="/site/work-surgical-guide.webp" alt="" width="1200" height="525" loading="lazy"></div>
+          <h3 data-i="m.guide.t">Surgical guides</h3><p data-i="m.guide.p">CBCT and surface scan alignment, implant planning with nerve, bone and angulation checks, tooth- and tissue-supported guides.</p><span class="more" data-i="m.more">Send this case</span></a>
+        <a class="model" href="#contact" data-topic="Wax-up &amp; smile design"><div class="pic"><img src="/site/work-occlusion.webp" alt="" width="1200" height="525" loading="lazy"></div>
+          <h3 data-i="m.occ.t">Occlusion &amp; function</h3><p data-i="m.occ.p">Static and dynamic contacts, guided disclusion and vertical dimension checked on full-mouth cases.</p><span class="more" data-i="m.more">Send this case</span></a>
+        <a class="model" href="#contact" data-topic="Wax-up &amp; smile design"><div class="pic"><img src="/site/work-full-mouth.webp" alt="" width="1200" height="525" loading="lazy"></div>
+          <h3 data-i="m.smile.t">Wax-up &amp; smile design</h3><p data-i="m.smile.p">Diagnostic wax-ups and smile designs set up from the patient's reference photo, with proportions, axis and midline checked.</p><span class="more" data-i="m.more">Send this case</span></a>
+      </div>
+      <div class="lineup" role="tabpanel" id="panel-removable" aria-labelledby="tab-removable" hidden>
+        <a class="model" href="#contact" data-topic="Dentures &amp; partials"><div class="pic icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 26c6 20 16 28 24 28s18-8 24-28"/><path d="M14 28c2 6 6 10 10 10M50 28c-2 6-6 10-10 10"/><path d="M20 22h24"/></svg></div>
+          <h3 data-i="m.dent.t">Dentures &amp; partials</h3><p data-i="m.dent.p">Full and partial dentures on flexible or hard bases, partial frameworks, flippers, bite rims, relines and repairs.</p><span class="more" data-i="m.more">Send this case</span></a>
+        <a class="model" href="#contact" data-topic="Splints &amp; trays"><div class="pic icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 24c4 18 14 26 24 26s20-8 24-26"/><path d="M16 26c3 12 9 17 16 17s13-5 16-17"/></svg></div>
+          <h3 data-i="m.splint.t">Splints &amp; trays</h3><p data-i="m.splint.p">Night guards, Michigan and Kois splints, sleep appliances, retainers, bleach trays and custom impression trays.</p><span class="more" data-i="m.more">Send this case</span></a>
+        <a class="model" href="#contact" data-topic="Aligner &amp; ortho"><div class="pic icon"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 24h44M10 40h44"/><path d="M18 18v28M30 18v28M42 18v28"/><path d="M52 14l4 4-4 4"/></svg></div>
+          <h3 data-i="m.ortho.t">Aligner &amp; ortho</h3><p data-i="m.ortho.p">Ortho analysis, sequential aligner treatment plans and before and after models.</p><span class="more" data-i="m.more">Send this case</span></a>
+      </div>
+      <div class="lineup-foot reveal"><a class="btn-line" href="#contact" data-topic="Price list" data-i="lu.foot">Request the full price list</a></div>
     </div>
   </section>
 
-  <div class="tools">
-    <div class="wrap tools-in">
-      <span class="eyebrow">We design in</span>
-      <ul>
-        <li>exocad</li><li>3Shape Dental System</li><li>exoplan</li><li>Implant Studio</li><li>Blue Sky Plan</li><li>Meshmixer</li><li>Geomagic</li><li>3-Matic</li>
-      </ul>
-    </div>
-  </div>
-
-  <!-- SERVICES -->
-  <section class="section" id="services" aria-labelledby="servicesTitle">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <span class="eyebrow">Services</span>
-        <h2 id="servicesTitle">Everything a lab sends out</h2>
-        <p class="serif">One team, every case type</p>
-        <p class="intro">Implants are our core. Around them we cover the full range of fixed, removable and appliance design, more than 70 case types in all, delivered as mill- and print-ready STL.</p>
-      </div>
-      <div class="services">
-        <article class="card service reveal"><span class="num">01</span><h3 class="h-caps">Crown &amp; bridge</h3><p>Full contour and cutback crowns and bridges, copings, veneers, inlays and onlays, Maryland and cantilever bridges, post and core.</p></article>
-        <article class="card service reveal"><span class="num">02</span><h3 class="h-caps">Implant restorations</h3><p>Screw-retained and cemented implant crowns, custom abutments, Ti-base and I-bar designs, built on your implant libraries.</p></article>
-        <article class="card service reveal"><span class="num">03</span><h3 class="h-caps">All-on-X &amp; bars</h3><p>Full-arch hybrid bridges and bars direct to multi-unit abutments, with screw channels routed through each MUA.</p></article>
-        <article class="card service reveal"><span class="num">04</span><h3 class="h-caps">Surgical guides</h3><p>CBCT and surface scan alignment, implant planning with nerve, bone and angulation checks, tooth- and tissue-supported guides.</p></article>
-        <article class="card service reveal"><span class="num">05</span><h3 class="h-caps">Wax-up &amp; smile design</h3><p>Diagnostic wax-ups and smile designs set up from the patient's reference photo, with proportions, axis and midline checked.</p></article>
-        <article class="card service reveal"><span class="num">06</span><h3 class="h-caps">Dentures &amp; partials</h3><p>Full and partial dentures on flexible or hard bases, partial frameworks, flippers, bite rims, relines and repairs.</p></article>
-        <article class="card service reveal"><span class="num">07</span><h3 class="h-caps">Splints &amp; trays</h3><p>Night guards, Michigan and Kois splints, sleep appliances, retainers, bleach trays and custom impression trays.</p></article>
-        <article class="card service reveal"><span class="num">08</span><h3 class="h-caps">Aligner &amp; ortho</h3><p>Ortho analysis, sequential aligner treatment plans and before and after models.</p></article>
-        <article class="card service reveal"><span class="num">09</span><h3 class="h-caps">Digital models</h3><p>Dies, articulated models, wax-up suckdown models, orthodontic models and implant tissue models.</p></article>
-      </div>
+  <!-- ============ EDITORIAL ============ -->
+  <section class="editorial" aria-labelledby="edTitle">
+    <img src="/site/work-full-mouth.webp" alt="" width="1200" height="525" loading="lazy">
+    <div class="wrap reveal">
+      <h2 id="edTitle" data-i="ed.h">Precision, by design</h2>
+      <p data-i="ed.p">Margins, contacts, occlusion and emergence profiles are checked before any file leaves us. You pay for a design that fits.</p>
+      <a class="btn-line light" href="#process" data-i="ed.b">Our process</a>
     </div>
   </section>
 
-  <!-- WHY -->
-  <section class="section navy-band" id="why" aria-labelledby="whyTitle">
+  <!-- ============ WHY ============ -->
+  <section class="section white-band" id="why" aria-labelledby="whyTitle">
     <div class="wrap">
       <div class="sec-head reveal">
-        <span class="eyebrow">Why D.EIGHT</span>
-        <h2 id="whyTitle">Precision you can send straight to the mill</h2>
-        <p class="serif">Designed to fit the first time</p>
+        <span class="eyebrow" data-i="why.eyebrow">Why D.EIGHT</span>
+        <h2 id="whyTitle" data-i="why.h">Built for labs that care about fit</h2>
       </div>
       <div class="why reveal">
-        <div>
-          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r=".8" fill="currentColor"/></svg></span>
-          <h3>Precision over shortcuts</h3>
-          <p>Margins, contacts, occlusion and emergence profiles are checked before any file leaves us. You pay for a design that fits.</p>
-        </div>
-        <div>
-          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h9M15 5h2M3 10h3M9 10h8M3 15h7M13 15h4"/><circle cx="13.5" cy="5" r="1.6"/><circle cx="7.5" cy="10" r="1.6"/><circle cx="11.5" cy="15" r="1.6"/></svg></span>
-          <h3>Your parameters, your libraries</h3>
-          <p>Material, cement gap, minimum thickness and implant libraries follow your Rx. FDI or Universal numbering, as you prefer.</p>
-        </div>
-        <div>
-          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2Z"/></svg></span>
-          <h3>Built across time zones</h3>
-          <p>Based in Vietnam (UTC+7), we work while your lab is closed, with set delivery windows for Europe and the Americas.</p>
-        </div>
-        <div>
-          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="9" width="12" height="9" rx="2"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg></span>
-          <h3>Confidential by default</h3>
-          <p>Patient files are handled confidentially and named by case ID. 3D previews use private links that expire on their own.</p>
-        </div>
+        <div><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r=".8" fill="currentColor"/></svg></span>
+          <h3 data-i="why.1.t">Precision over shortcuts</h3><p data-i="why.1.p">Every design is checked for margins, contacts, occlusion and emergence before export.</p></div>
+        <div><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h9M15 5h2M3 10h3M9 10h8M3 15h7M13 15h4"/><circle cx="13.5" cy="5" r="1.6"/><circle cx="7.5" cy="10" r="1.6"/><circle cx="11.5" cy="15" r="1.6"/></svg></span>
+          <h3 data-i="why.2.t">Your parameters, your libraries</h3><p data-i="why.2.p">Material, cement gap, minimum thickness and implant libraries follow your Rx. FDI or Universal numbering.</p></div>
+        <div><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2Z"/></svg></span>
+          <h3 data-i="why.3.t">Built across time zones</h3><p data-i="why.3.p">Based in Vietnam (UTC+7), we work while your lab is closed, with set delivery windows for Europe and the Americas.</p></div>
+        <div><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="9" width="12" height="9" rx="2"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg></span>
+          <h3 data-i="why.4.t">Confidential by default</h3><p data-i="why.4.p">Patient files are handled confidentially and named by case ID. Previews use private links that expire.</p></div>
       </div>
     </div>
   </section>
 
-  <!-- PROCESS -->
-  <section class="section" id="process" aria-labelledby="processTitle">
+  <!-- ============ PROCESS ============ -->
+  <section class="section navy-band" id="process" aria-labelledby="prTitle">
     <div class="wrap">
       <div class="sec-head reveal">
-        <span class="eyebrow">How it works</span>
-        <h2 id="processTitle">Four steps, one day</h2>
-        <p class="serif">Remote, but never out of reach</p>
+        <span class="eyebrow" data-i="pr.eyebrow">How it works</span>
+        <h2 id="prTitle" data-i="pr.h">Four steps, one day</h2>
+        <p class="serif" data-i="pr.serif">Remote, but never out of reach</p>
       </div>
-      <ol class="steps">
-        <li class="card step reveal"><span class="n">01</span><h3 class="h-caps">Send your case</h3><p>STL or PLY scans with your Rx. DICOM/CBCT for guides. Material, cement gap, libraries and tooth numbers.</p></li>
-        <li class="card step reveal"><span class="n">02</span><h3 class="h-caps">We design</h3><p>In exocad, 3Shape, Implant Studio or exoplan, using your parameters and your implant libraries.</p></li>
-        <li class="card step reveal"><span class="n">03</span><h3 class="h-caps">Review &amp; adjust</h3><p>Screenshots or a private 3D link for approval before export. Two free revisions per case.</p></li>
-        <li class="card step reveal"><span class="n">04</span><h3 class="h-caps">Receive files</h3><p>Production-ready STL for milling or printing, named by case ID, within 24 hours.</p></li>
+      <ol class="steps reveal">
+        <li><span class="n">01</span><h3 data-i="pr.1.t">Send your case</h3><p data-i="pr.1.p">Upload STL or PLY scans with your Rx in the portal. DICOM/CBCT for guides.</p></li>
+        <li><span class="n">02</span><h3 data-i="pr.2.t">We design</h3><p data-i="pr.2.p">In exocad, 3Shape, Implant Studio or exoplan, using your parameters and implant libraries.</p></li>
+        <li><span class="n">03</span><h3 data-i="pr.3.t">Review &amp; approve</h3><p data-i="pr.3.p">Open the private 3D link, ask for changes or approve with one click. Two free revisions per case.</p></li>
+        <li><span class="n">04</span><h3 data-i="pr.4.t">Receive files</h3><p data-i="pr.4.p">Download production-ready STL for milling or printing, named by case ID, within 24 hours.</p></li>
       </ol>
       <div class="assure reveal">
-        <span class="chip">STL / PLY in</span><span class="chip">Mill- &amp; print-ready STL out</span><span class="chip">FDI or Universal</span><span class="chip">Patient files kept confidential</span>
+        <span class="chip" data-i="pr.c1">STL / PLY in</span><span class="chip" data-i="pr.c2">Mill- &amp; print-ready STL out</span><span class="chip" data-i="pr.c3">FDI or Universal</span><span class="chip" data-i="pr.c4">Patient files kept confidential</span>
       </div>
     </div>
   </section>
 
-  <!-- 3D REVIEW -->
-  <section class="section tight paper-band" id="review" aria-labelledby="reviewTitle">
-    <div class="wrap review">
+  <!-- ============ PORTAL ============ -->
+  <section class="section paper-band" id="portal" aria-labelledby="poTitle">
+    <div class="wrap portal-band">
       <div class="reveal">
         <div class="sec-head" style="margin-bottom:0">
-          <span class="eyebrow">Review in 3D</span>
-          <h2 id="reviewTitle">Approve designs in your browser</h2>
-          <p class="serif">No software, no downloads</p>
+          <span class="eyebrow" data-i="po.eyebrow">Customer portal</span>
+          <h2 id="poTitle" data-i="po.h">Step into your case room</h2>
+          <p class="serif" data-i="po.serif">Sign in with Google, nothing to install</p>
         </div>
         <ul>
-          <li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 9.5l4 4 8-9"/></svg><span>A private link opens the exocad 3D view on any phone, tablet or computer.</span></li>
-          <li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 9.5l4 4 8-9"/></svg><span>Rotate, zoom and toggle layers, then approve or ask for changes.</span></li>
-          <li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 9.5l4 4 8-9"/></svg><span>Links carry no patient names, stay out of search engines and expire automatically.</span></li>
+          <li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 9.5l4 4 8-9"/></svg><span data-i="po.l1">Send new cases with scans, Rx and notes in one form.</span></li>
+          <li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 9.5l4 4 8-9"/></svg><span data-i="po.l2">Follow every status, from received to delivered.</span></li>
+          <li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 9.5l4 4 8-9"/></svg><span data-i="po.l3">Open 3D previews and approve designs in one click.</span></li>
+          <li><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 9.5l4 4 8-9"/></svg><span data-i="po.l4">Message our designers and download final files.</span></li>
         </ul>
+        <a class="btn btn-primary" href="/portal" data-i="po.b">Open the customer portal</a>
       </div>
-      <div class="mock reveal" aria-hidden="true">
-        <div class="mock-bar"><i></i><i></i><i></i></div>
-        <div class="mock-head">
-          <img src="/brand/logo-horizontal.svg" alt="" width="78" height="22">
-          <div class="case"><span class="eyebrow">3D design preview</span><b>Case 1024 · upper full arch</b></div>
-          <span class="pill">Full screen</span>
+      <div class="pmock reveal" aria-hidden="true">
+        <div class="pmock-head"><img src="/brand/logo-horizontal.svg" alt="" width="78" height="22">
+          <span class="sw"><span data-i="sh.view.site">Website</span><span class="on" data-i="sh.view.portal">Customer</span><span data-i="sh.view.admin">Admin</span></span></div>
+        <div class="pmock-body">
+          <div class="prow"><b>D8-261018-7KQ2</b><span class="st review" data-i="po.st1">Ready for review</span><small data-i="po.mk1">Upper full arch · All-on-X</small></div>
+          <div class="prow"><b>D8-261017-M4TX</b><span class="st design" data-i="po.st2">In design</span><small data-i="po.mk2">Crowns 11, 21 · e.max</small></div>
+          <div class="prow"><b>D8-261016-W9CB</b><span class="st done" data-i="po.st3">Delivered</span><small data-i="po.mk3">Lower guide · 3 implants</small></div>
         </div>
-        <div class="mock-stage"><img src="/site/work-screw-retained-bridge.webp" alt="" width="1200" height="525" loading="lazy"></div>
       </div>
     </div>
   </section>
 
-  <!-- WORK -->
-  <section class="section" id="work" aria-labelledby="workTitle">
+  <!-- ============ WORK ============ -->
+  <section class="section" id="work" aria-labelledby="wkTitle">
     <div class="wrap">
-      <div class="sec-head reveal">
-        <span class="eyebrow">Selected work</span>
-        <h2 id="workTitle">Recent designs</h2>
-        <p class="serif">Straight from our CAD screens</p>
+      <div class="rail-head">
+        <div class="sec-head reveal">
+          <span class="eyebrow" data-i="wk.eyebrow">Selected work</span>
+          <h2 id="wkTitle" data-i="wk.h">Recent designs</h2>
+          <p class="serif" data-i="wk.serif">Straight from our CAD screens</p>
+        </div>
+        <div class="rail-arrows">
+          <button type="button" id="railPrev" data-i-attr="aria-label:ctrl.prev" aria-label="Previous"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+          <button type="button" id="railNext" data-i-attr="aria-label:ctrl.next" aria-label="Next"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
+        </div>
       </div>
-      <div class="work">
-        <figure class="tile reveal"><img src="/site/work-full-mouth.webp" alt="Full-mouth rehabilitation wax-up on upper and lower scans" width="1200" height="525" loading="lazy"><figcaption><b>Full-mouth rehabilitation</b><span>Digital wax-up · anterior aesthetics</span></figcaption></figure>
-        <figure class="tile reveal"><img src="/site/work-screw-retained-bridge.webp" alt="Final screw-retained full-arch bridge, occlusal view" width="1200" height="525" loading="lazy"><figcaption><b>Final screw-retained bridge</b><span>Ready to mill or print</span></figcaption></figure>
-        <figure class="tile reveal"><img src="/site/work-mua-interface.webp" alt="All-on-X bridge with multi-unit abutment connections" width="1200" height="525" loading="lazy"><figcaption><b>Multi-unit abutment interface</b><span>Library-accurate connection geometry</span></figcaption></figure>
-        <figure class="tile reveal"><img src="/site/work-crowns-preps.webp" alt="Crowns designed on prepared teeth" width="1200" height="525" loading="lazy"><figcaption><b>Crowns on prepared teeth</b><span>Margins, contact points and emergence profile</span></figcaption></figure>
-        <figure class="tile reveal"><img src="/site/work-custom-abutment.webp" alt="Custom implant abutments under the planned crown outline" width="1200" height="525" loading="lazy"><figcaption><b>Custom abutment design</b><span>Abutment shape driven by the final crown outline</span></figcaption></figure>
-        <figure class="tile reveal"><img src="/site/work-surgical-guide.webp" alt="Tooth-supported surgical guide with three sleeves" width="1200" height="525" loading="lazy"><figcaption><b>Tooth-supported surgical guide</b><span>Sleeve seats and inspection windows</span></figcaption></figure>
-        <figure class="tile reveal"><img src="/site/work-waxup-gingiva.webp" alt="Digital wax-up with gingiva matched to a smile photo" width="1200" height="525" loading="lazy"><figcaption><b>Digital wax-up with gingiva</b><span>Tooth set-up matched to the reference photo</span></figcaption></figure>
-        <figure class="tile reveal"><img src="/site/work-occlusion.webp" alt="Occlusion check, right lateral view" width="1200" height="525" loading="lazy"><figcaption><b>Occlusion check</b><span>Static and dynamic contacts · guided disclusion</span></figcaption></figure>
+      <div class="rail" id="rail" tabindex="0" aria-label="Recent designs">
+        <figure class="tile"><img src="/site/work-full-mouth.webp" alt="Full-mouth rehabilitation wax-up" width="1200" height="525" loading="lazy"><figcaption><b data-i="w1.t">Full-mouth rehabilitation</b><span data-i="w1.p">Digital wax-up · anterior aesthetics</span></figcaption></figure>
+        <figure class="tile"><img src="/site/work-screw-retained-bridge.webp" alt="Final screw-retained full-arch bridge" width="1200" height="525" loading="lazy"><figcaption><b data-i="w2.t">Final screw-retained bridge</b><span data-i="w2.p">Ready to mill or print</span></figcaption></figure>
+        <figure class="tile"><img src="/site/work-mua-interface.webp" alt="All-on-X with multi-unit abutments" width="1200" height="525" loading="lazy"><figcaption><b data-i="w3.t">Multi-unit abutment interface</b><span data-i="w3.p">Library-accurate connection geometry</span></figcaption></figure>
+        <figure class="tile"><img src="/site/work-crowns-preps.webp" alt="Crowns on prepared teeth" width="1200" height="525" loading="lazy"><figcaption><b data-i="w4.t">Crowns on prepared teeth</b><span data-i="w4.p">Margins, contact points and emergence profile</span></figcaption></figure>
+        <figure class="tile"><img src="/site/work-custom-abutment.webp" alt="Custom implant abutments" width="1200" height="525" loading="lazy"><figcaption><b data-i="w5.t">Custom abutment design</b><span data-i="w5.p">Abutment shape driven by the final crown outline</span></figcaption></figure>
+        <figure class="tile"><img src="/site/work-surgical-guide.webp" alt="Tooth-supported surgical guide" width="1200" height="525" loading="lazy"><figcaption><b data-i="w6.t">Tooth-supported surgical guide</b><span data-i="w6.p">Sleeve seats and inspection windows</span></figcaption></figure>
+        <figure class="tile"><img src="/site/work-waxup-gingiva.webp" alt="Digital wax-up with gingiva" width="1200" height="525" loading="lazy"><figcaption><b data-i="w7.t">Digital wax-up with gingiva</b><span data-i="w7.p">Tooth set-up matched to the reference photo</span></figcaption></figure>
+        <figure class="tile"><img src="/site/work-occlusion.webp" alt="Occlusion check" width="1200" height="525" loading="lazy"><figcaption><b data-i="w8.t">Occlusion check</b><span data-i="w8.p">Static and dynamic contacts · guided disclusion</span></figcaption></figure>
       </div>
     </div>
   </section>
 
-  <!-- ABOUT -->
-  <section class="section paper-band" id="about" aria-labelledby="aboutTitle">
+  <!-- ============ ABOUT ============ -->
+  <section class="section paper-band" id="about" aria-labelledby="abTitle">
     <div class="wrap about">
       <div class="copy reveal">
         <div class="sec-head" style="margin-bottom:28px">
-          <span class="eyebrow">About us</span>
-          <h2 id="aboutTitle">Built at the bench</h2>
-          <p class="serif">Dental technicians first</p>
+          <span class="eyebrow" data-i="ab.eyebrow">About us</span>
+          <h2 id="abTitle" data-i="ab.h">Built at the bench</h2>
+          <p class="serif" data-i="ab.serif">Dental technicians first</p>
         </div>
-        <p>D.EIGHT DESIGN CENTER grew out of nearly five years of hands-on dental design work: first as a technician in a dental lab in Vietnam, then designing directly for clinics and labs in the United States and Australia.</p>
-        <p>Today D.EIGHT is a dedicated design team. Implant work is our core: single implant crowns, custom abutments, All-on-X bridges and bars. Around it we cover crown and bridge, removable and appliance design for labs and clinics that want a reliable remote CAD partner.</p>
-        <p>We only design. No milling, no printing, no shipping, so every hour goes into the file you send to your own mill, printer or production partner.</p>
+        <p data-i="ab.p1">D.EIGHT DESIGN CENTER grew out of nearly five years of hands-on dental design work: first as a technician in a dental lab in Vietnam, then designing directly for clinics and labs in the United States and Australia.</p>
+        <p data-i="ab.p2">Today D.EIGHT is a dedicated design team. Implant work is our core: single implant crowns, custom abutments, All-on-X bridges and bars. Around it we cover crown and bridge, removable and appliance design.</p>
+        <p data-i="ab.p3">We only design. No milling, no printing, no shipping, so every hour goes into the file you send to your own mill, printer or production partner.</p>
       </div>
       <aside class="card glance reveal" aria-label="D.EIGHT at a glance">
-        <span class="eyebrow">At a glance</span>
+        <span class="eyebrow steel" data-i="ab.glance">At a glance</span>
         <dl>
-          <div><dt>Based in</dt><dd>Vietnam · UTC+7</dd></div>
-          <div><dt>Experience</dt><dd>Nearly 5 years of dental CAD design</dd></div>
-          <div><dt>Clients</dt><dd>Labs and clinics in the US and Australia</dd></div>
-          <div><dt>What we deliver</dt><dd>Design only, as production-ready STL</dd></div>
-          <div><dt>Languages</dt><dd>English · Vietnamese</dd></div>
+          <div><dt data-i="ab.d1">Based in</dt><dd data-i="ab.v1">Vietnam · UTC+7</dd></div>
+          <div><dt data-i="ab.d2">Experience</dt><dd data-i="ab.v2">Nearly 5 years of dental CAD design</dd></div>
+          <div><dt data-i="ab.d3">Clients</dt><dd data-i="ab.v3">Labs and clinics in the US and Australia</dd></div>
+          <div><dt data-i="ab.d4">What we deliver</dt><dd data-i="ab.v4">Design only, as production-ready STL</dd></div>
+          <div><dt data-i="ab.d5">Languages</dt><dd data-i="ab.v5">English · Vietnamese</dd></div>
         </dl>
         <img class="mark" src="/brand/symbol-reversed.svg" alt="">
       </aside>
     </div>
   </section>
 
-  <!-- FAQ -->
-  <section class="section" id="faq" aria-labelledby="faqTitle">
+  <!-- ============ FAQ ============ -->
+  <section class="section" id="faq" aria-labelledby="fqTitle">
     <div class="wrap">
       <div class="sec-head reveal">
-        <span class="eyebrow">FAQ</span>
-        <h2 id="faqTitle">Good to know</h2>
-        <p class="serif">Before you send the first case</p>
+        <span class="eyebrow" data-i="fq.eyebrow">FAQ</span>
+        <h2 id="fqTitle" data-i="fq.h">Good to know</h2>
+        <p class="serif" data-i="fq.serif">Before you send the first case</p>
       </div>
       <div class="faq reveal">
-        <details><summary>What do you need to start a case?<span class="pm" aria-hidden="true"></span></summary>
-          <div class="ans">Intraoral or model scans (STL or PLY) and your Rx: tooth numbers, material, cement gap and any implant or library details. For surgical guides, add the DICOM/CBCT data.</div></details>
-        <details><summary>How fast is delivery?<span class="pm" aria-hidden="true"></span></summary>
-          <div class="ans">Designs are delivered within 24 hours of receiving a complete case. If a large full-arch or guide case needs more time, we confirm the timing when you send it.</div></details>
-        <details><summary>How do revisions work?<span class="pm" aria-hidden="true"></span></summary>
-          <div class="ans">Each case includes two free revisions before final export. Changes requested after approval are quoted by scope.</div></details>
-        <details><summary>Which software and numbering do you use?<span class="pm" aria-hidden="true"></span></summary>
-          <div class="ans">exocad, 3Shape Dental System, Implant Studio, exoplan and Blue Sky Plan, with your parameters and implant libraries. FDI or Universal numbering, whichever you work with.</div></details>
-        <details><summary>Do you mill, print or ship?<span class="pm" aria-hidden="true"></span></summary>
-          <div class="ans">No. D.EIGHT is a design-only service. You receive production-ready STL files for your own mill, printer or production partner.</div></details>
-        <details><summary>How is pricing set?<span class="pm" aria-hidden="true"></span></summary>
-          <div class="ans">Per unit or per case, in USD. Use the form below to request our current price list or a quote for a specific case.</div></details>
-        <details><summary>How do you handle patient data?<span class="pm" aria-hidden="true"></span></summary>
-          <div class="ans">Files are handled confidentially and named by case ID. Please leave patient names out of messages and file names; our 3D preview links never show them.</div></details>
+        <details><summary><span data-i="fq.q1">What do you need to start a case?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a1">Intraoral or model scans (STL or PLY) and your Rx: tooth numbers, material, cement gap and any implant or library details. For surgical guides, add the DICOM/CBCT data.</div></details>
+        <details><summary><span data-i="fq.q2">How fast is delivery?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a2">Designs are delivered within 24 hours of receiving a complete case. If a large full-arch or guide case needs more time, we confirm the timing when you send it.</div></details>
+        <details><summary><span data-i="fq.q3">How do revisions work?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a3">Each case includes two free revisions before final export. Changes requested after approval are quoted by scope.</div></details>
+        <details><summary><span data-i="fq.q4">Do I need an account?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a4">Just your Google account. Sign in to the customer portal to send cases, follow their status, approve designs and download files.</div></details>
+        <details><summary><span data-i="fq.q5">Do you mill, print or ship?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a5">No. D.EIGHT is a design-only service. You receive production-ready STL files for your own mill, printer or production partner.</div></details>
+        <details><summary><span data-i="fq.q6">How is pricing set?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a6">Per unit or per case, in USD. Use the form below to request our current price list or a quote for a specific case.</div></details>
+        <details><summary><span data-i="fq.q7">How do you handle patient data?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a7">Files are handled confidentially and named by case ID. Please leave patient names out of case references and messages.</div></details>
       </div>
     </div>
   </section>
 
-  <!-- CONTACT -->
-  <section class="section paper-band" id="contact" aria-labelledby="contactTitle">
+  <!-- ============ CONTACT ============ -->
+  <section class="section paper-band" id="contact" aria-labelledby="ctTitle">
     <div class="wrap">
       <div class="contact reveal">
         <div class="contact-info">
-          <span class="eyebrow">Contact</span>
-          <h2 id="contactTitle">Send a case or ask a question</h2>
-          <p class="serif">We'll take it from here</p>
-          <p>Tell us about your lab or practice and the work you send out. Want to start with a trial case? Describe it and we'll reply with how to send the files.</p>
+          <span class="eyebrow steel" data-i="ct.eyebrow">Contact</span>
+          <h2 id="ctTitle" data-i="ct.h">Send a case or ask a question</h2>
+          <p class="serif" data-i="ct.serif">We'll take it from here</p>
+          <p data-i="ct.p">Tell us about your lab or practice and the work you send out. Already ready to send files? Use the customer portal.</p>
           <ul class="contact-list">
             <li><span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2.5 5l6.5 5 6.5-5"/></svg></span>
-              <div><small>Email</small><a href="mailto:d.eightdesigncenter@gmail.com">d.eightdesigncenter@gmail.com</a></div></li>
+              <div><small data-i="ct.email">Email</small><a href="mailto:d.eightdesigncenter@gmail.com">d.eightdesigncenter@gmail.com</a></div></li>
             <li><span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 16s5.5-4.6 5.5-9A5.5 5.5 0 0 0 3.5 7c0 4.4 5.5 9 5.5 9Z"/><circle cx="9" cy="7" r="2"/></svg></span>
-              <div><small>Location</small><span class="v">Vietnam · UTC+7</span></div></li>
+              <div><small data-i="ct.loc">Location</small><span class="v" data-i="ct.locv">Vietnam · UTC+7</span></div></li>
             <li><span class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4h7M6.5 2v2M4.5 4c.5 3 2.5 5.5 5 6.5M9 4c-.5 3-2.5 5.5-5.5 7"/><path d="M9.5 16l3.25-8L16 16M10.5 13.5h4.5"/></svg></span>
-              <div><small>Languages</small><span class="v">English · Vietnamese</span></div></li>
+              <div><small data-i="ct.lang">Languages</small><span class="v" data-i="ct.langv">English · Vietnamese</span></div></li>
           </ul>
+          <div style="margin-top:28px;position:relative;z-index:1"><a class="btn btn-secondary" href="/portal" data-i="po.b">Open the customer portal</a></div>
           <img class="mark" src="/brand/symbol-reversed.svg" alt="">
         </div>
 
         <div class="contact-form">
           <form id="contactForm" novalidate>
-            <h3 class="h-caps">Message us</h3>
-            <p class="muted" style="margin:6px 0 0">Fields marked <span class="req">*</span> are required.</p>
+            <h3 class="h-caps" data-i="ct.form">Message us</h3>
+            <p class="muted" style="margin:6px 0 0" data-i="ct.req">Fields marked <span class="req">*</span> are required.</p>
             <div class="grid">
-              <div><label class="field-label" for="cName">Name<span class="req">*</span></label><input class="input" id="cName" name="name" autocomplete="name" maxlength="100" required></div>
-              <div><label class="field-label" for="cEmail">Email<span class="req">*</span></label><input class="input" id="cEmail" name="email" type="email" autocomplete="email" maxlength="160" required></div>
-              <div><label class="field-label" for="cOrg">Lab or practice</label><input class="input" id="cOrg" name="practice" autocomplete="organization" maxlength="120"></div>
-              <div><label class="field-label" for="cCountry">Country</label><input class="input" id="cCountry" name="country" autocomplete="country-name" maxlength="60"></div>
-              <div class="full"><label class="field-label" for="cService">What do you need?</label>
+              <div><label class="field-label" for="cName"><span data-i="ct.name">Name</span><span class="req">*</span></label><input class="input" id="cName" name="name" autocomplete="name" maxlength="100" required></div>
+              <div><label class="field-label" for="cEmail"><span data-i="ct.mail">Email</span><span class="req">*</span></label><input class="input" id="cEmail" name="email" type="email" autocomplete="email" maxlength="160" required></div>
+              <div><label class="field-label" for="cOrg" data-i="ct.org">Lab or practice</label><input class="input" id="cOrg" name="practice" autocomplete="organization" maxlength="120"></div>
+              <div><label class="field-label" for="cCountry" data-i="ct.country">Country</label><input class="input" id="cCountry" name="country" autocomplete="country-name" maxlength="60"></div>
+              <div class="full"><label class="field-label" for="cService" data-i="ct.topic">What do you need?</label>
                 <select class="input" id="cService" name="service">
-                  <option value="">Choose a topic</option>
-                  <option>Crown &amp; bridge</option>
-                  <option>Implant restorations</option>
-                  <option>All-on-X &amp; bars</option>
-                  <option>Surgical guides</option>
-                  <option>Wax-up &amp; smile design</option>
-                  <option>Dentures &amp; partials</option>
-                  <option>Splints &amp; trays</option>
-                  <option>Aligner &amp; ortho</option>
-                  <option>Digital models</option>
-                  <option>Trial case</option>
-                  <option>Price list</option>
-                  <option>Something else</option>
+                  <option value="" data-i="ct.topic0">Choose a topic</option>
+                  <option value="Crown &amp; bridge" data-i="t.cb">Crown &amp; bridge</option>
+                  <option value="Implant restorations" data-i="t.imp">Implant restorations</option>
+                  <option value="All-on-X &amp; bars" data-i="t.aox">All-on-X &amp; bars</option>
+                  <option value="Surgical guides" data-i="t.guide">Surgical guides</option>
+                  <option value="Wax-up &amp; smile design" data-i="t.smile">Wax-up &amp; smile design</option>
+                  <option value="Dentures &amp; partials" data-i="t.dent">Dentures &amp; partials</option>
+                  <option value="Splints &amp; trays" data-i="t.splint">Splints &amp; trays</option>
+                  <option value="Aligner &amp; ortho" data-i="t.ortho">Aligner &amp; ortho</option>
+                  <option value="Digital models" data-i="t.models">Digital models</option>
+                  <option value="Trial case" data-i="t.trial">Trial case</option>
+                  <option value="Price list" data-i="t.price">Price list</option>
+                  <option value="Something else" data-i="t.other">Something else</option>
                 </select>
               </div>
-              <div class="full"><label class="field-label" for="cMsg">Message<span class="req">*</span></label>
-                <textarea class="input" id="cMsg" name="message" maxlength="4000" required placeholder="Case types, monthly volume, software or scanner you use…"></textarea></div>
+              <div class="full"><label class="field-label" for="cMsg"><span data-i="ct.msg">Message</span><span class="req">*</span></label>
+                <textarea class="input" id="cMsg" name="message" maxlength="4000" required data-i-attr="placeholder:ct.ph" placeholder="Case types, monthly volume, software or scanner you use…"></textarea></div>
               <div class="hp" aria-hidden="true"><label for="cWebsite">Website</label><input id="cWebsite" name="website" tabindex="-1" autocomplete="off"></div>
             </div>
             <div class="form-foot">
-              <p class="hint">Please don't include patient names or health information in this form.</p>
-              <button class="btn btn-primary" type="submit" id="cSend">Send message</button>
+              <p class="hint" data-i="ct.hint">Please don't include patient names or health information in this form.</p>
+              <button class="btn btn-primary" type="submit" id="cSend" data-i="ct.send">Send message</button>
             </div>
             <p class="error" id="cError" role="alert" hidden></p>
           </form>
           <div class="thanks" id="cThanks" hidden tabindex="-1">
             <div class="ok" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5l4 4 8-9"/></svg></div>
-            <h3 class="h-caps">Message sent</h3>
-            <p id="cThanksText">Thank you. We'll reply by email.</p>
+            <h3 class="h-caps" data-i="ct.sent">Message sent</h3>
+            <p id="cThanksText"></p>
           </div>
         </div>
       </div>
@@ -563,88 +613,11 @@
   </section>
 </main>
 
-<footer class="d8-footer site-footer">
-  <div class="wrap d8-footer-in">
-    <div class="foot-brand">
-      <img class="logo-rev" src="/brand/logo-horizontal-reversed.svg" alt="D.EIGHT DESIGN CENTER" width="106" height="30">
-      <img class="tag" src="/brand/tagline.svg" alt="Design to fit" width="120" height="26">
-    </div>
-    <nav class="foot-nav" aria-label="Footer">
-      <a class="caps" href="#services">Services</a>
-      <a class="caps" href="#process">How it works</a>
-      <a class="caps" href="#work">Work</a>
-      <a class="caps" href="#about">About</a>
-      <a class="caps" href="#contact">Contact</a>
-    </nav>
-  </div>
-  <div class="foot-bottom">
-    <div class="wrap">
-      <span class="caps">© 2026 D.EIGHT DESIGN CENTER</span>
-      <a class="caps" href="mailto:d.eightdesigncenter@gmail.com">d.eightdesigncenter@gmail.com</a>
-    </div>
-  </div>
-</footer>
+<a class="fab" id="fab" href="#contact" data-i-attr="aria-label:fab" aria-label="Contact D.EIGHT">
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M7 9.5h8M7 12h5"/></svg>
+</a>
 
-<script>
-(() => {
-  const $ = (id) => document.getElementById(id);
-
-  /* mobile menu */
-  const nav = $("siteNav"), btn = $("menuBtn");
-  btn.addEventListener("click", () => {
-    const open = !nav.classList.contains("open");
-    nav.classList.toggle("open", open);
-    btn.setAttribute("aria-expanded", String(open));
-    btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
-  });
-  nav.addEventListener("click", (e) => { if (e.target.closest("a")) { nav.classList.remove("open"); btn.setAttribute("aria-expanded", "false"); } });
-
-  /* reveal on scroll + active nav link */
-  if ("IntersectionObserver" in window) {
-    const io = new IntersectionObserver((entries) => entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } }), { rootMargin: "0px 0px -8% 0px" });
-    document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
-    const links = [...nav.querySelectorAll("a.link")];
-    const map = new Map(links.map((a) => [a.getAttribute("href").slice(1), a]));
-    const so = new IntersectionObserver((entries) => entries.forEach((en) => {
-      const a = map.get(en.target.id); if (!a) return;
-      if (en.isIntersecting) { links.forEach((l) => l.classList.remove("active")); a.classList.add("active"); }
-    }), { rootMargin: "-45% 0px -50% 0px" });
-    map.forEach((_, id) => { const s = document.getElementById(id); if (s) so.observe(s); });
-  } else {
-    document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in"));
-  }
-
-  /* contact form */
-  const form = $("contactForm"), started = Date.now();
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    $("cError").hidden = true;
-    const data = Object.fromEntries(new FormData(form).entries());
-    for (const k of Object.keys(data)) data[k] = String(data[k]).trim();
-    const missing = [];
-    if (!data.name) missing.push("your name");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) missing.push("a valid email");
-    if (data.message.length < 10) missing.push("a message (at least 10 characters)");
-    if (missing.length) { showError("Please add " + missing.join(", ") + "."); return; }
-    data.elapsed = Date.now() - started;
-    const send = $("cSend");
-    send.disabled = true; send.textContent = "Sending…";
-    try {
-      const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      let out = {}; try { out = await res.json(); } catch {}
-      if (!res.ok) throw new Error(out.error || "Something went wrong. Please email us directly.");
-      form.hidden = true;
-      $("cThanksText").textContent = "Thank you, " + data.name + ". We'll reply to " + data.email + ".";
-      $("cThanks").hidden = false;
-      $("cThanks").focus();
-    } catch (err) {
-      showError(err.message === "Failed to fetch" ? "Couldn't reach the server. Check your connection, or email us directly." : err.message);
-    } finally {
-      send.disabled = false; send.textContent = "Send message";
-    }
-  });
-  function showError(msg) { $("cError").textContent = msg; $("cError").hidden = false; }
-})();
-</script>
+<div id="d8-footer"></div>
+<script src="/site/home.js?v=2026-10-19.1" defer></script>
 </body>
 </html>

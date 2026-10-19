@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Customer portal | D.EIGHT DESIGN CENTER</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="theme-color" content="#05316E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.1">
+<link rel="stylesheet" href="/case.css?v=2026-10-19.1">
+<style>
+  body { background: var(--paper); }
+</style>
+<script>
+window.D8_DICT = {
+  "title": ["Customer portal | D.EIGHT DESIGN CENTER", "Cổng khách hàng | D.EIGHT DESIGN CENTER"],
+  "p.eyebrow": ["Customer portal", "Cổng khách hàng"],
+  "p.loading": ["Loading…", "Đang tải…"],
+  "p.si.h": ["Your case room", "Phòng làm việc của bạn"],
+  "p.si.serif": ["Every case, one place", "Mọi ca, một nơi"],
+  "p.si.l1": ["Send scans, Rx and notes in one form", "Gửi file scan, phiếu chỉ định và ghi chú trong một biểu mẫu"],
+  "p.si.l2": ["Follow each case from received to delivered", "Theo dõi từng ca từ lúc nhận đến khi giao"],
+  "p.si.l3": ["Open 3D previews and approve in one click", "Mở bản xem 3D và duyệt chỉ với một cú nhấp"],
+  "p.si.l4": ["Message our designers and download final STL", "Nhắn tin với kỹ thuật viên và tải file STL hoàn chỉnh"],
+  "p.si.title": ["Sign in", "Đăng nhập"],
+  "p.si.p": ["Use the Google account you want your cases linked to. No password to remember.", "Dùng tài khoản Google bạn muốn gắn với các ca của mình. Không cần nhớ mật khẩu."],
+  "p.si.new": ["New to D.EIGHT? Your portal is created the first time you sign in.", "Lần đầu dùng D.EIGHT? Cổng của bạn được tạo ngay khi đăng nhập lần đầu."],
+  "p.si.fine": ['By signing in you agree to our <a href="/terms">Terms of service</a> and <a href="/privacy">Privacy policy</a>.', 'Khi đăng nhập, bạn đồng ý với <a href="/terms">Điều khoản dịch vụ</a> và <a href="/privacy">Chính sách bảo mật</a> của chúng tôi.'],
+  "p.si.or": ["Questions first?", "Muốn hỏi trước?"],
+  "p.si.contact": ["Message us", "Nhắn cho chúng tôi"],
+  "p.list.h": ["My cases", "Ca của tôi"],
+  "p.list.hi": ["Welcome back, {name}", "Chào {name}"],
+  "p.new": ["New case", "Gửi ca mới"],
+  "p.f.all": ["All", "Tất cả"],
+  "p.f.active": ["In progress", "Đang làm"],
+  "p.f.review": ["To review", "Chờ duyệt"],
+  "p.f.done": ["Delivered", "Đã giao"],
+  "p.search": ["Search cases", "Tìm ca"],
+  "p.updated": ["Updated {t}", "Cập nhật {t}"],
+  "p.sent": ["Sent {d}", "Gửi {d}"],
+  "p.newreply": ["New update", "Có cập nhật"],
+  "p.empty.h": ["No cases yet", "Chưa có ca nào"],
+  "p.empty.p": ["Send your first case with scans, Rx and notes. We'll confirm it and start designing.", "Gửi ca đầu tiên kèm file scan, phiếu chỉ định và ghi chú. Chúng tôi sẽ xác nhận và bắt đầu thiết kế."],
+  "p.nomatch": ["No cases match this filter.", "Không có ca nào khớp bộ lọc."],
+  "p.lag": ["A case you just sent can take up to a minute to appear here.", "Ca vừa gửi có thể mất khoảng một phút mới hiện ở đây."],
+  "p.back": ["My cases", "Ca của tôi"],
+  "p.c.sent": ["Sent {d}", "Gửi lúc {d}"],
+  "p.c.needs": ["We need a little more information before we can continue. Please see the messages below.", "Chúng tôi cần thêm thông tin để tiếp tục. Vui lòng xem tin nhắn bên dưới."],
+  "p.c.cancelled": ["This case was cancelled. Message us if you'd like to reopen it.", "Ca này đã bị hủy. Nhắn cho chúng tôi nếu bạn muốn mở lại."],
+  "p.c.delivered": ["Your final files are ready to download.", "File hoàn chỉnh đã sẵn sàng để tải về."],
+  "p.c.approvedOn": ["You approved this design on {d}. We're exporting the final files.", "Bạn đã duyệt thiết kế vào {d}. Chúng tôi đang xuất file hoàn chỉnh."],
+  "p.pv.h": ["3D design preview", "Xem thiết kế 3D"],
+  "p.pv.sub": ["Opens in your browser. Rotate, zoom and switch parts on and off.", "Mở ngay trên trình duyệt. Xoay, phóng to và bật tắt từng phần."],
+  "p.pv.none": ["We'll post a 3D preview here as soon as the design is ready.", "Bản xem 3D sẽ hiện ở đây ngay khi thiết kế xong."],
+  "p.pv.open": ["Open in 3D", "Mở xem 3D"],
+  "p.pv.exp": ["Link valid until {d}", "Link dùng được đến {d}"],
+  "p.ap.p": ["<b>Happy with the design?</b> Approve it and we'll export the production files. Each case includes two free revisions.", "<b>Bạn hài lòng với thiết kế?</b> Hãy duyệt để chúng tôi xuất file sản xuất. Mỗi ca được chỉnh sửa miễn phí hai lần."],
+  "p.ap.ok": ["Approve design", "Duyệt thiết kế"],
+  "p.ap.sure": ["Tap again to confirm", "Bấm lần nữa để xác nhận"],
+  "p.ap.change": ["Request changes", "Yêu cầu chỉnh sửa"],
+  "p.ap.done": ["Design approved. Thank you!", "Đã duyệt thiết kế. Cảm ơn bạn!"],
+  "p.fl.h": ["Files", "File"],
+  "p.fl.out": ["Final files from D.EIGHT", "File hoàn chỉnh từ D.EIGHT"],
+  "p.fl.in": ["Your files", "File của bạn"],
+  "p.fl.none": ["No files yet.", "Chưa có file."],
+  "p.fl.dl": ["Download", "Tải về"],
+  "p.fl.del": ["Remove file", "Xóa file"],
+  "p.fl.delsure": ["Tap again to remove", "Bấm lần nữa để xóa"],
+  "p.fl.exp": ["kept until {d}", "lưu đến {d}"],
+  "p.fl.add": ["Add files", "Thêm file"],
+  "p.fl.upload": ["Upload {n} file(s)", "Tải lên {n} file"],
+  "p.fl.closed": ["This case is closed for new files. Send them in a message link or open a new case.", "Ca này không nhận thêm file. Gửi link trong tin nhắn hoặc mở ca mới."],
+  "p.drop.t": ["Drop scans here or click to choose", "Kéo file scan vào đây hoặc bấm để chọn"],
+  "p.drop.s": ["STL, PLY, OBJ, exocad or 3Shape exports, photos, ZIP · up to 300 MB per case", "STL, PLY, OBJ, file xuất exocad hoặc 3Shape, ảnh, ZIP · tối đa 300 MB mỗi ca"],
+  "p.drop.dicom": ["For DICOM/CBCT, zip the folder first.", "Với DICOM/CBCT, hãy nén cả thư mục thành ZIP trước."],
+  "p.ms.h": ["Messages", "Tin nhắn"],
+  "p.ms.sub": ["Talk directly with the designer on this case.", "Trao đổi trực tiếp với kỹ thuật viên phụ trách ca này."],
+  "p.ms.none": ["No messages yet. Ask a question or add details here.", "Chưa có tin nhắn. Đặt câu hỏi hoặc bổ sung thông tin tại đây."],
+  "p.ms.ph": ["Write a message…", "Viết tin nhắn…"],
+  "p.ms.phc": ["Describe the changes you'd like (tooth, area, what to adjust)…", "Mô tả chỉnh sửa bạn muốn (răng nào, vùng nào, chỉnh thế nào)…"],
+  "p.ms.send": ["Send", "Gửi"],
+  "p.ms.hint": ["Ctrl + Enter to send. Please leave patient names out.", "Ctrl + Enter để gửi. Vui lòng không ghi tên bệnh nhân."],
+  "p.ms.status": ["Status: {s}", "Trạng thái: {s}"],
+  "p.ms.you": ["You", "Bạn"],
+  "p.dt.h": ["Case details", "Thông tin ca"],
+  "p.dt.service": ["Service", "Dịch vụ"],
+  "p.dt.teeth": ["Teeth", "Răng"],
+  "p.dt.material": ["Material", "Vật liệu"],
+  "p.dt.shade": ["Shade", "Màu răng"],
+  "p.dt.needed": ["Needed by", "Cần trước"],
+  "p.dt.sent": ["Sent", "Ngày gửi"],
+  "p.dt.notes": ["Notes", "Ghi chú"],
+  "p.dt.links": ["Links", "Link"],
+  "p.nf.h": ["Send a new case", "Gửi ca mới"],
+  "p.nf.serif": ["Scans, Rx and notes in one go", "File scan, chỉ định và ghi chú một lần"],
+  "p.nf.s1": ["Case details", "Thông tin ca"],
+  "p.nf.s2": ["Files", "File"],
+  "p.nf.s3": ["Notes &amp; instructions", "Ghi chú &amp; yêu cầu"],
+  "p.nf.ref": ["Case reference", "Mã tham chiếu ca"],
+  "p.nf.refh": ["Your own case or order number. Please don't use the patient's name.", "Số ca hoặc số đơn của bạn. Vui lòng không dùng tên bệnh nhân."],
+  "p.nf.refph": ["e.g. Case 1024, upper full arch", "VD: Case 1024, toàn hàm trên"],
+  "p.nf.service": ["Service", "Dịch vụ"],
+  "p.nf.choose": ["Choose a service", "Chọn dịch vụ"],
+  "p.nf.teeth": ["Teeth / units", "Răng / đơn vị"],
+  "p.nf.teethph": ["e.g. 11, 21 or 14–24", "VD: 11, 21 hoặc 14–24"],
+  "p.nf.num": ["Numbering", "Cách đánh số"],
+  "p.nf.material": ["Material", "Vật liệu"],
+  "p.nf.materialph": ["e.g. Zirconia, e.max, PMMA", "VD: Zirconia, e.max, PMMA"],
+  "p.nf.shade": ["Shade", "Màu răng"],
+  "p.nf.shadeph": ["e.g. A2", "VD: A2"],
+  "p.nf.needed": ["Needed by", "Cần trước ngày"],
+  "p.nf.notes": ["Instructions", "Yêu cầu thiết kế"],
+  "p.nf.notesph": ["Cement gap, minimum thickness, implant system and library, contacts, occlusion, anything we should know…", "Khoảng xi măng, độ dày tối thiểu, hệ implant và thư viện, điểm tiếp xúc, khớp cắn, mọi điều cần lưu ý…"],
+  "p.nf.links": ["File links (optional)", "Link file (không bắt buộc)"],
+  "p.nf.linksh": ["Already shared the files on WeTransfer, Google Drive or Dropbox? Paste the links here.", "Đã gửi file qua WeTransfer, Google Drive hoặc Dropbox? Dán link vào đây."],
+  "p.nf.addlink": ["Add link", "Thêm link"],
+  "p.nf.submit": ["Send case", "Gửi ca"],
+  "p.nf.creating": ["Creating the case…", "Đang tạo ca…"],
+  "p.nf.agree": ["By sending, you confirm you're allowed to share these files with D.EIGHT for design.", "Khi gửi, bạn xác nhận mình được phép chia sẻ các file này với D.EIGHT để thiết kế."],
+  "p.nf.need": ["Please add a case reference.", "Vui lòng nhập mã tham chiếu ca."],
+  "p.nf.needfile": ["Add at least one file or file link so we can start.", "Hãy thêm ít nhất một file hoặc link file để chúng tôi bắt đầu."],
+  "p.nf.badlink": ["Links must start with http:// or https://", "Link phải bắt đầu bằng http:// hoặc https://"],
+  "p.nf.partial": ["The case was created, but some files didn't upload: {e} You can add them again from the case page.", "Ca đã được tạo nhưng một số file chưa tải lên được: {e} Bạn có thể thêm lại ở trang của ca."],
+  "p.nf.done": ["Case sent. We'll confirm it shortly.", "Đã gửi ca. Chúng tôi sẽ xác nhận sớm."],
+  "p.tips.h": ["Good to include", "Nên gửi kèm"],
+  "p.tips.1": ["Upper, lower and bite scans (STL or PLY)", "File scan hàm trên, hàm dưới và khớp cắn (STL hoặc PLY)"],
+  "p.tips.2": ["Implant system, platform and scan body", "Hệ implant, kích thước kết nối và scan body"],
+  "p.tips.3": ["Pre-op or wax-up scans for full-mouth cases", "File scan trước điều trị hoặc wax-up cho ca toàn hàm"],
+  "p.tips.4": ["A smile photo for anterior and smile design work", "Ảnh nụ cười cho ca răng trước và thiết kế nụ cười"],
+  "p.tips.5": ["DICOM/CBCT (zipped) for surgical guides", "DICOM/CBCT (đã nén ZIP) cho máng hướng dẫn phẫu thuật"],
+  "p.pf.h": ["Profile", "Hồ sơ"],
+  "p.pf.serif": ["So we know who we're designing for", "Để chúng tôi biết mình đang thiết kế cho ai"],
+  "p.pf.google": ["Google account", "Tài khoản Google"],
+  "p.pf.name": ["Name", "Họ tên"],
+  "p.pf.practice": ["Lab or practice", "Lab hoặc phòng khám"],
+  "p.pf.country": ["Country", "Quốc gia"],
+  "p.pf.phone": ["Phone or WhatsApp", "Điện thoại hoặc WhatsApp"],
+  "p.pf.save": ["Save profile", "Lưu hồ sơ"],
+  "p.pf.saved": ["Profile saved.", "Đã lưu hồ sơ."],
+  "p.pf.note": ["Your name and photo come from Google. Change them in your Google account.", "Họ tên và ảnh lấy từ Google. Muốn đổi, hãy đổi trong tài khoản Google."],
+  "p.pf.out": ["Sign out", "Đăng xuất"],
+  "p.err.nf": ["We couldn't find this case. It may belong to another account.", "Không tìm thấy ca này. Có thể ca thuộc tài khoản khác."],
+  "p.err.load": ["Couldn't load this page. Please try again.", "Không tải được trang. Vui lòng thử lại."],
+  "p.retry": ["Try again", "Thử lại"]
+};
+</script>
+<script src="/shell.js?v=2026-10-19.1" defer></script>
+<script src="/portal.js?v=2026-10-19.1" defer></script>
+</head>
+<body data-page="portal" data-title-key="title">
+<div id="d8-header"></div>
+<main id="view" aria-live="polite">
+  <div class="wrap pt-loading"><div class="spin" aria-hidden="true"></div><span data-i="p.loading">Loading…</span></div>
+</main>
+<div id="d8-footer"></div>
+</body>
+</html>

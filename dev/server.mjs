@@ -76,9 +76,27 @@ const ASSETS = {
   },
 };
 
-const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD };
+// ---- Fake Google sign-in for local tests: a local RSA key stands in for Google's signing keys.
+import crypto from "node:crypto";
+const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+const TEST_KID = "local-test-key";
+const TEST_CLIENT_ID = "local-test-client.apps.googleusercontent.com";
+const jwks = { keys: [{ ...publicKey.export({ format: "jwk" }), kid: TEST_KID, alg: "RS256", use: "sig" }] };
+function fakeIdToken(email, name) {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64({ alg: "RS256", kid: TEST_KID, typ: "JWT" });
+  const body = b64({ iss: "https://accounts.google.com", aud: TEST_CLIENT_ID, sub: "x" + email, email, email_verified: true, name, picture: "", iat: now, exp: now + 3600 });
+  const sig = crypto.sign("RSA-SHA256", Buffer.from(head + "." + body), privateKey).toString("base64url");
+  return head + "." + body + "." + sig;
+}
+
+const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` };
 
 http.createServer(async (req, res) => {
+  if (req.url === "/__test/jwks") { res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "max-age=3600" }); res.end(JSON.stringify(jwks)); return; }
+  const tk = req.url.match(/^\/__test\/idtoken\?email=([^&]+)&name=(.*)$/);
+  if (tk) { res.end(fakeIdToken(decodeURIComponent(tk[1]), decodeURIComponent(tk[2]))); return; }
   // test hook: force a case to look expired
   const m = req.url.match(/^\/__test\/expire\/(\w+)$/);
   if (m) {

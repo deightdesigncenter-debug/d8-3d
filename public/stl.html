@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta name="d8-version" content="2026-10-18.4">
+<meta name="d8-version" content="2026-10-19.1">
 <title>Chuyển HTML sang STL | D.EIGHT</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -13,11 +13,20 @@
 <meta name="theme-color" content="#05316E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-18.4">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css?v=2026-10-19.1">
+<link rel="stylesheet" href="/case.css?v=2026-10-19.1">
+<script src="/shell.js?v=2026-10-19.1" defer></script>
 <style>
-  :root { --wrap: 1180px; }
-  .login { max-width: 460px; }
+  body { background: var(--paper); }
+  .gate { max-width: 480px; margin: 10px auto 0; }
+  .gate .lock-mark { width: 40px; height: 36px; margin-bottom: 18px; }
+  .gate .gbtn { margin: 22px 0 0; min-height: 44px; }
+  .gate .row-inline { display: flex; gap: 10px; }
+  .gate .row-inline .input { flex: 1; min-width: 0; }
+  .gate .who { margin: 18px 0 0; padding: 14px 16px; border-radius: 12px; background: #FDECEA; color: #7A1E16; line-height: 1.6; }
+  .divider { display: flex; align-items: center; gap: 12px; margin: 26px 0 18px; color: var(--muted); font-size: 13px; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   .privacy { display: flex; gap: 10px; align-items: center; margin: 16px 0 0; color: var(--muted); font-size: 13px; }
   .privacy svg { color: var(--success); flex: 0 0 auto; }
 
@@ -38,12 +47,12 @@
   @keyframes breathe { 50% { opacity: .45; transform: scale(.94); } }
   .preview-cap { margin: 10px 4px 0; font-size: 13px; color: var(--muted); }
 
-  .panel { position: sticky; top: 24px; }
+  .panel { position: sticky; top: 176px; }
   .status { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--steel-100);
             color: var(--navy); font-size: 14px; margin-top: 16px; }
   .status.err { background: #FBEDEC; color: var(--error); }
   .status.ok { background: #EAF4EF; color: var(--success); }
-  .spin { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%;
+  .status .spin { flex: 0 0 16px; width: 16px; height: 16px; margin: 2px 0 0; border-radius: 50%;
           border: 2px solid rgba(5, 49, 110, .2); border-top-color: var(--navy); animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -64,13 +73,6 @@
   .note { font-size: 12px; color: var(--muted); margin: 16px 0 0; line-height: 1.55; }
   .skipped { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
 
-  .logout svg { display: none; }
-  @media (max-width: 640px) {
-    .logout { width: 36px; padding: 0; }
-    .logout .lbl { display: none; }
-    .logout svg { display: block; }
-    .d8-nav .short svg { display: block; }
-  }
   @media (max-width: 960px) {
     .work { grid-template-columns: 1fr; }
     .panel { position: static; }
@@ -78,37 +80,30 @@
   }
 </style>
 </head>
-<body>
-<header class="d8-header">
-  <div class="wrap d8-header-in">
-    <a class="d8-logo" href="/admin" aria-label="D.EIGHT DESIGN CENTER">
-      <img class="full" src="/brand/logo-horizontal.svg" alt="D.EIGHT DESIGN CENTER" width="127" height="36">
-      <img class="sym" src="/brand/symbol.svg" alt="" width="33" height="30">
-    </a>
-    <nav class="d8-nav" aria-label="Công cụ">
-      <a href="/admin"><span class="long">Tạo link 3D</span><span class="short">Link 3D</span></a>
-      <a href="/stl" aria-current="page"><span class="long">HTML sang STL</span><span class="short">STL</span></a>
-      <a href="/admin#messages" id="msgTab" hidden><span class="long">Tin nhắn</span><span class="short" aria-label="Tin nhắn"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2.5 5l6.5 5 6.5-5"/></svg></span></a>
-    </nav>
-    <button class="btn small logout" id="logout" hidden aria-label="Đăng xuất"><span class="lbl">Đăng xuất</span><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 3H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 5.5 15 9l-4 3.5M15 9H7"/></svg></button>
-  </div>
-</header>
+<body data-page="stl">
+<div id="d8-header"></div>
 
-<section class="d8-hero">
-  <div class="wrap d8-hero-in">
-    <h1>HTML sang STL</h1>
-    <p class="serif">Tách từng lớp 3D, giữ nguyên tọa độ exocad</p>
+<section class="pt-band">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow">Quản trị D.EIGHT</span>
+      <h1>HTML sang STL</h1>
+      <p class="serif">Tách từng lớp 3D, giữ nguyên tọa độ exocad</p>
+    </div>
   </div>
-  <div class="d8-hero-art" aria-hidden="true"><svg viewBox="0 0 1108.539 1000" focusable="false"><path d="M 221.089 744.849 L 417.416 744.849 L 417.715 718.125 L 418.462 705.882 L 616.132 705.733 C 656.144 705.733 694.215 692.147 726.464 669.454 C 797.978 619.289 830.525 529.263 806.936 444.909 C 792.304 392.654 757.817 348.014 710.788 320.693 C 684.81 305.763 656.294 294.715 625.688 294.416 L 417.715 293.371 L 417.416 255.3 L 214.669 255.599 C 182.57 255.599 153.158 264.109 123.448 277.993 L 124.195 58.9728 C 124.344 27.023 153.308 0 184.959 0 L 638.677 0.1493 C 702.875 0.1493 766.327 17.1693 823.956 44.4909 C 910.698 85.5479 983.257 151.538 1033.57 233.055 C 1086.72 319.05 1112.4 419.827 1108.07 520.902 C 1105.68 574.948 1095.23 627.65 1076.42 677.814 L 1072.99 686.772 C 1024.61 809.346 928.763 909.674 807.085 961.78 C 753.338 984.772 695.111 999.552 636.138 999.701 L 187.348 1000 C 154.203 1000.15 124.195 974.171 124.195 940.131 L 123.448 722.156 C 155.099 736.936 186.303 744.849 221.089 744.849" fill="#05316E"/><path d="M 88.0643 330.248 C 16.5504 380.412 -15.9966 470.439 7.5925 554.793 C 22.2238 606.898 56.7117 651.687 103.741 678.859 C 129.719 693.938 158.235 704.987 188.841 705.136 L 388.9 706.181 L 388.9 293.67 L 198.396 293.819 C 158.384 293.968 120.313 307.555 88.0643 330.248" fill="#1E457C" stroke="#05316E" stroke-width="18"/></svg></div>
 </section>
 
-<main>
-  <div class="wrap lift">
-    <!-- Login (same password as /admin) -->
-    <section class="card login" id="login">
+<main class="pt-main">
+  <div class="wrap">
+    <div class="pt-loading" id="booting"><div class="spin" aria-hidden="true"></div>Đang tải…</div>
+    <!-- Sign in (Google admin account or the admin password) -->
+    <section class="card gate" id="login" hidden>
       <img class="lock-mark" src="/brand/symbol.svg" alt="">
-      <h2 class="h-caps">Đăng nhập</h2>
-      <p class="lead">Nhập mật khẩu trang tạo link để dùng công cụ chuyển HTML sang STL.</p>
+      <h2 class="h-caps">Đăng nhập quản trị</h2>
+      <p class="muted" style="margin:6px 0 0;line-height:1.7">Dùng tài khoản Google của D.EIGHT hoặc mật khẩu trang quản trị.</p>
+      <div id="gateWho"></div>
+      <div class="gbtn" id="gbtn"></div>
+      <div class="divider">hoặc dùng mật khẩu</div>
       <form id="loginForm">
         <label class="field-label" for="pw">Mật khẩu</label>
         <div class="row-inline">
@@ -194,49 +189,48 @@
   </div>
 </main>
 
-<footer class="d8-footer">
-  <div class="wrap d8-footer-in">
-    <img class="logo-rev" src="/brand/logo-horizontal-reversed.svg" alt="D.EIGHT DESIGN CENTER" width="106" height="30">
-    <div class="d8-footer-meta">
-      <a class="caps" href="/" target="_blank" rel="noopener">Trang giới thiệu</a>
-      <a class="caps" href="https://d8designcenter.com" target="_blank" rel="noopener">d8designcenter.com</a>
-      <span class="caps">© 2026 D.EIGHT DESIGN CENTER</span>
-      <span class="caps">Phiên bản 18/10/2026.4</span>
-    </div>
-  </div>
-</footer>
+<div id="d8-footer"></div>
 
 <script>
 (() => {
   const KEY_NAME = "d8-upload-key";       // shared with /admin
   const MAX_INPUT = 500 * 1024 * 1024;
   const $ = (id) => document.getElementById(id);
-  let key = null;
 
-  /* ---------------- login (same password as /admin) ---------------- */
-  function loadKey() { try { return localStorage.getItem(KEY_NAME) || sessionStorage.getItem(KEY_NAME); } catch { return null; } }
-  function saveKey(k, remember) { try { (remember ? localStorage : sessionStorage).setItem(KEY_NAME, k); } catch {} }
+  /* ---------------- sign in: Google admin account or the admin password (shared with /admin) ---------------- */
   function clearKey() { try { localStorage.removeItem(KEY_NAME); } catch {} try { sessionStorage.removeItem(KEY_NAME); } catch {} }
-  function showApp(on) { $("login").hidden = on; $("app").hidden = !on; $("logout").hidden = !on; $("msgTab").hidden = !on; }
-
-  async function tryLogin(k, remember, silent) {
-    let res;
-    try { res = await fetch("/api/ping", { headers: { "X-Upload-Key": k } }); }
-    catch { if (!silent) showLoginError("Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại."); return; }
-    let data = {}; try { data = await res.json(); } catch {}
-    if (res.ok) { key = k; if (remember !== undefined) saveKey(k, remember); showApp(true); return; }
-    if (res.status === 401) clearKey();
-    if (!silent || res.status !== 401) showLoginError(data.error || ("Lỗi máy chủ (" + res.status + ")."));
-    showApp(false);
+  let authed = false;
+  function showApp(on) {
+    $("booting").hidden = true;
+    $("login").hidden = on; $("app").hidden = !on;
+    if (on && !authed) { authed = true; document.body.dataset.authed = "1"; D8.renderHeader(); }
   }
-  function showLoginError(msg) { $("loginError").textContent = msg; $("loginError").hidden = false; }
-
+  function showGate(u) {
+    showApp(false);
+    $("gateWho").innerHTML = "";
+    if (u) {
+      const p = document.createElement("p"); p.className = "who";
+      p.textContent = "Bạn đang đăng nhập bằng " + u.email + ". Tài khoản này không có quyền quản trị.";
+      $("gateWho").appendChild(p);
+    }
+    D8.renderGoogleButton($("gbtn"), null, { width: 320 });
+  }
+  document.addEventListener("DOMContentLoaded", async () => {
+    const u = await D8.ready;
+    if (u && u.role === "admin") return showApp(true);
+    if (D8.adminKey()) {
+      try { await D8.api("/api/ping"); return showApp(true); } catch (err) { if (err.status === 401) clearKey(); }
+    }
+    showGate(u);
+    document.addEventListener("d8:user", (e) => { if (authed || !e.detail) return; if (e.detail.role === "admin") showApp(true); else showGate(e.detail); });
+  });
   $("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault(); $("loginError").hidden = true; $("loginBtn").disabled = true;
-    await tryLogin($("pw").value, $("remember").checked, false);
+    try { ($("remember").checked ? localStorage : sessionStorage).setItem(KEY_NAME, $("pw").value); } catch {}
+    try { await D8.api("/api/ping"); showApp(true); }
+    catch (err) { clearKey(); $("loginError").textContent = err.message; $("loginError").hidden = false; }
     $("loginBtn").disabled = false;
   });
-  $("logout").addEventListener("click", () => { clearKey(); key = null; $("pw").value = ""; resetAll(); showApp(false); });
 
   /* ---------------- code injected into the sandboxed exocad file ---------------- */
   // Tag names are split so the HTML parser of this page does not see real tags.
@@ -564,8 +558,6 @@
   function fmtMB(b) { return (b / 1048576).toLocaleString("vi-VN", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + " MB"; }
 
   /* ---------------- start ---------------- */
-  const saved = loadKey();
-  if (saved) tryLogin(saved, undefined, true); else $("pw").focus();
 })();
 </script>
 </body>

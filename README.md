@@ -1,82 +1,81 @@
-# D.EIGHT — Link xem thiết kế 3D
+# D.EIGHT DESIGN CENTER — trang web, cổng khách hàng và công cụ quản trị
 
-Công cụ biến file HTML xuất từ exocad thành một đường link để bác sĩ mở xem 3D ngay trên trình duyệt (điện thoại hoặc máy tính), không cần cài exocad viewer.
+Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Việt), cổng khách hàng đăng nhập bằng Google, trang quản trị ca hàng, link xem thiết kế 3D cho bác sĩ và công cụ chuyển HTML exocad sang STL. Mọi trang dùng chung một thanh đầu trang, chân trang và thanh chuyển **Trang web / Khách hàng / Quản trị**.
 
-- Trang tạo link (cho D.EIGHT): `https://3d.d8designcenter.com/admin`
-- Link gửi bác sĩ có dạng: `https://3d.d8designcenter.com/v/<mã>`
-- Địa chỉ tạm của Cloudflare: `https://d8-3d.pages.dev`
+- Trang web: `https://3d.d8designcenter.com/` (địa chỉ tạm: `https://d8-3d.pages.dev`)
+- Cổng khách hàng: `/portal`
+- Quản trị: `/admin` (Ca hàng, Link xem 3D, Tin nhắn, Khách hàng) và `/stl`
+- Link gửi bác sĩ: `/v/<mã>`
+- Pháp lý: `/privacy`, `/terms` (Google yêu cầu khi cho khách đăng nhập)
 
-## Cách hoạt động
+## Đăng nhập
 
-1. Trên trang `/admin`, kéo file HTML từ exocad vào, đặt tên ca, chọn hạn dùng (7, 14 hoặc 30 ngày).
-2. Trình duyệt nén file (khoảng 10 MB còn 4–5 MB) rồi tải lên Cloudflare KV.
-3. Máy chủ tạo một mã ngẫu nhiên 12 ký tự và trả về link, mã QR, tin nhắn tiếng Anh soạn sẵn.
-4. Bác sĩ mở link thấy thanh tiêu đề D.EIGHT và bản xem 3D. Hết hạn thì file tự xóa.
+- **Khách hàng** đăng nhập bằng Google (Google Identity Services). Máy chủ kiểm tra chữ ký ID token bằng khóa công khai của Google (RS256), rồi đặt cookie phiên `d8s` (ký HMAC, HttpOnly, SameSite=Lax, 30 ngày). Không lưu mật khẩu, chỉ nhận tên, email, ảnh đại diện.
+- **Quản trị**: email trong `ADMIN_EMAILS` (mặc định `d.eightdesigncenter@gmail.com`) đăng nhập Google là vào được `/admin` và `/stl`. Mật khẩu `UPLOAD_PASSWORD` cũ vẫn dùng được (header `X-Upload-Key`, chỉ gửi từ trang quản trị).
+- Chống giả mạo yêu cầu: yêu cầu ghi từ trang khác bị chặn (kiểm tra `Origin`), yêu cầu dùng cookie phải có header `X-D8: 1`.
+- Client ID Google (công khai) nằm trong `_worker.js` (`GOOGLE_CLIENT_ID`), có thể ghi đè bằng biến môi trường cùng tên. Không cần client secret.
 
-Bảo mật: link không chứa tên file hay tên bệnh nhân; trang không cho Google lập chỉ mục; file 3D chạy trong môi trường cô lập (sandbox) nên không đọc được mật khẩu hay gọi được chức năng quản lý.
+## Cổng khách hàng (`/portal`)
 
-## Trang giới thiệu và tin nhắn liên hệ
+- Gửi ca mới: mã tham chiếu, dịch vụ, răng (FDI/Universal), vật liệu, màu, ngày cần, yêu cầu, link file và file tải lên.
+- File được nén gzip trong trình duyệt khi có lợi, chia phần 20 MB, lưu KV khóa `jf:<ca>:<file>:<phần>`, tự xóa sau 60 ngày. Tối đa 300 MB mỗi ca.
+- Trạng thái: Đã nhận → (Cần bổ sung) → Đang thiết kế → Chờ duyệt → Đã duyệt → Đã giao (hoặc Đã hủy).
+- Khách xem link 3D, bấm **Duyệt thiết kế**, nhắn tin, tải file hoàn chỉnh. Mã ca dạng `D8-YYMMDD-XXXX`.
 
-- Trang chủ `/` là trang giới thiệu D.EIGHT cho khách (bác sĩ, lab), bằng tiếng Anh. Vẫn để `noindex` (chưa cho Google lập chỉ mục) cho tới khi gắn tên miền chính thức.
-- Form Contact gửi tới `/api/contact` (không cần mật khẩu). Tin nhắn lưu trong KV với khóa `msg:<thời điểm><mã>`, tự xóa sau 180 ngày.
-- Chống spam: ô ẩn (honeypot), bỏ qua form gửi trong vòng 3 giây sau khi mở trang, tối đa 30 tin mỗi ngày (giữ lượt ghi KV cho việc tạo link 3D).
-- Xem tin nhắn ở `/admin`, mục **Tin nhắn từ khách** (biểu tượng phong bì có số tin mới trên thanh menu). Trạng thái "đã đọc" lưu trên trình duyệt đang dùng.
+## Quản trị (`/admin`)
+
+- **Ca hàng**: lọc theo trạng thái, tìm theo mã/tên/email, dấu "Khách vừa nhắn". Trong từng ca: đổi trạng thái, tải file của khách, tạo link 3D từ HTML exocad và gắn vào ca (tự chuyển sang Chờ duyệt), tải file STL hoàn chỉnh lên để giao (tự chuyển Đã giao), nhắn tin với mẫu soạn sẵn.
+- **Link xem 3D**: tạo link gửi bác sĩ như trước (QR, tin nhắn tiếng Anh kèm bản tiếng Việt).
+- **Tin nhắn**: tin từ form Liên hệ trên trang web, tự xóa sau 180 ngày.
+- **Khách hàng**: các tài khoản đã đăng nhập, lab, quốc gia, số điện thoại, số ca.
 
 ## Chuyển HTML sang STL (`/stl`)
 
-Trang `https://3d.d8designcenter.com/stl` (đăng nhập bằng cùng mật khẩu với `/admin`) tách các lớp lưới 3D trong file HTML của exocad thành file STL.
-
-- Xử lý hoàn toàn trong trình duyệt: file không được tải lên máy chủ, không tốn dung lượng KV.
-- File exocad được mở trong khung cô lập (sandbox) kèm một đoạn mã nhỏ chờ exocad dựng xong mô hình, rồi gửi dữ liệu lưới (`DentalWebGL.m_SceneManager.m_MeshSort.m_SortedMeshs`) ra trang chính.
-- Mỗi lớp (ví dụ *Merged parts*, *Antagonist*, *Jaw scans*) xuất thành STL nhị phân; lớp ảnh 2D được bỏ qua.
-- Tọa độ giữ nguyên hệ tọa độ exocad (mm), các file khớp vị trí với nhau.
-- Tải từng lớp, tải nhiều lớp dạng `.zip` (nén deflate), hoặc gộp các lớp đã chọn thành 1 file STL.
-
-Đã kiểm tra với file mẫu: khung bao của từng lớp khớp tuyệt đối với số liệu exocad, lớp thiết kế là khối kín, mặt hướng ra ngoài.
+Tách các lớp lưới 3D trong file HTML của exocad thành file STL, xử lý hoàn toàn trong trình duyệt (không tải file lên máy chủ). Tọa độ giữ nguyên hệ tọa độ exocad (mm). Tải từng lớp, nhiều lớp dạng `.zip`, hoặc gộp thành 1 file.
 
 ## Cấu trúc thư mục
 
 | Đường dẫn | Vai trò |
 |---|---|
-| `public/_worker.js` | Phần máy chủ (Cloudflare Pages, chế độ advanced): API tải lên, danh sách, xóa; trang xem cho bác sĩ; trả file 3D |
-| `public/admin.html` | Trang tạo link và quản lý link (tiếng Việt) |
-| `public/stl.html` | Trang chuyển HTML exocad sang STL (chạy trong trình duyệt) |
-| `public/index.html` | Trang giới thiệu D.EIGHT (tiếng Anh): dịch vụ, quy trình, xem 3D, ảnh case, giới thiệu, FAQ, form liên hệ |
-| `public/site/` | Ảnh dùng cho trang giới thiệu (cắt từ ảnh portfolio trong bộ nhận diện) và ảnh chia sẻ `og.jpg` |
-| `public/brand.css` | Kiểu giao diện dùng chung theo bộ nhận diện D.EIGHT (màu, nút bo tròn, chữ in hoa giãn cách, header kem, hero navy, footer navy) |
-| `public/brand/` | Logo SVG lấy từ DEIGHT-Brand-Kit: lockup ngang (thường và đảo màu), biểu tượng, tagline "Design to fit" (đã outline) |
-| `public/favicon.ico`, `public/favicon.svg`, `public/icons/`, `public/site.webmanifest` | Biểu tượng tab, icon điện thoại, manifest (mở `/admin` khi thêm ra màn hình chính) |
-| `public/robots.txt` | Chặn công cụ tìm kiếm |
-| `dev/server.mjs` | Bộ giả lập Cloudflare Pages + KV để chạy thử trên máy (không được triển khai) |
+| `public/_worker.js` | Máy chủ (Cloudflare Pages, chế độ advanced): đăng nhập Google, phiên, API ca hàng, file, tin nhắn, link 3D, trang xem cho bác sĩ |
+| `public/shell.js` | Đầu trang, chân trang, đổi ngôn ngữ EN/VI, trạng thái đăng nhập, thanh chuyển, hàm tải file theo phần |
+| `public/index.html`, `public/site/home.js`, `public/site/home-dict.js` | Trang chủ (slider toàn màn hình, các dòng dịch vụ, quy trình, sản phẩm, FAQ, liên hệ) và bản dịch |
+| `public/portal.html`, `public/portal.js` | Cổng khách hàng |
+| `public/admin.html`, `public/admin.js` | Trang quản trị (tiếng Việt) |
+| `public/stl.html` | Chuyển HTML exocad sang STL |
+| `public/privacy.html`, `public/terms.html` | Chính sách bảo mật, Điều khoản dịch vụ (song ngữ) |
+| `public/brand.css`, `public/case.css` | Giao diện theo bộ nhận diện; giao diện ca hàng dùng chung cho cổng khách và quản trị |
+| `public/brand/`, `public/site/`, `public/icons/` | Logo SVG, ảnh trang chủ, biểu tượng |
+| `dev/server.mjs` | Bộ giả lập Cloudflare Pages + KV + Google (khóa thử) để chạy trên máy, không được triển khai |
 
 ## Giao diện thương hiệu
 
-- Màu: navy `#05316E`, steel `#8FACCB`, kem `#FCFDF6`, ink `#0B1B33` (theo `03-COLOR/tokens.css` của bộ nhận diện).
-- Logo và tagline dùng file SVG đã outline từ bộ nhận diện, không phụ thuộc font.
-- Font gốc TF Phodest và TF The Gold Bachelor là bản quyền in ấn, không nhúng lên web. Trên web dùng font Google thay thế, đều có đủ dấu tiếng Việt: **Lexend Exa** (tiêu đề, nút, chữ in hoa) thay TF Phodest, **Noto Serif Display** dạng hẹp (dòng phụ kiểu serif) thay TF The Gold Bachelor, **Be Vietnam Pro** cho nội dung.
-- Sửa `brand.css` thì tăng số phiên bản `?v=` trong các trang và `ASSET_VERSION` trong `_worker.js` để trình duyệt tải bản mới.
+- Màu: navy `#05316E`, steel `#8FACCB`, kem `#FCFDF6`, ink `#0B1B33`.
+- Font web thay font in ấn: **Lexend Exa** (thay TF Phodest), **Noto Serif Display** hẹp (thay TF The Gold Bachelor), **Be Vietnam Pro** (nội dung).
+- Sửa CSS/JS thì tăng số `?v=` trong các trang và `ASSET_VERSION` trong `_worker.js`.
+- Thêm chữ song ngữ: gắn `data-i="khóa"` vào thẻ (nội dung tiếng Anh viết sẵn trong HTML), thêm `"khóa": ["English", "Tiếng Việt"]` vào từ điển của trang.
 
 ## Cài đặt trên Cloudflare (dự án Pages `d8-3d`)
 
-- **Build:** nối với repo này, nhánh `main`. Build command: để trống. Build output directory: `public`.
-- **Bindings:** KV namespace, tên biến `CASES`, trỏ tới kho `d8-3d-cases`.
-- **Variables and secrets:** Secret `UPLOAD_PASSWORD` là mật khẩu của trang `/admin`.
-- **Custom domain:** `3d.d8designcenter.com` (bản ghi CNAME `3d` ở P.A Vietnam trỏ về `d8-3d.pages.dev`).
+- **Build:** repo này, nhánh `main`, build command để trống, output `public`.
+- **Bindings:** KV namespace, biến `CASES`, kho `d8-3d-cases`.
+- **Variables and secrets:** `UPLOAD_PASSWORD` (mật khẩu quản trị; cũng dùng làm khóa ký cookie phiên, đổi mật khẩu sẽ đăng xuất mọi người). Tùy chọn: `ADMIN_EMAILS` (danh sách email quản trị, cách nhau bằng dấu phẩy), `GOOGLE_CLIENT_ID`.
+- **Custom domain:** `3d.d8designcenter.com` (cần bản ghi CNAME `3d` trỏ về `d8-3d.pages.dev` khi đã có tên miền).
+- **Google Auth Platform:** thêm địa chỉ trang web vào *Authorized JavaScript origins* của OAuth client; trang Branding cần link trang chủ, `/privacy`, `/terms`.
 
-## Cập nhật
-
-Mọi thay đổi đẩy lên nhánh `main` sẽ được Cloudflare tự triển khai trong 1–2 phút. Kiểm tra tiến độ ở tab **Deployments** của dự án `d8-3d`.
+Mọi thay đổi đẩy lên `main` được Cloudflare tự triển khai trong 1–2 phút.
 
 ## Chạy thử trên máy
 
 ```bash
 cd dev
 node server.mjs ../public 8788 mat-khau-thu
-# mở http://localhost:8788/admin
+# http://localhost:8788/  ·  /portal  ·  /admin
+# đăng nhập Google giả lập: lấy token ở /__test/idtoken?email=...&name=... rồi POST /api/auth/google
 ```
 
 ## Giới hạn gói miễn phí (Cloudflare KV)
 
-- 1 GB lưu trữ (khoảng 200 ca cùng lúc, mỗi ca 4–5 MB sau nén)
-- 1.000 lượt tải lên mỗi ngày, 100.000 lượt xem mỗi ngày
-- Tối đa 25 MB mỗi file sau khi nén
+- 1 GB lưu trữ tổng (file ca hàng tự xóa sau 60 ngày, link 3D sau 7–30 ngày)
+- 1.000 lượt ghi mỗi ngày (mỗi phần file 20 MB, mỗi tin nhắn, mỗi lần đổi trạng thái là 1 lượt), 100.000 lượt đọc mỗi ngày
+- Tối đa 25 MB mỗi giá trị (vì vậy file lớn được chia phần 20 MB)
