@@ -30,8 +30,10 @@ function asType(buf, type) {
   if (type === "stream") return new Response(buf).body;
   return buf.toString("utf8");
 }
+const ops = { read: 0, write: 0, list: 0, delete: 0 }; // compare with the free plan: 100k reads, 1k writes/lists/deletes a day
 const KV = {
   async put(key, value, opts = {}) {
+    ops.write++;
     const buf = await toBuffer(value);
     if (buf.length > KV_MAX_VALUE) throw new Error("KV put failed: 413 Value length exceeds limit");
     if (opts.metadata && Buffer.byteLength(JSON.stringify(opts.metadata)) > KV_MAX_META) throw new Error("KV put failed: metadata too large");
@@ -41,22 +43,25 @@ const KV = {
     store.set(key, { buf, metadata: opts.metadata ?? null, expiration, t: Date.now() });
   },
   async get(key, opt) {
+    ops.read++;
     const type = typeof opt === "string" ? opt : opt?.type || "text";
     const rec = store.get(key);
     return alive(rec) ? asType(rec.buf, type) : null;
   },
   async getWithMetadata(key, opt) {
+    ops.read++;
     const type = typeof opt === "string" ? opt : opt?.type || "text";
     const rec = store.get(key);
     return alive(rec) ? { value: asType(rec.buf, type), metadata: rec.metadata } : { value: null, metadata: null };
   },
   async list({ prefix = "", limit = 1000 } = {}) {
+    ops.list++;
     const now = Date.now(); const all = [...store.entries(), ...[...tomb.entries()].filter(([, r]) => now - r.d < LAG_MS)];
     const keys = all.filter(([k, r]) => k.startsWith(prefix) && alive(r) && now - r.t >= LAG_MS).sort(([a],[b]) => a < b ? -1 : 1)
       .slice(0, limit).map(([name, r]) => ({ name, expiration: r.expiration, metadata: r.metadata }));
     return { keys, list_complete: true, cursor: "" };
   },
-  async delete(key) { const r = store.get(key); if (r) tomb.set(key, { ...r, d: Date.now() }); store.delete(key); },
+  async delete(key) { ops.delete++; const r = store.get(key); if (r) tomb.set(key, { ...r, d: Date.now() }); store.delete(key); },
 };
 
 // ---- ASSETS mock (Pages static asset behaviour incl. .html stripping)
@@ -94,6 +99,7 @@ function fakeIdToken(email, name) {
 const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` };
 
 http.createServer(async (req, res) => {
+  if (req.url === "/__test/ops") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(ops)); for (const k in ops) ops[k] = 0; return; }
   if (req.url === "/__test/jwks") { res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "max-age=3600" }); res.end(JSON.stringify(jwks)); return; }
   const tk = req.url.match(/^\/__test\/idtoken\?email=([^&]+)&name=(.*)$/);
   if (tk) { res.end(fakeIdToken(decodeURIComponent(tk[1]), decodeURIComponent(tk[2]))); return; }

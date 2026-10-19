@@ -41,9 +41,12 @@ const THREAD_MAX = 400;
 
 const PRIVATE_HEADERS = {
   "X-Robots-Tag": "noindex, nofollow, noarchive",
-  "Referrer-Policy": "no-referrer",
+  // Google sign-in needs the page origin; cross-site requests get the origin only, never the path.
+  "Referrer-Policy": "strict-origin-when-cross-origin",
   "X-Content-Type-Options": "nosniff",
 };
+// 3D links for doctors send no referrer at all, so the link code never leaves the page.
+const LINK_HEADERS = { ...PRIVATE_HEADERS, "Referrer-Policy": "no-referrer" };
 
 export default {
   async fetch(request, env) {
@@ -385,6 +388,34 @@ async function loadJob(env, id) {
   return env.CASES.get("job:" + id, "json");
 }
 
+// Each customer's case ids are kept in "own:<email>" so their list needs no KV "list" request
+// (the free plan allows 1,000 list requests a day but 100,000 reads).
+async function ownerIds(env, email, rebuild) {
+  const ids = await env.CASES.get("own:" + email, "json");
+  if (Array.isArray(ids) || !rebuild) return Array.isArray(ids) ? ids : [];
+  const found = [];
+  let cursor;
+  do {
+    const page = await env.CASES.list({ prefix: "job:", cursor });
+    for (const k of page.keys) if ((k.metadata || {}).o === email) found.push({ id: k.name.slice(4), c: k.metadata.c || 0 });
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  const list = found.sort((a, b) => b.c - a.c).map((x) => x.id);
+  await env.CASES.put("own:" + email, JSON.stringify(list)); // also stored when empty, so the scan runs once per customer
+  return list;
+}
+async function listOwnJobs(env, email) {
+  const ids = (await ownerIds(env, email, true)).slice(0, 500);
+  const rows = await Promise.all(ids.map((id) => env.CASES.getWithMetadata("job:" + id)));
+  const items = [];
+  rows.forEach((r, i) => {
+    const m = r && r.metadata;
+    if (m) items.push({ id: ids[i], owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0 });
+  });
+  items.sort((a, b) => b.updated - a.updated);
+  return json({ items });
+}
+
 async function listJobs(env, owner) {
   const items = [];
   let cursor;
@@ -415,7 +446,7 @@ async function handleJobs(request, env, url, who) {
   const method = request.method;
   let m;
 
-  if (path === "/api/my/jobs" && method === "GET") return listJobs(env, who.email || "-");
+  if (path === "/api/my/jobs" && method === "GET") return who.email ? listOwnJobs(env, who.email) : json({ items: [] });
 
   if (path === "/api/my/jobs" && method === "POST") {
     if (!who.email) return json({ error: "Sign in with Google to send a case." }, 403);
@@ -432,7 +463,9 @@ async function handleJobs(request, env, url, who) {
       files: [], previews: [], thread: [],
     };
     while (await env.CASES.get("job:" + job.id)) job.id = newJobId();
+    const own = await ownerIds(env, who.email, true);
     await saveJob(env, job);
+    await env.CASES.put("own:" + who.email, JSON.stringify([job.id, ...own.filter((x) => x !== job.id)].slice(0, 2000)));
     return json({ job: await jobView(env, job) }, 201);
   }
 
@@ -785,7 +818,7 @@ async function viewerPage(env, id) {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
-      ...PRIVATE_HEADERS,
+      ...LINK_HEADERS,
     },
   });
 }
@@ -803,7 +836,7 @@ async function rawFile(env, id) {
     "Cache-Control": "private, max-age=600",
     // Run the exocad file in an isolated (opaque) origin so it cannot touch /admin or the API.
     "Content-Security-Policy": "sandbox allow-scripts allow-downloads allow-popups allow-modals; frame-ancestors 'self'",
-    ...PRIVATE_HEADERS,
+    ...LINK_HEADERS,
   });
   if (metadata.z) headers.set("Content-Encoding", "gzip");
 
@@ -873,7 +906,7 @@ function unavailablePage() {
 </html>`;
   return new Response(html, {
     status: 404,
-    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...PRIVATE_HEADERS },
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...LINK_HEADERS },
   });
 }
 

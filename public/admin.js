@@ -92,9 +92,11 @@
     document.body.dataset.authed = "1";
     D8.renderHeader();
     route();
-    loadJobs(true);
-    refreshMessages(true);
-    setInterval(() => { if (!document.hidden && !busy) loadJobs(true); }, 120000);
+    // Each listing is a KV "list" request (1,000 a day on the free plan), so load once and refresh sparingly.
+    const h = location.hash.replace(/^#/, "") || "jobs";
+    if (h !== "jobs") loadJobs(true);
+    if (h !== "messages") refreshMessages(true);
+    setInterval(() => { if (!document.hidden && !busy && !$("p-jobs").hidden) loadJobs(true); }, 300000);
   }
 
   /* ------------------------------------------------------------ router */
@@ -111,7 +113,7 @@
     setBand(...BANDS.jobs);
     show("p-jobs");
     drawJobs();
-    loadJobs();
+    loadJobs(false, 30000);
   }
   window.addEventListener("hashchange", route);
 
@@ -125,9 +127,12 @@
   }
 
   /* ------------------------------------------------------------ case list */
-  async function loadJobs(quiet) {
+  let jobsAt = 0;
+  async function loadJobs(quiet, maxAge) {
+    if (maxAge && Date.now() - jobsAt < maxAge) return;
     try {
       jobs = (await api("/api/admin/jobs")).items || [];
+      jobsAt = Date.now();
       $("jobErr").hidden = true;
       if (!$("p-jobs").hidden) drawJobs();
       updateJobCount();
