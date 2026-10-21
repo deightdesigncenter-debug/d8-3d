@@ -102,7 +102,7 @@
         <div class="pt-signin-art">
           <span class="eyebrow" style="color:var(--steel)">${esc(T("p.eyebrow"))}</span>
           <h1>${esc(T("p.si.h"))}</h1>
-          <p class="serif">${esc(T("p.si.serif"))}</p>
+          <p class="serif" lang="en">${esc(T("p.si.serif"))}</p>
           <ul>${["p.si.l1", "p.si.l2", "p.si.l3", "p.si.l4"].map((k) => `<li>${ICON.check}<span>${esc(T(k))}</span></li>`).join("")}</ul>
           <img class="mark" src="/brand/symbol-reversed.svg" alt="">
         </div>

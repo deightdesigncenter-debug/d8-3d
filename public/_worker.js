@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-21.3"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-21.5"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -2260,21 +2260,21 @@ async function handleBook(request, env, url, who) {
 /* ---- products */
 const SAMPLE_PRODUCTS = [
   ["CR", "Crown & bridge", "unit", "Mão răng (giải phẫu)", "Crown (full anatomy)"],
-  ["CP", "Crown & bridge", "unit", "Sườn / mão cắt lớp", "Coping / cutback"],
+  ["CP", "Crown & bridge", "unit", "Sườn / mão cut-back", "Coping / cutback"],
   ["PT", "Crown & bridge", "unit", "Nhịp cầu", "Bridge pontic"],
   ["VN", "Crown & bridge", "unit", "Veneer", "Veneer"],
   ["IO", "Crown & bridge", "unit", "Inlay / onlay", "Inlay / onlay"],
-  ["PC", "Crown & bridge", "unit", "Chốt cùi", "Post and core"],
+  ["PC", "Crown & bridge", "unit", "Cùi giả có chốt", "Post and core"],
   ["IMC", "Implant restorations", "unit", "Mão trên implant (bắt vít / Ti-base)", "Implant crown (screw-retained / Ti-base)"],
-  ["IMA", "Implant restorations", "unit", "Abutment cá nhân", "Custom abutment"],
-  ["IMAC", "Implant restorations", "unit", "Abutment cá nhân + mão", "Custom abutment + crown"],
+  ["IMA", "Implant restorations", "unit", "Abutment cá nhân hóa", "Custom abutment"],
+  ["IMAC", "Implant restorations", "unit", "Abutment cá nhân hóa + mão", "Custom abutment + crown"],
   ["AOX", "All-on-X & bars", "arch", "Cầu hybrid All-on-X", "All-on-X hybrid bridge"],
   ["BAR", "All-on-X & bars", "arch", "Thanh bar", "Bar"],
-  ["PMMA", "All-on-X & bars", "arch", "Hàm tạm PMMA", "Provisional (PMMA)"],
+  ["PMMA", "All-on-X & bars", "arch", "Phục hình tạm PMMA", "Provisional (PMMA)"],
   ["SG", "Surgical guides", "arch", "Máng hướng dẫn phẫu thuật", "Surgical guide"],
   ["WX", "Wax-up & smile design", "unit", "Wax-up kỹ thuật số", "Digital wax-up"],
   ["SD", "Wax-up & smile design", "case", "Thiết kế nụ cười", "Smile design"],
-  ["GUM", "Wax-up & smile design", "unit", "Mảnh nướu hồng rời", "Separate pink gingiva"],
+  ["GUM", "Wax-up & smile design", "unit", "Nướu giả rời", "Separate pink gingiva"],
   ["DEN", "Dentures & partials", "arch", "Hàm tháo lắp toàn hàm", "Full denture"],
   ["RPD", "Dentures & partials", "arch", "Hàm khung / bán phần", "Partial denture / framework"],
   ["NG", "Splints & trays", "arch", "Máng nhai / chống nghiến", "Night guard / splint"],
