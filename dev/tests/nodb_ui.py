@@ -23,6 +23,8 @@ with sync_playwright() as p:
     pg.goto(B + "/admin#settings"); pg.wait_for_timeout(1200)
     t = pg.inner_text("#p-settings")
     ok("Chưa kết nối" in t and "d8-db" in t and "DB" in t, "settings show how to connect D1")
+    ok("Máy chủ đang thấy" in t and "CASES (KV)" in t and "chưa có D1" in t, "settings show which bindings the server has")
+    ok("Production" in t and "Retry deployment" in t, "settings explain the Production binding and the redeploy")
     pg.screenshot(path=f"{OUT}/settings.png", full_page=True)
     pg.goto(B + "/admin#customers"); pg.wait_for_timeout(1500)
     ok(pg.query_selector("#custBody") is not None, "customers fall back to the Google account list")

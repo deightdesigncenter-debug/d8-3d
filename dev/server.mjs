@@ -260,7 +260,8 @@ http.createServer(async (req, res) => {
     method: req.method, headers: req.headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : body, duplex: "half",
   });
   try {
-    const out = await worker.fetch(request, process.env.NO_DB ? env : { ...env, DB: d1({ n: 0 }) }, {});
+    // NO_DB=1: no database; DB_AS=name: the database bound under another variable name (a dashboard typo)
+    const out = await worker.fetch(request, process.env.NO_DB ? env : { ...env, [process.env.DB_AS || "DB"]: d1({ n: 0 }) }, {});
     const headers = {}; out.headers.forEach((v, k) => { headers[k] = v; });
     res.writeHead(out.status, headers);
     if (out.body && req.method !== "HEAD") { for await (const c of out.body) res.write(c); }

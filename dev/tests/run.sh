@@ -45,5 +45,10 @@ run nodb-ui      python3 dev/tests/nodb_ui.py "$OUT/nodb"
 run access-plain python3 dev/tests/access_ui.py "$OUT/access-plain"
 stop
 
+# the database bound under another variable name still works
+start DB_AS=d8_db
+run db-name   node dev/tests/dbname.test.mjs
+stop
+
 echo
 if [ ${#FAILED[@]} -eq 0 ]; then echo "ALL TEST SUITES PASSED (logs and screenshots in $OUT)"; else echo "FAILED: ${FAILED[*]} (logs in $OUT)"; exit 1; fi
