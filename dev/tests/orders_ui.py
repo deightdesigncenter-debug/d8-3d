@@ -131,7 +131,7 @@ with sync_playwright() as p:
     # a design file in the chat
     stl = os.path.join(OUT, "11-13 crown v1.stl")
     with open(stl, "w") as fh: fh.write("solid crown\n" + "facet normal 0 0 1\n" * 400 + "endsolid crown\n")
-    kp.set_input_files('#oChat [data-pick="file"]', stl); kp.wait_for_timeout(300)
+    kp.set_input_files('#oChat [data-ochat="file"]', stl); kp.wait_for_timeout(300)
     ok("11-13 crown v1.stl" in text(kp, "#oChat .ochat-files"), "file waits under the message box")
     kp.fill("#oChat textarea", "File thiết kế v1"); kp.click("#oChat [type=submit]"); kp.wait_for_timeout(2000)
     ok(kp.query_selector("#oChat a.ochat-file") is not None and "11-13 crown v1.stl" in text(kp, "#oChat .ochat-list"), "file sent in the chat")

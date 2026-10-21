@@ -660,8 +660,8 @@
         <textarea class="input" id="ocText-${orderId}" rows="2" maxlength="4000" placeholder="Nhắn cho KTV / QC về đơn này… (dán ảnh chụp màn hình bằng Ctrl+V, kéo thả file vào đây)"></textarea>
         <div class="ochat-img" hidden><img alt=""><button class="iconbtn" type="button" aria-label="Bỏ ảnh">${ICON.x}</button></div>
         <ul class="ochat-files" hidden></ul>
-        <div class="ochat-foot"><label class="btn small ochat-pick" title="Gửi ảnh">${ICON.img}<span>Ảnh</span><input type="file" accept="image/*" hidden data-pick="img"></label>
-          <label class="btn small ochat-pick" title="Gửi file (STL, PLY, HTML exocad, PDF, ZIP…)">${ICON.clip}<span>File</span><input type="file" multiple hidden data-pick="file"></label>
+        <div class="ochat-foot"><label class="btn small ochat-pick" title="Gửi ảnh">${ICON.img}<span>Ảnh</span><input type="file" accept="image/*" hidden data-ochat="img"></label>
+          <label class="btn small ochat-pick" title="Gửi file (STL, PLY, HTML exocad, PDF, ZIP…)">${ICON.clip}<span>File</span><input type="file" multiple hidden data-ochat="file"></label>
           <span class="hint">Ctrl + Enter để gửi</span><button class="btn btn-primary small" type="submit">Gửi</button></div>
         <p class="hint ochat-prog" hidden></p>
         <p class="error" hidden></p></form></div>`;
@@ -710,8 +710,8 @@
       if (!file || !/^image\//.test(file.type)) return;
       try { img = await toJpeg(file); prevImg.src = img; prevBox.hidden = false; } catch { D8.toast("Không đọc được ảnh này."); }
     };
-    form.querySelector('[data-pick="img"]').addEventListener("change", (e) => { setImg(e.target.files[0]); e.target.value = ""; });
-    form.querySelector('[data-pick="file"]').addEventListener("change", (e) => { addFiles([...e.target.files]); e.target.value = ""; });
+    form.querySelector('[data-ochat="img"]').addEventListener("change", (e) => { setImg(e.target.files[0]); e.target.value = ""; });
+    form.querySelector('[data-ochat="file"]').addEventListener("change", (e) => { addFiles([...e.target.files]); e.target.value = ""; });
     form.addEventListener("dragover", (e) => { if ([...(e.dataTransfer ? e.dataTransfer.types : [])].includes("Files")) { e.preventDefault(); form.classList.add("drop"); } });
     form.addEventListener("dragleave", (e) => { if (!form.contains(e.relatedTarget)) form.classList.remove("drop"); });
     form.addEventListener("drop", (e) => { e.preventDefault(); form.classList.remove("drop"); addFiles([...(e.dataTransfer ? e.dataTransfer.files : [])]); });
