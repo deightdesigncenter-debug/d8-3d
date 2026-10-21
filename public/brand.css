@@ -30,7 +30,7 @@
   --f-body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --f-serif: "Noto Serif Display", "Times New Roman", Georgia, serif;
 
-  --wrap: 1200px;
+  --wrap: clamp(1200px, 80vw, 1480px); /* content width: 1200 on laptops, up to 1480 on wide monitors so the sides are not empty */
   --radius: 16px;
   --shadow: 0 1px 2px rgba(11, 27, 51, .04), 0 10px 30px rgba(11, 27, 51, .05);
 
