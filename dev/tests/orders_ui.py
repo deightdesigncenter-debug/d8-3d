@@ -62,7 +62,7 @@ with sync_playwright() as p:
     op.goto(B + f"/admin#orders/new?customer={CID}"); op.wait_for_timeout(1500)
     ok(CODE in op.input_value("#ofCust"), "form opens with the customer filled in")
     code_preview = op.inner_text("#ofCodeOut")
-    ok(re.match(r"^\d{2}/\d{2}/\d{2}/\d{2,4}$", code_preview) is not None, "code preview " + code_preview)
+    ok(re.match(r"^\d{8,9}$", code_preview) is not None, "code preview " + code_preview)
     op.fill("#ofClinic", "Lux Smile"); op.fill("#ofDoctor", "Dr Kiệt"); op.fill("#ofPatient", "Chuang Tsung Wei"); op.fill("#ofRef", "KN" + stamp)
     op.fill('#ofItems [data-i="0"] [data-k="product"]', "CR"); op.wait_for_timeout(500)
     op.fill('#ofItems [data-i="0"] [data-k="teeth"]', "11-13"); op.wait_for_timeout(700)
@@ -86,17 +86,36 @@ with sync_playwright() as p:
     op.screenshot(path=f"{OUT}/order-page.png", full_page=True)
 
     # search
-    for q, why in [("chuang", "patient"), ("kiet", "doctor without accents"), (code_preview.replace("/", ""), "code without slashes"), (CODE, "customer code")]:
+    old_style = "/".join([code_preview[0:2], code_preview[2:4], code_preview[4:6], code_preview[6:]])
+    for q, why in [("chuang", "patient"), ("kiet", "doctor without accents"), (code_preview, "code"), (old_style, "code typed the old way"), (CODE, "customer code")]:
         op.goto(B + "/admin#orders"); op.wait_for_timeout(800)
         op.fill("#oQ", q); op.wait_for_timeout(1200)
         ok(code_preview in text(op, "#oList"), "list search by " + why)
     op.screenshot(path=f"{OUT}/orders-list.png", full_page=True)
 
-    # redo (R)
+    # the same case typed in again: the form says it is already in the book, with its code
+    op.goto(B + f"/admin#orders/new?customer={CID}"); op.wait_for_timeout(1500)
+    op.fill("#ofPatient", "chuang tsung wei"); op.wait_for_timeout(1300)
+    ok(op.is_visible("#ofDupes") and code_preview in text(op, "#ofDupes"), "duplicate warning shows the existing code " + code_preview)
+    op.fill('#ofItems [data-i="0"] [data-k="product"]', "CR"); op.wait_for_timeout(400)
+    op.click("#ofSave"); op.wait_for_timeout(900)
+    ok("#orders/new" in op.url and op.is_visible("#ofErr") and "đã có" in text(op, "#ofErr"), "saving is held back until confirmed")
+    op.screenshot(path=f"{OUT}/order-dupe.png", full_page=True)
+    op.check("#ofDupOk"); op.click("#ofSave"); op.wait_for_timeout(1800)
+    m2 = re.search(r"#orders/(\d+)$", op.url)
+    ok(m2 is not None, "after ticking 'this is another order' it is created")
+    if m2: op.evaluate("async (id) => (await fetch('/api/orders/' + id, {method: 'DELETE', headers: {'X-D8': '1'}})).status", m2.group(1))
+
+    # redo (R) and next stage (C): the code is shown before saving
     op.goto(B + f"/admin#orders/new?redo={OID}"); op.wait_for_timeout(1500)
+    ok(text(op, "#ofKidCode") == code_preview + "R1", "redo form shows the new code " + text(op, "#ofKidCode"))
     op.click("#ofSave"); op.wait_for_timeout(1800)
     ok(code_preview + "R1" in op.inner_text(".pt-band"), "redo order " + code_preview + "R1")
     ok(code_preview in text(op, ".o-fam") and "R1" in text(op, ".o-fam"), "family of orders shown")
+    op.goto(B + f"/admin#orders/new?continue={OID}"); op.wait_for_timeout(1500)
+    ok(text(op, "#ofKidCode") == code_preview + "C2", "next-stage form shows " + text(op, "#ofKidCode") + " (stage 1 is the plain code)")
+    op.click("#ofSave"); op.wait_for_timeout(1800)
+    ok(code_preview + "C2" in op.inner_text(".pt-band") and "Giai đoạn 2" in op.inner_text(".pt-band"), "stage 2 order " + code_preview + "C2")
 
     # KTV: no money, workflow, chat
     kc = ctx(); kp = kc.new_page(); watch(kp, "ktv")
@@ -109,6 +128,16 @@ with sync_playwright() as p:
     ok("US$" not in kb and "Thanh toán" not in kb and "Còn nợ" not in kb, "KTV order page shows no money")
     ok("CR" in kb and "IMC" in kb and "11-13" in kb, "KTV sees the items and teeth")
     kp.fill("#oChat textarea", "Anh ơi 12 cần dài thêm không?"); kp.click("#oChat [type=submit]"); kp.wait_for_timeout(900)
+    # a design file in the chat
+    stl = os.path.join(OUT, "11-13 crown v1.stl")
+    with open(stl, "w") as fh: fh.write("solid crown\n" + "facet normal 0 0 1\n" * 400 + "endsolid crown\n")
+    kp.set_input_files('#oChat [data-pick="file"]', stl); kp.wait_for_timeout(300)
+    ok("11-13 crown v1.stl" in text(kp, "#oChat .ochat-files"), "file waits under the message box")
+    kp.fill("#oChat textarea", "File thiết kế v1"); kp.click("#oChat [type=submit]"); kp.wait_for_timeout(2000)
+    ok(kp.query_selector("#oChat a.ochat-file") is not None and "11-13 crown v1.stl" in text(kp, "#oChat .ochat-list"), "file sent in the chat")
+    href = kp.eval_on_selector("#oChat a.ochat-file", "a => a.getAttribute('href')")
+    fr = kp.request.get(B + href)
+    ok(fr.status == 200 and fr.body().startswith(b"solid crown"), "file downloads from the chat")
     kp.click('[data-act="submit"]'); kp.wait_for_timeout(1000)
     ok("Chờ QC" in kp.inner_text(".pt-band"), "KTV sends to QC")
     kp.screenshot(path=f"{OUT}/ktv-order.png", full_page=True)

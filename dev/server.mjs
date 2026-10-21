@@ -118,7 +118,7 @@ const AI = {
 // Like D1 it refuses undefined values and counts queries: more than 50 in one request fails, as on the free plan
 // (each statement of a batch counted, to stay on the safe side).
 import { DatabaseSync } from "node:sqlite";
-const sdb = new DatabaseSync(":memory:");
+const sdb = new DatabaseSync(process.env.D1_FILE || ":memory:"); // D1_FILE: keep the local database between runs
 const D1_LIMIT = 50;
 function d1(counter) {
   const norm = (args) => args.map((v) => {

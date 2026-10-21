@@ -1161,7 +1161,8 @@
     if (!code) { $("ogOrderHint").textContent = ""; return; }
     try {
       const d = await api("/api/orders?status=&limit=5&q=" + encodeURIComponent(code));
-      const o = d.items.find((x) => x.code === code) || d.items[0];
+      const want = code.toUpperCase().replace(/[\s/._-]+/g, "");
+      const o = d.items.find((x) => x.code === want) || d.items[0];
       if (!o) { $("ogOrderHint").textContent = "Không tìm thấy đơn này."; return; }
       linkOrder = o;
       const t = D8.ogText(o, (o.previews || []).length, true);

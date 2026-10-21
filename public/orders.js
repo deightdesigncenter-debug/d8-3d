@@ -19,7 +19,12 @@
   const UNIT = { unit: "răng / đơn vị", arch: "hàm", case: "ca", hour: "giờ" };
   D8.OST = OST; D8.OST_ORDER = OST_ORDER; D8.UNIT_LABEL = UNIT;
   D8.ostChip = (s) => `<span class="ost ost-${esc(s)}">${esc(OST[s] || s)}</span>`;
-  const kindChip = (o) => (o.kind && o.kind !== "new" ? `<span class="okind okind-${esc(o.kind)}">${esc(KIND[o.kind])}</span>` : "");
+  // code 26102101R1C2: stage 1 is the plain code, C2 = stage 2, R1 = first redo
+  const lastSeg = (code) => { const m = /([RC])(\d+)$/.exec(String(code || "")); return m ? { k: m[1], n: +m[2] } : null; };
+  const codeSteps = (code) => (String(code || "").match(/[RC]\d+/g) || []).map((x) => (x[0] === "R" ? "làm lại " + x.slice(1) : "giai đoạn " + x.slice(1))).join(" → ");
+  const kindText = (o) => { const l = lastSeg(o.code); return !l ? (o.kind === "new" || !o.kind ? "Đơn mới · giai đoạn 1" : KIND[o.kind]) : l.k === "R" ? "Làm lại lần " + l.n : "Làm tiếp · giai đoạn " + l.n; };
+  const kindChip = (o) => { const l = lastSeg(o.code); return l ? `<span class="okind okind-${l.k === "R" ? "redo" : "continue"}">${esc(l.k === "R" ? "Làm lại " + l.n : "Giai đoạn " + l.n)}</span>` : ""; };
+  D8.codeSteps = codeSteps;
   D8.fmtMoney = (v, cur) => {
     if (v === null || v === undefined || v === "" || isNaN(v)) return "—";
     if (cur === "VND") return Math.round(v).toLocaleString("vi-VN") + " ₫";
@@ -42,6 +47,8 @@
     next: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5"/></svg>',
     edit: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M13.5 3.5l3 3L7 16H4v-3z"/></svg>',
     chat: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 5h14v9H8l-4 3v-3H3z"/></svg>',
+    clip: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M15.5 9.5 10 15a3.5 3.5 0 0 1-5-5l6-6a2.3 2.3 0 0 1 3.3 3.3l-6 6a1.2 1.2 0 0 1-1.7-1.7L12 6.2"/></svg>',
+    warn: '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 18 17H2z"/><path d="M10 8.5v4M10 14.6v.1"/></svg>',
   };
   D8.ORDER_ICON = ICON;
   const parseHash = () => {
@@ -257,14 +264,14 @@
     const charge0 = order ? order.charge || "charge" : kind === "redo" ? "warranty" : "charge";
     host.innerHTML = `<form id="ofForm" class="of" novalidate>
       <div class="of-main">
-        ${parent ? `<div class="pt-alert info">${ICON.redo}<div>${kind === "redo" ? "Làm lại" : "Làm tiếp giai đoạn"} từ đơn <a href="#orders/${parent.id}"><b>${esc(parent.code)}</b></a>. Mã đơn mới được tạo theo đơn gốc (thêm ${kind === "redo" ? "R" : "C"} + số lần).</div></div>` : ""}
+        ${parent ? `<div class="pt-alert info">${ICON.redo}<div>${kind === "redo" ? "Làm lại" : "Làm tiếp giai đoạn sau"} từ đơn <a href="#orders/${parent.id}"><b>${esc(parent.code)}</b></a> → mã đơn mới <b id="ofKidCode">…</b>. ${kind === "redo" ? "Làm lại thêm R + số lần làm lại (R1, R2…)." : "Giai đoạn 1 là mã gốc, làm tiếp thêm C + số giai đoạn (C2, C3…)."}</div></div>` : ""}
         ${portal ? `<div class="pt-alert info">${ICON.chat}<div>Đơn này khách gửi qua cổng khách hàng. Khách hàng, ngày nhận, phân công và trạng thái theo trang ca; ở đây sửa hạng mục, thông tin và tiền.</div></div>` : ""}
         <section class="card"><h2 class="h-caps">Thông tin đơn</h2>
           <div class="of-grid3">
             <div><label class="field-label" for="ofDay">Ngày nhận</label><input class="input" type="date" id="ofDay" value="${esc(src.day && order ? src.day : today)}"${portal || parent ? " disabled" : ""} required></div>
             <div><label class="field-label" for="ofCode">Mã đơn</label>
               <div class="of-code"><output id="ofCodeOut">${esc(order ? order.code : "…")}</output>${!parent && !portal && (!order || order.kind === "new") ? '<button class="linkbtn" type="button" id="ofCodeEdit">Sửa mã</button>' : ""}</div>
-              <input class="input" id="ofCode" hidden placeholder="yy/mm/dd/xx" value="${esc(order ? order.code : "")}" autocomplete="off">
+              <input class="input" id="ofCode" hidden placeholder="yymmddxx, VD 26102101" value="${esc(order ? order.code : "")}" autocomplete="off" style="text-transform:uppercase">
               <p class="hint" id="ofCodeHint">${parent ? "Tạo khi lưu." : order ? "Theo ngày nhận." : "Tự đánh số theo ngày nhận."}</p></div>
             <div><label class="field-label" for="ofDue">Hạn giao</label><input class="input" type="datetime-local" id="ofDue" value="${esc(toLocalInput(src.due_at && order ? src.due_at : 0))}"></div>
           </div>
@@ -277,7 +284,8 @@
             <div><label class="field-label" for="ofClinic">Nha khoa / phòng khám</label><input class="input" id="ofClinic" maxlength="120" list="ofClinicList" value="${esc(src.clinic || "")}" placeholder="Khi khách là lab: phòng khám cuối"><datalist id="ofClinicList"></datalist></div>
             <div><label class="field-label" for="ofDoctor">Bác sĩ</label><input class="input" id="ofDoctor" maxlength="120" list="ofDoctorList" value="${esc(src.doctor || "")}"><datalist id="ofDoctorList"></datalist></div>
             <div class="span2"><label class="field-label" for="ofPatient">Bệnh nhân</label><input class="input" id="ofPatient" maxlength="120" value="${esc(src.patient || "")}" placeholder="Tên hoặc mã bệnh nhân"></div>
-          </div></section>
+          </div>
+          <div id="ofDupes" class="of-dupes" aria-live="polite" hidden></div></section>
         <section class="card"><div class="card-head-row"><h2 class="h-caps">Hạng mục</h2><span class="hint" style="margin:0">Mã hàng chung cho mọi khách · giá theo bảng giá của khách</span></div>
           <div class="of-items" id="ofItems"></div>
           <datalist id="ofProdList">${prods.filter((p) => p.active).map((p) => `<option value="${esc(p.code)}">${esc(p.name)}</option>`).join("")}</datalist>
@@ -322,6 +330,7 @@
         </section>
       </aside></form>`;
     W.show("p-order-edit");
+    const err0 = (m) => { $("ofErr").textContent = m; $("ofErr").hidden = !m; };
 
     const prodOf = (code) => prods.find((p) => p.code === String(code || "").trim().toUpperCase());
     const priceFor = (code) => {
@@ -399,14 +408,45 @@
       if (!d) return;
       try { const r = await api("/api/orders/next-code?day=" + d); if (!st.codeEdit) { $("ofCodeOut").textContent = r.code; $("ofSumCode").textContent = r.code; } } catch {}
     };
+    // redo / next stage: show the code it will get (and say so at once if that stage already exists)
+    if (parent && !order) api(`/api/orders/${parent.id}/next?kind=${kind}`).then((r) => { $("ofKidCode").textContent = r.code; $("ofCodeOut").textContent = r.code; $("ofSumCode").textContent = r.code; })
+      .catch((ex) => { $("ofKidCode").textContent = "—"; err0(ex.message); if (ex.data && ex.data.id) $("ofErr").innerHTML = esc(ex.message) + ` <a href="#orders/${ex.data.id}">Mở đơn đó</a>`; });
+    // "is this order already in the book?" while a new order is typed in (an admin or another KTV may have entered it)
+    const dupBox = $("ofDupes");
+    let dupList = [], dupT = 0, dupSeq = 0;
+    const drawDupes = () => {
+      if (!dupList.length) { dupBox.hidden = true; dupBox.innerHTML = ""; return; }
+      const ok0 = $("ofDupOk") && $("ofDupOk").checked;
+      dupBox.hidden = false;
+      dupBox.innerHTML = `<div class="pt-alert warn">${ICON.warn}<div><b>Đơn này có thể đã có trong sổ</b> — ${dupList.length > 1 ? "các case này đã có mã đơn hàng" : "case này đã có mã đơn hàng"}:
+        <ul>${dupList.map((x) => `<li>${x.canOpen ? `<a href="#orders/${x.id}"><b>${esc(x.code)}</b></a>` : `<b>${esc(x.code)}</b>`} · ${esc(x.patient || x.ref || "—")} · ${esc(x.customer_code)} · nhận ${esc(fmtDay(x.day))} · ${esc(OST[x.status] || x.status)}
+          · ${x.source === "portal" ? "khách gửi qua cổng khách" : "nhập bởi " + esc(name(x.created_by) || x.created_by)}${x.designer ? " · KTV " + esc(name(x.designer)) : ""}
+          <small>${x.match === "ref" ? "trùng mã của khách" : "trùng tên bệnh nhân"}${x.canOpen ? "" : " · đơn chưa giao cho bạn, hỏi quản trị nếu cần nhận làm"}</small></li>`).join("")}</ul>
+        <label class="check"><input type="checkbox" id="ofDupOk"${ok0 ? " checked" : ""}> Đây là đơn khác, vẫn tạo đơn mới</label></div></div>`;
+    };
+    const checkDupes = () => {
+      if (order || parent) return;
+      clearTimeout(dupT);
+      dupT = setTimeout(async () => {
+        const pt = $("ofPatient").value.trim(), ref = $("ofRef").value.trim();
+        if (pt.length < 3 && !(ref && st.cust)) { dupList = []; drawDupes(); return; }
+        const n = ++dupSeq;
+        try {
+          const r = await api(`/api/orders/dupes?patient=${encodeURIComponent(pt)}&ref=${encodeURIComponent(ref)}&customer=${st.cust ? st.cust.id : ""}`);
+          if (n === dupSeq) { dupList = r.dupes || []; drawDupes(); }
+        } catch {}
+      }, 450);
+    };
+    ["ofPatient", "ofRef"].forEach((k) => $(k).addEventListener("input", checkDupes));
     $("ofCust").addEventListener("change", setCust);
-    $("ofCust").addEventListener("input", () => { if (custs.some((c) => D8.book.custLabel(c) === $("ofCust").value)) setCust(); });
+    $("ofCust").addEventListener("change", checkDupes);
+    $("ofCust").addEventListener("input", () => { if (custs.some((c) => D8.book.custLabel(c) === $("ofCust").value)) { setCust(); checkDupes(); } });
     $("ofDay").addEventListener("change", codePreview);
     const ce = $("ofCodeEdit");
     if (ce) ce.addEventListener("click", () => {
       st.codeEdit = !st.codeEdit; $("ofCode").hidden = !st.codeEdit;
       ce.textContent = st.codeEdit ? "Dùng mã tự động" : "Sửa mã";
-      $("ofCodeHint").textContent = st.codeEdit ? "Gõ mã cũ dạng yy/mm/dd/xx (VD " + ($("ofCodeOut").textContent || "26/10/20/01") + ")." : "Tự đánh số theo ngày nhận.";
+      $("ofCodeHint").textContent = st.codeEdit ? "Gõ mã cũ dạng yymmddxx (VD " + ($("ofCodeOut").textContent || "26102101") + ")." : "Tự đánh số theo ngày nhận.";
       if (st.codeEdit) { if (!$("ofCode").value) $("ofCode").value = $("ofCodeOut").textContent; $("ofCode").focus(); }
     });
     $("ofAdd").addEventListener("click", () => { st.items.push({ product: "", teeth: "", qty: 1, note: "", auto: true }); drawItems(); $("ofItems").querySelector(`[data-i="${st.items.length - 1}"] [data-k="product"]`).focus(); });
@@ -424,6 +464,7 @@
       e.preventDefault();
       const err = $("ofErr"); err.hidden = true;
       const fail = (m, el) => { err.textContent = m; err.hidden = false; if (el) el.focus(); };
+      if (dupList.length && !($("ofDupOk") && $("ofDupOk").checked)) { dupBox.scrollIntoView({ block: "center", behavior: "smooth" }); return fail("Đơn này có thể đã có (xem khung đỏ ở trên). Mở đơn đã có, hoặc tick \"Đây là đơn khác\" để vẫn tạo đơn mới."); }
       if (!st.cust && !portal && !parent) return fail("Chọn khách hàng có trong danh sách.", $("ofCust"));
       const its = st.items.filter((x) => String(x.product || "").trim());
       const bad = its.find((x) => !prodOf(x.product));
@@ -446,13 +487,18 @@
       if (stSel && stSel.value) { body.status = stSel.value; if (stSel.value === "delivered") body.delivered = $("ofDel").value; }
       if ($("ofChat") && $("ofChat").value.trim()) body.chat = $("ofChat").value.trim();
       if (parent) { body.kind = kind; body.parent_id = parent.id; }
+      if (!order && !parent && !($("ofDupOk") && $("ofDupOk").checked)) body.check_dupes = true;
       const btn = $("ofSave"); D8.busy(btn, true);
       try {
         const r = order ? await api("/api/orders/" + order.id, { method: "POST", body }) : await api("/api/orders", { method: "POST", body });
         D8.toast(order ? "Đã lưu đơn " + r.order.code + "." : "Đã tạo đơn " + r.order.code + ".");
         listData = null;
         location.hash = "#orders/" + r.order.id;
-      } catch (ex) { D8.busy(btn, false); fail(ex.message); }
+      } catch (ex) {
+        D8.busy(btn, false);
+        if (ex.data && ex.data.code === "dupe") { dupList = ex.data.dupes || []; drawDupes(); dupBox.scrollIntoView({ block: "center", behavior: "smooth" }); }
+        fail(ex.message);
+      }
     });
   }
 
@@ -493,10 +539,10 @@
       if (["delivered", "cancelled", "hold"].includes(o.status) && (can("cases.status") || can("cases.qc"))) acts.push(["reopen", "Mở lại", ""]);
     }
     const needNote = acts.some((a) => a[0] === "fail" || a[0] === "cancel");
-    const fam = (d.related || []).length > 1 ? `<nav class="o-fam" aria-label="Đơn cùng ca">${d.related.map((x) => `<a href="#orders/${x.id}"${x.id === o.id ? ' aria-current="page"' : ""}><b>${esc(x.code)}</b><small>${esc(KIND[x.kind])} · ${esc(OST[x.status] || x.status)}</small></a>`).join("")}</nav>` : "";
+    const fam = (d.related || []).length > 1 ? `<nav class="o-fam" aria-label="Đơn cùng ca">${d.related.map((x) => `<a href="#orders/${x.id}"${x.id === o.id ? ' aria-current="page"' : ""}><b>${esc(x.code)}</b><small>${esc(lastSeg(x.code) ? codeSteps(x.code) : "giai đoạn 1")} · ${esc(OST[x.status] || x.status)}</small></a>`).join("")}</nav>` : "";
     const det = [["Khách hàng", o.customer_code + " — " + o.customer_name], ["Nha khoa", o.clinic], ["Bác sĩ", o.doctor], ["Bệnh nhân", o.patient], ["Mã của khách", o.ref],
       ["Ngày nhận", fmtDay(o.day)], ["Hạn giao", o.due_at ? D8.fmtDate(o.due_at, true) : ""], ["Ngày giao", o.dday ? fmtDay(o.dday) : ""],
-      ["Dịch vụ", D8.svcLabel(o.service)], ["Vật liệu", o.material], ["Màu", o.shade], ["Loại đơn", KIND[o.kind]], ["Nguồn", o.source === "portal" ? "Cổng khách hàng" : o.source === "import" ? "Nhập từ Excel" : "Nhập tay"]]
+      ["Dịch vụ", D8.svcLabel(o.service)], ["Vật liệu", o.material], ["Màu", o.shade], ["Loại đơn", kindText(o) + (codeSteps(o.code) ? " (" + codeSteps(o.code) + ")" : "")], ["Nguồn", o.source === "portal" ? "Cổng khách hàng" : o.source === "import" ? "Nhập từ Excel" : "Nhập tay"]]
       .filter((r) => r[1]).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
     const items = d.items || [];
     const itemsHtml = items.length ? `<div class="tbl-wrap"><table class="grid-tbl o-items"><thead><tr><th>Mã hàng</th><th>Răng</th><th class="num">SL</th>${m ? '<th class="num">Đơn giá</th><th class="num">Thành tiền</th>' : ""}</tr></thead>
@@ -611,19 +657,36 @@
   D8.orderChat = function (host, orderId) {
     host.innerHTML = `<div class="ochat"><div class="ochat-list" id="ocList-${orderId}" role="log" aria-live="polite">${D8.skel.rows(2)}</div>
       <form class="ochat-form"><label class="sr-only" for="ocText-${orderId}">Tin nhắn nội bộ</label>
-        <textarea class="input" id="ocText-${orderId}" rows="2" maxlength="4000" placeholder="Nhắn cho KTV / QC về đơn này… (dán ảnh chụp màn hình bằng Ctrl+V)"></textarea>
+        <textarea class="input" id="ocText-${orderId}" rows="2" maxlength="4000" placeholder="Nhắn cho KTV / QC về đơn này… (dán ảnh chụp màn hình bằng Ctrl+V, kéo thả file vào đây)"></textarea>
         <div class="ochat-img" hidden><img alt=""><button class="iconbtn" type="button" aria-label="Bỏ ảnh">${ICON.x}</button></div>
-        <div class="ochat-foot"><label class="btn small ochat-pick" title="Gửi ảnh">${ICON.img}<span>Ảnh</span><input type="file" accept="image/*" hidden></label><span class="hint">Ctrl + Enter để gửi</span><button class="btn btn-primary small" type="submit">Gửi</button></div>
+        <ul class="ochat-files" hidden></ul>
+        <div class="ochat-foot"><label class="btn small ochat-pick" title="Gửi ảnh">${ICON.img}<span>Ảnh</span><input type="file" accept="image/*" hidden data-pick="img"></label>
+          <label class="btn small ochat-pick" title="Gửi file (STL, PLY, HTML exocad, PDF, ZIP…)">${ICON.clip}<span>File</span><input type="file" multiple hidden data-pick="file"></label>
+          <span class="hint">Ctrl + Enter để gửi</span><button class="btn btn-primary small" type="submit">Gửi</button></div>
+        <p class="hint ochat-prog" hidden></p>
         <p class="error" hidden></p></form></div>`;
     const list = host.querySelector(".ochat-list"), form = host.querySelector("form"), box = form.querySelector("textarea"), err = form.querySelector(".error");
-    const prevBox = form.querySelector(".ochat-img"), prevImg = prevBox.querySelector("img");
-    let msgs = [], last = 0, img = "", timer = null, loading = false;
+    const prevBox = form.querySelector(".ochat-img"), prevImg = prevBox.querySelector("img"), fileBox = form.querySelector(".ochat-files"), prog = form.querySelector(".ochat-prog");
+    let msgs = [], last = 0, img = "", files = [], timer = null, loading = false;
+    const FILE_MAX = 300 * 1024 * 1024;
+    const drawFiles = () => {
+      fileBox.hidden = !files.length;
+      fileBox.innerHTML = files.map((f, i) => `<li>${ICON.clip}<span>${esc(f.name)}</span><small>${esc(D8.size(f.size))}</small><button class="iconbtn" type="button" data-rmf="${i}" aria-label="Bỏ ${esc(f.name)}">${ICON.x}</button></li>`).join("");
+      fileBox.querySelectorAll("[data-rmf]").forEach((b) => b.addEventListener("click", () => { files.splice(+b.dataset.rmf, 1); drawFiles(); }));
+    };
+    const addFiles = (list) => {
+      for (const f of list) {
+        if (f.size > FILE_MAX) { D8.toast("File " + f.name + " quá lớn (tối đa 300 MB)."); continue; }
+        if (!files.some((x) => x.name === f.name && x.size === f.size)) files.push(f);
+      }
+      files = files.slice(0, 10); drawFiles();
+    };
     const me = (D8.user && D8.user.email) || "";
     const draw = () => {
       if (!msgs.length) { list.innerHTML = '<p class="muted ochat-empty">Chưa có tin nhắn. Hỏi đáp về thiết kế, QC, chỉnh sửa… đều ghi lại ở đây theo mã đơn.</p>'; return; }
       const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
       list.innerHTML = msgs.map((x) => x.kind === "sys" ? `<div class="sys">${esc(D8.fmtDate(x.at, true))} · ${esc(x.name || name(x.by) || "")}: ${esc(x.text)}</div>`
-        : `<div class="bub ${x.by === me ? "me" : "them"}">${x.by === me ? "" : `<b>${esc(x.name || name(x.by))}</b>`}${x.text ? `<div class="bub-text">${esc(x.text)}</div>` : ""}${x.img ? `<a class="ochat-photo" data-mid="${x.id}" href="#" aria-label="Mở ảnh"><img alt="Ảnh" data-mid="${x.id}"></a>` : ""}<small>${esc(D8.fmtDate(x.at, true))}</small></div>`).join("");
+        : `<div class="bub ${x.by === me ? "me" : "them"}">${x.by === me ? "" : `<b>${esc(x.name || name(x.by))}</b>`}${x.text ? `<div class="bub-text">${esc(x.text)}</div>` : ""}${x.img ? `<a class="ochat-photo" data-mid="${x.id}" href="#" aria-label="Mở ảnh"><img alt="Ảnh" data-mid="${x.id}"></a>` : ""}${(x.files || []).map((f) => `<a class="ochat-file" href="/api/orders/${orderId}/files/${esc(f.fid)}" download="${esc(f.name)}">${ICON.clip}<span class="fn">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span></a>`).join("")}<small>${esc(D8.fmtDate(x.at, true))}</small></div>`).join("");
       list.querySelectorAll("img[data-mid]").forEach(async (im) => { const u = await imgUrl(orderId, im.dataset.mid); if (u) im.src = u; else im.alt = "Ảnh đã hết hạn"; });
       list.querySelectorAll("a.ochat-photo").forEach((a) => a.addEventListener("click", async (e) => { e.preventDefault(); const u = await imgUrl(orderId, a.dataset.mid); if (u) window.open(u, "_blank", "noopener"); }));
       if (atBottom || !draw.done) list.scrollTop = list.scrollHeight;
@@ -647,21 +710,33 @@
       if (!file || !/^image\//.test(file.type)) return;
       try { img = await toJpeg(file); prevImg.src = img; prevBox.hidden = false; } catch { D8.toast("Không đọc được ảnh này."); }
     };
-    form.querySelector('input[type="file"]').addEventListener("change", (e) => { setImg(e.target.files[0]); e.target.value = ""; });
+    form.querySelector('[data-pick="img"]').addEventListener("change", (e) => { setImg(e.target.files[0]); e.target.value = ""; });
+    form.querySelector('[data-pick="file"]').addEventListener("change", (e) => { addFiles([...e.target.files]); e.target.value = ""; });
+    form.addEventListener("dragover", (e) => { if ([...(e.dataTransfer ? e.dataTransfer.types : [])].includes("Files")) { e.preventDefault(); form.classList.add("drop"); } });
+    form.addEventListener("dragleave", (e) => { if (!form.contains(e.relatedTarget)) form.classList.remove("drop"); });
+    form.addEventListener("drop", (e) => { e.preventDefault(); form.classList.remove("drop"); addFiles([...(e.dataTransfer ? e.dataTransfer.files : [])]); });
     prevBox.querySelector("button").addEventListener("click", () => { img = ""; prevBox.hidden = true; prevImg.removeAttribute("src"); });
     box.addEventListener("paste", (e) => { const f = [...(e.clipboardData ? e.clipboardData.files : [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); setImg(f); } });
     box.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); form.requestSubmit(); } });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = box.value.trim();
-      if (!text && !img) return box.focus();
+      if (!text && !img && !files.length) return box.focus();
       const b = form.querySelector("[type=submit]"); D8.busy(b, true); err.hidden = true;
       try {
-        await api(`/api/orders/${orderId}/chat`, { method: "POST", body: { text, ...(img ? { img } : {}) } });
-        box.value = ""; img = ""; prevBox.hidden = true; D8.busy(b, false);
+        if (img || (text && !files.length)) await api(`/api/orders/${orderId}/chat`, { method: "POST", body: { text: files.length ? "" : text, ...(img ? { img } : {}) } });
+        img = ""; prevBox.hidden = true;
+        if (files.length) {
+          const base = `/api/orders/${orderId}/files`;
+          prog.hidden = false;
+          const metas = await D8.uploadParts(base, files, { onProgress: (p) => { prog.textContent = p.text; } });
+          await api(base, { method: "POST", body: { files: metas, text } });
+          files = []; drawFiles(); prog.hidden = true;
+        }
+        box.value = ""; D8.busy(b, false);
         await load();
         list.scrollTop = list.scrollHeight;
-      } catch (ex) { D8.busy(b, false); err.textContent = ex.message; err.hidden = false; }
+      } catch (ex) { D8.busy(b, false); prog.hidden = true; err.textContent = ex.message; err.hidden = false; }
     });
   };
 

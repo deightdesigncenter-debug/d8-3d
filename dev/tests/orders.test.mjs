@@ -1,4 +1,4 @@
-// Order book (D1): product codes, price lists, customers, order codes yy/mm/dd/xx with R / C, search,
+// Order book (D1): product codes, price lists, customers, order codes yymmddxx with R / C, search, "already in the book" check, files in the chat,
 // permissions (KTV never sees money), workflow, team chat, payments matched to orders, reports, export, import,
 // portal cases becoming orders, 3D link previews. Run against: PAY=1 node dev/server.mjs public 8788 mat-khau-thu
 import { B, PW, ok, done, signin, uniq } from "./lib.mjs";
@@ -55,7 +55,7 @@ ok(r.data.own.length === 2 && r.data.defaults.some((d) => d.product === ZR), "pr
 // ---------- order codes
 const day = "2026-10-20";
 const before = (await sql(`SELECT COALESCE(MAX(seq),0) AS m FROM orders WHERE cday='${day}' AND kind='new'`))[0].m;
-const code = (n) => "26/10/20/" + String(before + n).padStart(2, "0");
+const code = (n) => "261020" + String(before + n).padStart(2, "0");
 r = await owner("/api/orders", { method: "POST", body: { customer_id: jake, received: day, patient: "John Smith", doctor: "Dr Jake", clinic: "Smile Co",
   items: [{ product: "CR", teeth: "11, 21", qty: 2 }, { product: "IMC", qty: 1 }], adj_pct: 50 } });
 ok(r.status === 201 && r.data.order.code === code(1), "first order of the day: " + (r.data.order && r.data.order.code));
@@ -65,8 +65,8 @@ r = await owner("/api/orders", { method: "POST", body: { customer_id: jake, rece
 ok(r.data.order.code === code(2) && r.data.order.total === 12, "second order of the day " + r.data.order.code + ", default price used");
 const o2 = r.data.order;
 r = await owner("/api/orders", { method: "POST", body: { customer_id: jake, received: "2026-09-18", items: [{ product: "CR" }] } });
-ok(/^26\/09\/18\/\d{2}$/.test(r.data.order.code), "code follows the date received: " + r.data.order.code);
-const typed = "26/10/20/" + String(before + 40).padStart(2, "0");
+ok(/^260918\d{2}$/.test(r.data.order.code), "code follows the date received: " + r.data.order.code);
+const typed = "261020" + String(before + 40).padStart(2, "0");
 r = await owner("/api/orders", { method: "POST", body: { customer_id: jake, received: day, code: typed, items: [{ product: "CR" }] } });
 ok(r.status === 201 && r.data.order.code === typed, "old order keeps a typed code");
 const oTyped = r.data.order;
@@ -74,27 +74,40 @@ r = await owner("/api/orders", { method: "POST", body: { customer_id: jake, rece
 ok(r.status === 409, "typed code cannot be used twice");
 r = await owner("/api/orders", { method: "POST", body: { customer_id: jake, code: "2026/10/20" } });
 ok(r.status === 400, "bad code format refused");
+const oldStyle = "26/10/20/" + String(before + 45).padStart(2, "0");
+r = await owner("/api/orders", { method: "POST", body: { customer_id: jake, received: day, code: oldStyle, items: [{ product: "CR" }] } });
+ok(r.status === 201 && r.data.order.code === oldStyle.replace(/\//g, ""), "an old-style code 26/10/20/xx is stored as " + (r.data.order && r.data.order.code));
+const oOld = r.data.order;
 r = await owner("/api/orders", { method: "POST", body: { customer_id: jake, items: [{ product: "NOPE" }] } });
 ok(r.status === 400, "unknown product code refused");
 
 // redo (R) and next stage (C)
 const child = async (parent, kind) => (await owner("/api/orders", { method: "POST", body: { kind, parent_id: parent.id, items: [{ product: "CR" }] } })).data.order;
+// the owner's rules: stage 1 = 26102101, stage 2 = 26102101C2, first redo = 26102101R1, redo then stage 2 = 26102101R1C2
+r = await owner(`/api/orders/${o1.id}/next?kind=redo`);
+ok(r.status === 200 && r.data.code === o1.code + "R1", "the form shows the redo code before saving: " + r.data.code);
 const r1 = await child(o1, "redo");
 ok(r1.code === o1.code + "R1" && r1.kind === "redo" && r1.charge === "warranty" && r1.total === 0, "redo → " + r1.code + ", free under warranty by default");
 const r2 = await child(r1, "redo");
 ok(r2.code === o1.code + "R2", "second redo → " + r2.code);
-const c1 = await child(o1, "continue");
-ok(c1.code === o1.code + "C1" && c1.total === 30, "next stage → " + c1.code + " (charged)");
-const c2 = await child(c1, "continue");
-ok(c2.code === o1.code + "C2", "following stage → " + c2.code);
-const c1r = await child(c1, "redo");
-ok(c1r.code === o1.code + "C1R1", "redo of a stage → " + c1r.code);
-const c3 = await child(c1r, "continue");
-ok(c3.code === o1.code + "C3", "stage after a redone stage → " + c3.code);
+const c2 = await child(o1, "continue");
+ok(c2.code === o1.code + "C2" && c2.kind === "continue" && c2.stage === 2 && c2.total === 30, "stage 2 → " + c2.code + " (charged)");
+const c3 = await child(c2, "continue");
+ok(c3.code === o1.code + "C3" && c3.stage === 3, "stage 3 → " + c3.code);
+const r1c2 = await child(r1, "continue");
+ok(r1c2.code === o1.code + "R1C2" && r1c2.stage === 2, "redo, then stage 2 → " + r1c2.code);
+const c2r1 = await child(c2, "redo");
+ok(c2r1.code === o1.code + "C2R1", "redo of stage 2 → " + c2r1.code);
+r = await owner("/api/orders", { method: "POST", body: { kind: "continue", parent_id: o1.id, items: [{ product: "CR" }] } });
+ok(r.status === 409 && r.data.id === c2.id, "stage 2 cannot be made twice (points to " + o1.code + "C2)");
+r = await owner(`/api/orders/${r1c2.id}/next?kind=continue`);
+ok(r.data.code === o1.code + "R1C3", "after R1C2 the next stage is " + r.data.code);
+const r3 = await child(o1, "redo");
+ok(r3.code === o1.code + "R3", "another redo of the original counts on → " + r3.code);
 r = await owner("/api/orders/" + o1.id);
-ok(r.data.related.map((x) => x.code).join(" ") === [o1.code, o1.code + "C1", o1.code + "C1R1", o1.code + "C2", o1.code + "C3", o1.code + "R1", o1.code + "R2"].join(" "), "order page lists the whole family: " + r.data.related.map((x) => x.code).join(" "));
+ok(r.data.related.map((x) => x.code).join(" ") === ["", "C2", "C2R1", "C3", "R1", "R1C2", "R2", "R3"].map((x) => o1.code + x).join(" "), "order page lists the whole family: " + r.data.related.map((x) => x.code).join(" "));
 r = await owner("/api/orders/next-code?day=" + day);
-ok(r.data.code === code(41), "next code continues after the highest number of the day: " + r.data.code);
+ok(r.data.code === code(46), "next code continues after the highest number of the day: " + r.data.code);
 
 // search: code, patient, doctor, clinic, customer, without accents
 const find = async (q) => ((await owner("/api/orders?limit=200&q=" + encodeURIComponent(q))).data.items || []).map((x) => x.code);
@@ -104,7 +117,8 @@ ok((await find("smile co")).includes(o1.code), "search by clinic");
 ok((await find(J)).includes(o2.code), "search by customer code");
 ok((await find("colorado")).includes(o2.code), "search by customer name");
 ok((await find("kiet")).includes(o2.code), "search without accents (Kiệt)");
-ok((await find(o1.code.replace(/\//g, ""))).includes(o1.code), "search by code without slashes");
+ok((await find(o1.code)).includes(o1.code), "search by code");
+ok((await find(o1.code.slice(0, 2) + "/" + o1.code.slice(2, 4) + "/" + o1.code.slice(4, 6) + "/" + o1.code.slice(6))).includes(o1.code), "search by a code typed the old way (26/10/20/xx)");
 ok((await find(o1.code + "R2")).length === 1, "search by full redo code");
 
 // ---------- team: KTV and QC
@@ -185,6 +199,46 @@ ok(r.status === 403, "KTV cannot assign people");
 r = await ktv("/api/customers");
 ok(r.status === 200 && r.data.customers.every((c) => !("billed" in c) && !("phone" in c)), "KTV picks customers by name only");
 
+// "this order is already in the book": a KTV typing an order the admin already entered is told so, with its code
+r = await ktv2("/api/orders/dupes?patient=john%20smith&customer=" + jake);
+ok(r.status === 403, "staff who cannot enter orders get no duplicate check");
+await owner("/api/staff", { method: "POST", body: { email: KTV2, role: "designer", perms: [...desPerms, "orders.edit"] } });
+r = await ktv2("/api/orders/dupes?patient=" + encodeURIComponent("JOHN  smith") + "&customer=" + jake);
+const dj = (r.data.dupes || []).find((x) => x.id === o1.id);
+ok(r.status === 200 && dj && dj.code === o1.code && dj.match === "patient" && dj.canOpen === false && !("total" in dj), "KTV sees the existing order code " + (dj && dj.code) + " (no money, cannot open it)");
+ok(!(r.data.dupes || []).some((x) => x.kind !== "new" && x.patient !== "John Smith"), "duplicates are matched on the patient");
+r = await ktv2("/api/orders/dupes?patient=Nobody%20Here&customer=" + jake);
+ok(r.status === 200 && r.data.dupes.length === 0, "no false alarm for a new patient");
+r = await owner("/api/orders", { method: "POST", body: { customer_id: alls, received: day, patient: "Mai Anh", ref: "AS-7781", items: [{ product: "CR" }] } });
+const oRef = r.data.order;
+r = await ktv2("/api/orders/dupes?ref=AS-7781&customer=" + alls);
+ok(r.data.dupes.length === 1 && r.data.dupes[0].code === oRef.code && r.data.dupes[0].match === "ref", "same customer case number found: " + oRef.code);
+r = await ktv2("/api/orders", { method: "POST", body: { customer_id: alls, received: day, patient: "mai anh", check_dupes: true, items: [{ product: "CR" }] } });
+ok(r.status === 409 && r.data.code === "dupe" && r.data.dupes.some((x) => x.code === oRef.code), "saving it asks first: already in the book as " + oRef.code);
+r = await ktv2("/api/orders", { method: "POST", body: { customer_id: alls, received: day, patient: "mai anh", items: [{ product: "CR" }] } });
+ok(r.status === 201, "after confirming it is a different order, it is created");
+await owner("/api/orders/" + r.data.order.id, { method: "DELETE" });
+await owner("/api/orders/" + oRef.id, { method: "DELETE" });
+await owner("/api/staff", { method: "POST", body: { email: KTV2, role: "designer", perms: null } });
+
+// files in the team chat (sent in parts like case files)
+const fid = "Fa1b2C3d4E", partA = Buffer.from("solid crown\n" + "x".repeat(3000)), partB = Buffer.from("endsolid crown\n");
+const put = (who, n, buf, f = fid) => fetch(`${B}/api/orders/${o1.id}/files/${f}/${n}`, { method: "PUT", headers: { ...who.headers, "Content-Type": "application/octet-stream" }, body: buf });
+ok((await put(ktv, 0, partA)).status === 200 && (await put(ktv, 1, partB)).status === 200, "KTV uploads a file in two parts");
+r = await ktv(`/api/orders/${o1.id}/files`, { method: "POST", body: { files: [{ fid: "Zz9y8X7w6V", name: "missing.stl", size: 10, stored: 10, parts: 1 }], text: "x" } });
+ok(r.status === 400, "a file that was not uploaded is refused");
+r = await ktv(`/api/orders/${o1.id}/files`, { method: "POST", body: { files: [{ fid, name: "11-21 crown v2.stl", size: partA.length + partB.length, stored: partA.length + partB.length, parts: 2, gz: 0 }], text: "File thiết kế v2" } });
+ok(r.status === 200 && r.data.files === 1, "file sent in the chat with a note");
+r = await qc(`/api/orders/${o1.id}/chat`);
+const fm = r.data.msgs.find((m) => m.files && m.files.length);
+ok(fm && fm.text === "File thiết kế v2" && fm.files[0].name === "11-21 crown v2.stl" && fm.files[0].fid === fid, "QC sees the file in the chat");
+const dl = await fetch(`${B}/api/orders/${o1.id}/files/${fid}`, { headers: qc.headers });
+const got = Buffer.from(await dl.arrayBuffer());
+ok(dl.status === 200 && got.equals(Buffer.concat([partA, partB])) && /attachment/.test(dl.headers.get("content-disposition") || ""), "QC downloads the same file (" + got.length + " bytes)");
+ok((await fetch(`${B}/api/orders/${o1.id}/files/${fid}`, { headers: ktv2.headers })).status === 404, "staff not on the order cannot download it");
+ok([401, 403].includes((await fetch(`${B}/api/orders/${o1.id}/files/${fid}`, { headers: cust0.headers })).status), "customers cannot download team files");
+ok((await put(cust0, 0, partA, "Qq1w2e3r4T")).status >= 400, "customers cannot upload team files");
+
 // ---------- payments matched to orders (deposit, payment for one order, cancellation)
 const mk = async (d, qty) => (await owner("/api/orders", { method: "POST", body: { customer_id: alls, received: d, items: [{ product: "CR", qty }] } })).data.order;
 const oa = await mk("2026-09-18", 3), ob = await mk("2026-10-01", 2), oc = await mk("2026-10-05", 1);
@@ -240,21 +294,28 @@ ok(r.status === 200 && r.data.done === 1, "import of the valid rows only");
 r = await owner("/api/import/prices", { method: "POST", body: { partial: true, rows: [{ customer: K, product: "CR", price: 150000 }, { customer: "NOPE", product: "CR", price: 1 }, { customer: "", product: "CR", currency: "VND", price: 120000 }] } });
 ok(r.data.done === 2 && r.data.errors.length === 1, "price import (one bad customer code)");
 const kn = (await owner("/api/customers")).data.customers.find((c) => c.code === K);
-const t5 = "26/08/05/05";
-const existing5 = (await sql(`SELECT COUNT(*) AS n FROM orders WHERE code='${t5}'`))[0].n;
+const t5 = "26/08/05/05", t5n = "26080505";
+const existing5 = (await sql(`SELECT COUNT(*) AS n FROM orders WHERE code='${t5n}'`))[0].n;
 r = await owner("/api/import/orders", { method: "POST", body: { dry: true, rows: [{ key: "A1", day: "2026-08-05", customer: K, patient: "P1", items: [{ product: "CR", qty: 2 }], paid: "x", status: "delivered" }] } });
 ok(r.status === 200 && r.data.preview.length === 1 && (await sql(`SELECT COUNT(*) AS n FROM orders WHERE customer_id=${kn.id}`))[0].n === 0, "dry run saves nothing");
 r = await owner("/api/import/orders", { method: "POST", body: { rows: [
   { key: "A1", day: "2026-08-05", customer: K, patient: "P1", doctor: "BS Kiệt", items: [{ product: "CR", qty: 2, teeth: "11 21" }], paid: "x", status: "delivered", designer: KNAME },
-  ...(existing5 ? [] : [{ key: "A2", code: t5, day: "2026-08-05", customer: K, items: [{ product: "CR", qty: 1 }] }]),
+  ...(existing5 ? [] : [{ key: "A2", code: t5, day: "2026-08-05", customer: K, items: [{ product: "CR", qty: 1 }] },
+    { key: t5n + "R1", code: t5n + "R1", day: "2026-08-07", customer: K, items: [{ product: "CR", qty: 1 }] },
+    { key: t5n + "R1C2", code: t5n + "R1C2", day: "2026-08-09", customer: K, items: [{ product: "IMC", qty: 1 }] }]),
   { key: "A3", day: "2026-08-05", customer: K, items: [{ product: "CR" }, { product: "IMC" }] },
 ] } });
-ok(r.status === 200 && r.data.done === (existing5 ? 2 : 3), "old orders imported (" + JSON.stringify(r.data.codes || r.data.errors) + ")");
+ok(r.status === 200 && r.data.done === (existing5 ? 2 : 5), "old orders imported (" + JSON.stringify(r.data.codes || r.data.errors) + ")");
+if (!existing5) {
+  const fam = await sql(`SELECT o.code, o.kind, p.code AS parent, o.charge FROM orders o LEFT JOIN orders p ON p.id = o.parent_id WHERE o.code LIKE '${t5n}%' ORDER BY o.code`);
+  ok(fam.map((x) => x.code + ":" + x.kind + ":" + (x.parent || "")).join(" ") === `${t5n}:new: ${t5n}R1:redo:${t5n} ${t5n}R1C2:continue:${t5n}R1`, "imported redo / next-stage codes are linked to their parent: " + fam.map((x) => x.code + "←" + (x.parent || "")).join(" "));
+  ok(fam.find((x) => x.code === t5n + "R1").charge === "warranty", "an imported redo is free under warranty unless the file says otherwise");
+}
 r = await owner("/api/orders?customer=" + kn.id + "&limit=50&sort=code");
 const imp = r.data.items;
 const a1row = imp.find((x) => x.patient === "P1");
 ok(a1row && a1row.total === 300000 && a1row.paid === 300000 && a1row.currency === "VND" && a1row.designer === KTV, "imported order priced in VND, marked paid, KTV matched by name");
-ok(imp.every((x) => /^26\/08\/05\/\d{2}$/.test(x.code)), "imported codes follow the date: " + imp.map((x) => x.code).join(", "));
+ok(imp.every((x) => /^260805\d{2}(?:[RC]\d+)*$/.test(x.code)), "imported codes follow the date: " + imp.map((x) => x.code).join(", "));
 r = await owner("/api/import/orders", { method: "POST", body: { rows: [{ key: "B1", day: "2026-13-01", customer: K, items: [{ product: "CR" }] }, { key: "B2", day: "2026-08-06", customer: "NOPE", items: [] }] } });
 ok(r.status === 400 && r.data.errors.length === 2, "import explains bad dates and unknown customers");
 // a big file in one request stays within the database limits of the free plan
@@ -276,7 +337,7 @@ const lab = await signin(labEmail, "Smile Lab");
 await lab("/api/my/profile", { method: "POST", body: { practice: "Bright Smile Dental", country: "USA" } });
 r = await lab("/api/my/jobs", { method: "POST", body: { title: "Case 990, crown 36", service: "Crown & bridge", teeth: "36" } });
 const job = r.data.job;
-ok(job.order && /^\d{2}\/\d{2}\/\d{2}\/\d{2,4}$/.test(job.order) && !("orderId" in job) && !job.trial, "portal case gets an order code (" + job.order + "), no automatic free trial");
+ok(job.order && /^\d{8,9}$/.test(job.order) && !("orderId" in job) && !job.trial, "portal case gets an order code (" + job.order + "), no automatic free trial");
 r = await lab("/api/my/jobs");
 ok(r.data.items.some((x) => x.id === job.id && x.order === job.order), "customer's list shows the order code");
 r = await owner("/api/orders?q=" + encodeURIComponent("case 990"));

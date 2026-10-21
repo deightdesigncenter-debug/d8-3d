@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-21.1">
-<link rel="stylesheet" href="/case.css?v=2026-10-21.1">
+<link rel="stylesheet" href="/brand.css?v=2026-10-21.2">
+<link rel="stylesheet" href="/case.css?v=2026-10-21.2">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -287,6 +287,13 @@
   .of-grid2.tight, .of-grid3.tight { gap: 10px; margin-top: 10px; }
   .span2 { grid-column: 1 / -1; }
   .of-code { display: flex; align-items: center; min-height: 44px; }
+  .of-dupes { margin-top: 16px; }
+  .of-dupes .pt-alert { margin: 0; }
+  .of-dupes ul { margin: 8px 0 10px; padding-left: 18px; }
+  .of-dupes li { margin: 4px 0; }
+  .of-dupes li small { display: block; opacity: .85; }
+  .of-dupes a { color: inherit; }
+  .of-dupes .check { font-weight: 600; }
   .of-code output { font-weight: 600; font-size: 17px; color: var(--navy); font-variant-numeric: tabular-nums; }
   .of-items { display: grid; gap: 8px; margin-top: 16px; }
   .of-item { display: grid; grid-template-columns: minmax(120px, 1.3fr) minmax(110px, 1.2fr) 74px minmax(120px, 1.3fr) 40px; gap: 8px; align-items: start; }
@@ -360,6 +367,19 @@
   .ochat-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .ochat-foot .hint { margin: 0 auto 0 0; }
   .ochat-pick { cursor: pointer; }
+  .ochat-file { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: rgba(127, 127, 127, .14);
+                color: inherit; text-decoration: none; max-width: 300px; transition: background-color .2s ease-out; }
+  .ochat-file:hover { background: rgba(127, 127, 127, .24); }
+  .ochat-file svg { flex: 0 0 auto; }
+  .ochat-file .fn { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13px; }
+  .ochat-file .fs { flex: 0 0 auto; font-size: 11px; opacity: .75; }
+  .ochat-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .ochat-files[hidden] { display: none; }
+  .ochat-files li { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; min-width: 0; }
+  .ochat-files li span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ochat-files li small { color: var(--muted); flex: 0 0 auto; }
+  .ochat-form.drop textarea { outline: 2px dashed var(--steel); outline-offset: 2px; }
+  .ochat-prog { margin: 0; }
   /* KPI tiles, dashboard money */
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
   .kpis + .kpis { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -498,12 +518,12 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-21.1" defer></script>
-<script src="/xlsx.js?v=2026-10-21.1" defer></script>
-<script src="/orders.js?v=2026-10-21.1" defer></script>
-<script src="/books.js?v=2026-10-21.1" defer></script>
-<script src="/snap.js?v=2026-10-21.1" defer></script>
-<script src="/admin.js?v=2026-10-21.1" defer></script>
+<script src="/shell.js?v=2026-10-21.2" defer></script>
+<script src="/xlsx.js?v=2026-10-21.2" defer></script>
+<script src="/orders.js?v=2026-10-21.2" defer></script>
+<script src="/books.js?v=2026-10-21.2" defer></script>
+<script src="/snap.js?v=2026-10-21.2" defer></script>
+<script src="/admin.js?v=2026-10-21.2" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
@@ -598,12 +618,12 @@
         <div class="form-grid2">
           <div>
             <label class="field-label" for="ogOrder">Mã đơn <span class="opt">(không bắt buộc: tự điền tiêu đề, gắn link vào đơn)</span></label>
-            <input class="input" type="text" id="ogOrder" maxlength="30" placeholder="VD: 26/10/20/03" autocomplete="off">
+            <input class="input" type="text" id="ogOrder" maxlength="30" placeholder="VD: 26102003" autocomplete="off">
             <p class="hint" id="ogOrderHint" style="min-height:1.5em"></p>
             <label class="field-label" for="label" style="margin-top:14px">Tiêu đề khi gửi link</label>
             <input class="input" type="text" id="label" maxlength="80" placeholder="VD: Patient: NGUYEN VAN A - First design">
             <label class="field-label" for="ogDesc" style="margin-top:14px">Dòng mô tả</label>
-            <input class="input" type="text" id="ogDesc" maxlength="200" placeholder="VD: Code: 26/10/20/03 | Lux Smile Studio | Dr Kiệt">
+            <input class="input" type="text" id="ogDesc" maxlength="200" placeholder="VD: Code: 26102003 | Lux Smile Studio | Dr Kiệt">
             <p class="hint">Hiện trên trang bác sĩ xem và trong ảnh xem trước khi gửi link qua Messenger, Zalo, WhatsApp. Ai có link đều thấy.</p>
           </div>
           <fieldset style="border:0;margin:0;padding:0;min-width:0">

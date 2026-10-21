@@ -133,7 +133,7 @@
       <div class="lm-row"><label class="btn small lm-file">Chọn file HTML exocad<input type="file" accept=".html,.htm,text/html" hidden></label><span class="lm-name muted">Chưa chọn file</span></div>
       <div class="of-grid2 tight">
         <div class="span2"><label class="field-label">Tiêu đề khi gửi link <span class="opt">(hiện trong Messenger, Zalo, WhatsApp)</span></label><input class="input" data-k="title" maxlength="120" value="${esc(t0.title)}" placeholder="VD: Patient: NGUYEN VAN A - First design"></div>
-        <div class="span2"><label class="field-label">Dòng mô tả</label><input class="input" data-k="desc" maxlength="200" value="${esc(t0.desc)}" placeholder="VD: Code: 26/10/20/03 | Smile Studio | Dr Kiệt"></div>
+        <div class="span2"><label class="field-label">Dòng mô tả</label><input class="input" data-k="desc" maxlength="200" value="${esc(t0.desc)}" placeholder="VD: Code: 26102003 | Smile Studio | Dr Kiệt"></div>
         ${o && o.patient ? `<label class="check span2" style="margin:0"><input type="checkbox" data-k="pt" checked> Ghi tên bệnh nhân (ai có link đều thấy)</label>` : ""}
         <div><span class="field-label">Hạn dùng link</span><div class="seg seg-sm" role="radiogroup" aria-label="Hạn dùng">${[7, 14, 30].map((d) => `<label><input type="radio" name="lmDays${o ? o.id : ""}" value="${d}"${d === 30 ? " checked" : ""}><span>${d} ngày</span></label>`).join("")}</div></div>
       </div>
