@@ -72,7 +72,7 @@ with sync_playwright() as p:
     pg.goto(B + "/portal"); pg.evaluate(SIGNIN, ["visitor%d@lab.example" % int(time.time()), "Visitor"]); pg.reload(); pg.wait_for_timeout(700)
     ok("Workspace" not in pg.inner_text(".sh-bar"), "customer header has no Workspace switch")
     pg.goto(B + "/admin"); pg.wait_for_timeout(800)
-    ok(pg.is_visible("#gate") and "chưa được cấp quyền" in pg.inner_text("#gate"), "customer sees the workspace gate")
+    ok(pg.is_visible("#gate") and "tài khoản khách hàng" in pg.inner_text("#gate") and not pg.is_visible("#wsNav"), "customer sees the locked workspace card")
     pg.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "Danny Do"]); pg.goto(B + "/"); pg.wait_for_timeout(700)
     ok("WORKSPACE" in pg.inner_text(".sh-bar").upper(), "staff header shows the Workspace switch")
     c.close()

@@ -12,6 +12,8 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 
 - **Khách hàng** đăng nhập bằng Google (Google Identity Services). Máy chủ kiểm tra chữ ký ID token bằng khóa công khai của Google (RS256), rồi đặt cookie phiên `d8s` (ký HMAC, HttpOnly, SameSite=Lax, 30 ngày). Không lưu mật khẩu, chỉ nhận tên, email, ảnh đại diện.
 - **Chủ tài khoản**: email trong `ADMIN_EMAILS` (mặc định `d.eightdesigncenter@gmail.com`) luôn là Quản trị, đủ mọi quyền, không bị khóa hay xóa được. Mật khẩu `UPLOAD_PASSWORD` vẫn dùng được như tài khoản chủ (header `X-Upload-Key`, chỉ gửi từ trang quản trị).
+- **Ai thấy gì**: chưa đăng nhập → chỉ trang web giới thiệu (không có liên kết nào vào khu làm việc). Đăng nhập Google mà chưa được cấp quyền → tài khoản khách hàng: trang web + cổng khách hàng; mở `/admin` hay `/stl` chỉ thấy thẻ "Chỉ dành cho đội D.EIGHT", mọi API khu làm việc trả 403. Được cấp quyền → nút **Quản trị** hiện ở đầu trang, vào khu làm việc với đúng quyền của vai trò. Gỡ quyền → về lại tài khoản khách hàng.
+- **Cấp quyền cho tài khoản khách**: ở **Nhân sự & phân quyền → Cấp quyền cho tài khoản khách** (danh sách người đã đăng nhập Google, tìm theo tên / email / lab), chọn vai trò rồi bấm **Cấp quyền** 2 lần; hoặc mở tài khoản đó ở Khách hàng → thẻ **Khu làm việc**.
 - **Nhân sự** (Quản trị, Kỹ thuật viên thiết kế, QC, và vai trò tự tạo): chủ thêm email Google ở **Workspace → Nhân sự & phân quyền**; người đó đăng nhập Google là vào được khu làm việc với đúng quyền của mình. Ai không có trong danh sách là khách hàng.
 - Chống giả mạo yêu cầu: yêu cầu ghi từ trang khác bị chặn (kiểm tra `Origin`), yêu cầu dùng cookie phải có header `X-D8: 1`.
 - Client ID Google (công khai) nằm trong `_worker.js` (`GOOGLE_CLIENT_ID`), có thể ghi đè bằng biến môi trường cùng tên. Không cần client secret.
@@ -162,7 +164,7 @@ node server.mjs ../public 8788 mat-khau-thu
 dev/tests/run.sh /tmp/d8-shots    # API + trình duyệt (máy tính, điện thoại, sáng/tối), tốc độ, không có lỗi trang
 ```
 
-Gồm: phân quyền và quy trình KTV → QC → giao khách (`rbac.test.mjs`), sổ đơn hàng: mã đơn R/C, quyền KTV, thanh toán, báo cáo, nhập Excel, ảnh xem trước (`orders.test.mjs`, `orders_ui.py`), khu làm việc khi chưa có D1 (`nodb_ui.py`), thanh toán (`pay.test.mjs`), Workspace (`workspace_ui.py`), cổng khách hàng (`portal_ui.py`), trang web và giao diện chung (`site_ui.py`), tốc độ và độ ổn định bố cục trên điện thoại chậm (`perf.py`). Chạy hai lần: có và không có PayPal/Stripe/AI.
+Gồm: phân quyền và quy trình KTV → QC → giao khách (`rbac.test.mjs`), sổ đơn hàng: mã đơn R/C, quyền KTV, thanh toán, báo cáo, nhập Excel, ảnh xem trước (`orders.test.mjs`, `orders_ui.py`), khu làm việc khi chưa có D1 (`nodb_ui.py`), ai thấy gì: khách vãng lai / khách hàng / được cấp quyền (`access_ui.py`), thanh toán (`pay.test.mjs`), Workspace (`workspace_ui.py`), cổng khách hàng (`portal_ui.py`), trang web và giao diện chung (`site_ui.py`), tốc độ và độ ổn định bố cục trên điện thoại chậm (`perf.py`). Chạy hai lần: có và không có PayPal/Stripe/AI.
 
 ## Giới hạn gói miễn phí (Cloudflare KV)
 

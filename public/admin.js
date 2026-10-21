@@ -118,10 +118,14 @@
     mode = null;
     setBand(...BANDS.gate);
     show("gate");
-    $("gateWho").innerHTML = u ? `<p class="who">Bạn đang đăng nhập bằng <b>${esc(u.email)}</b>. Tài khoản này chưa được cấp quyền vào khu làm việc. Nhờ quản trị thêm email này ở mục Nhân sự &amp; phân quyền.
-      <button class="btn small" type="button" id="gateOut" style="margin-top:10px">Đăng xuất tài khoản này</button></p>` : "";
+    // a signed-in customer only gets the website and the customer portal: no sign-in form, just the way back
+    $("gateWho").innerHTML = u ? `<p class="who">Bạn đang đăng nhập bằng <b>${esc(u.email)}</b> — tài khoản khách hàng, không vào được khu làm việc. Bạn vẫn dùng trang web và cổng khách hàng như bình thường. Nếu bạn là kỹ thuật viên của D.EIGHT, nhờ quản trị cấp quyền cho email này.</p>
+      <div class="who-btns"><a class="btn btn-primary small" href="/">Về trang web</a><a class="btn small" href="/portal">Cổng khách hàng</a><button class="btn small" type="button" id="gateOut">Đăng xuất để đổi tài khoản</button></div>` : "";
+    $("gateIn").hidden = !!u;
+    $("gateIntro").hidden = !!u;
+    $("gateTitle").textContent = u ? "Chỉ dành cho đội D.EIGHT" : "Đăng nhập khu làm việc";
     if (u) $("gateOut").onclick = D8.signOut;
-    D8.renderGoogleButton($("gbtn"), null, { width: 320 });
+    else D8.renderGoogleButton($("gbtn"), null, { width: 320 });
   }
   document.addEventListener("d8:user", (e) => {
     if (mode || !e.detail) return;
@@ -828,13 +832,39 @@
           <div><dt>Lab / phòng khám</dt><dd>${esc(u.practice || "—")}</dd></div><div><dt>Quốc gia</dt><dd>${esc(u.country || "—")}</dd></div>
           <div><dt>Điện thoại</dt><dd>${esc(u.phone || "—")}</dd></div>
           <div><dt>Đăng nhập đầu</dt><dd>${u.created ? esc(D8.fmtDate(u.created)) : "—"}</dd></div><div><dt>Gần nhất</dt><dd>${u.last ? esc(D8.ago(u.last)) : "—"}</dd></div></dl></section>
+        ${can("staff.manage") ? `<section class="card" id="custAccess"><h2 class="h-caps" style="margin-bottom:12px">Khu làm việc</h2><p class="muted" style="margin:0">Đang tải…</p></section>` : ""}
         ${can("billing.view") ? `<section class="card"><h2 class="h-caps" style="margin-bottom:12px">Dùng thử</h2><p class="muted" style="margin:0">${tu.cases ? `${tu.cases} ca dùng thử, tổng giá ${esc(money(tu.used))} / mức ${esc(money(TRIAL_CREDIT))}. Phần vượt do bạn thương lượng với khách.` : "Không có ca dùng thử."}</p></section>` : ""}
       </aside></div>`;
+    if ($("custAccess")) drawAccess(email, u);
     if ($("custLink") && D8.book) D8.book.customers().then((cs) => {
       const c = cs.find((x) => (x.logins || []).includes(email)), box = $("custLink"); if (!box) return;
       box.innerHTML = c ? `<p style="margin:0 0 12px">Tài khoản này thuộc khách <b>${esc(c.code)}</b> — ${esc(c.name)}. Đơn hàng, bảng giá riêng và công nợ ở hồ sơ khách.</p><a class="btn small btn-primary" href="#cust/${c.id}">Mở hồ sơ khách</a>`
         : `<p style="margin:0 0 12px">Chưa gắn vào khách nào.</p><a class="btn small" href="#customers">Gắn ở danh sách khách hàng</a>`;
     }).catch(() => {});
+  }
+
+  // A customer account is locked out of the workspace until someone with staff.manage grants it a role.
+  async function drawAccess(email, u) {
+    let d;
+    try { d = await api("/api/staff"); } catch { if ($("custAccess")) $("custAccess").hidden = true; return; }
+    const box = $("custAccess");
+    if (!box) return;
+    const head = '<h2 class="h-caps" style="margin-bottom:12px">Khu làm việc</h2>';
+    const rec = d.staff.find((x) => x.email === email);
+    if (rec) {
+      box.innerHTML = head + `<p style="margin:0 0 12px;line-height:1.6">Tài khoản này là nhân sự: <b>${esc(rec.owner ? "Chủ tài khoản" : (d.roles[rec.role] || {}).label || rec.role)}</b>${rec.active === false ? " (đang khóa)" : ""}.</p><a class="btn small" href="#staff">Sửa ở Nhân sự &amp; phân quyền</a>`;
+      return;
+    }
+    box.innerHTML = head + `<p class="muted" style="margin:0 0 12px;line-height:1.6">Tài khoản khách hàng: chỉ thấy trang web và cổng khách hàng, bị khóa khu làm việc.</p>
+      <label class="field-label" for="caRole">Vai trò khi cấp quyền</label>
+      <select class="input" id="caRole">${Object.entries(d.roles).map(([k, r]) => `<option value="${esc(k)}"${k === "designer" ? " selected" : ""}>${esc(r.label)}</option>`).join("")}</select>
+      <button class="btn btn-primary small" type="button" id="caGrant" style="margin-top:12px">Cấp quyền khu làm việc</button><p class="hint" style="margin:8px 0 0">Bấm 2 lần để xác nhận.</p>`;
+    armed($("caGrant"), async () => {
+      await api("/api/staff", { method: "POST", body: { email, role: $("caRole").value, perms: null, active: true, name: (u && u.name) || "" } });
+      staffData = null; loadTeam();
+      D8.toast("Đã cấp quyền: " + email + " vào được khu làm việc.");
+      drawAccess(email, u);
+    });
   }
 
   /* ------------------------------------------------------------ staff and permissions */
@@ -843,7 +873,11 @@
     setBand("Nhân sự & phân quyền", "Ai vào được khu làm việc và được làm gì");
     const host = $("p-staff");
     if (!staffData) host.innerHTML = D8.skel.card(5) + D8.skel.card(6);
-    try { staffData = await api("/api/staff"); roleDraft = JSON.parse(JSON.stringify(staffData.roles)); }
+    try {
+      const [s, u] = await Promise.all([api("/api/staff"), api("/api/admin/users").catch(() => null)]);
+      staffData = s; staffData.accounts = u ? u.users || [] : null;
+      roleDraft = JSON.parse(JSON.stringify(staffData.roles));
+    }
     catch (err) { host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
     renderStaff();
   }
@@ -888,6 +922,8 @@
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nhân sự</th><th>Vai trò</th><th>Quyền</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
         <form class="add-row" id="stAdd"><input class="input" type="email" id="stEmail" placeholder="Email Google của nhân sự mới" required autocomplete="off"><select class="input" id="stRole">${roleOpts("designer")}</select><button class="btn btn-primary" type="submit">Thêm nhân sự</button></form>
         <p class="error" id="stErr" hidden></p></section>
+      ${staffData.accounts ? `<section class="card" id="stAccounts"><div class="card-head"><div><h2 class="h-caps">Cấp quyền cho tài khoản khách</h2><p class="muted" style="margin:6px 0 0;font-size:13px;line-height:1.6">Tài khoản đã đăng nhập Google ở cổng khách hàng nhưng chưa được cấp quyền: chỉ thấy trang web và cổng khách hàng, bị khóa khu làm việc. Chọn vai trò rồi bấm <b>Cấp quyền</b> (bấm 2 lần để xác nhận) để đưa vào nhân sự.</p></div></div>
+        <input class="input" id="acQ" type="search" placeholder="Tìm theo tên, email, lab / phòng khám" autocomplete="off" style="margin-bottom:6px"><div id="acList"></div></section>` : ""}
       <section class="card"><div class="card-head"><div><h2 class="h-caps">Vai trò &amp; quyền</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tick quyền cho từng vai trò. Thêm vai trò mới (ví dụ Trưởng nhóm) nếu cần.</p></div></div>
         ${matrix}
         <div class="add-row"><input class="input" id="rNew" placeholder="Tên vai trò mới, ví dụ Trưởng nhóm" maxlength="60"><button class="btn small" type="button" id="rAdd">+ Thêm vai trò</button><button class="btn btn-primary" type="button" id="rSave">Lưu vai trò &amp; quyền</button></div>
@@ -911,6 +947,28 @@
     host.querySelectorAll("[data-active]").forEach((b) => b.addEventListener("click", () => { const s = staff[+b.dataset.active]; save(s, { active: s.active === false }, b); }));
     host.querySelectorAll("[data-remove]").forEach((b) => armed(b, async () => { await api("/api/staff/" + encodeURIComponent(staff[+b.dataset.remove].email), { method: "DELETE" }); await drawStaff(); loadTeam(); D8.toast("Đã xóa nhân sự."); }));
     $("stAdd").addEventListener("submit", (e) => { e.preventDefault(); save({ email: $("stEmail").value.trim(), role: $("stRole").value }, {}, $("stAdd").querySelector("[type=submit]")); });
+    // customer accounts (signed in, not staff) that can be granted workspace access
+    if ($("acList")) {
+      const staffMails = new Set(staff.map((s) => s.email));
+      const pool = staffData.accounts.filter((a) => !staffMails.has(a.email));
+      const drawAc = () => {
+        const fold = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase().trim();
+        const q = fold($("acQ").value);
+        const hit = pool.filter((a) => !q || fold([a.name, a.email, a.practice].join(" ")).includes(q));
+        $("acList").innerHTML = hit.length ? hit.slice(0, 8).map((a) => `<div class="ac-row"><div><b>${esc(a.name || a.email.split("@")[0])}</b><small>${esc(a.email)}${a.practice ? " · " + esc(a.practice) : ""}${a.last ? " · đăng nhập " + esc(D8.ago(a.last)) : ""}</small></div>
+            <select class="input" data-acrole="${esc(a.email)}" aria-label="Vai trò cho ${esc(a.email)}">${roleOpts("designer")}</select>
+            <button class="btn small btn-primary" type="button" data-grant="${esc(a.email)}">Cấp quyền</button></div>`).join("")
+            + (hit.length > 8 ? `<p class="hint" style="margin:10px 0 0">Còn ${hit.length - 8} tài khoản nữa — gõ để tìm.</p>` : "")
+          : `<p class="muted" style="margin:8px 0 0">${pool.length ? "Không có tài khoản nào khớp." : "Chưa có tài khoản khách nào đăng nhập."}</p>`;
+        $("acList").querySelectorAll("[data-grant]").forEach((b) => armed(b, async () => {
+          const email = b.dataset.grant, role = $("acList").querySelector(`[data-acrole="${CSS.escape(email)}"]`).value;
+          await api("/api/staff", { method: "POST", body: { email, role, perms: null, active: true, name: (pool.find((a) => a.email === email) || {}).name || "" } });
+          await drawStaff(); loadTeam(); D8.toast("Đã cấp quyền: " + email + " vào được khu làm việc.");
+        }));
+      };
+      $("acQ").addEventListener("input", drawAc);
+      drawAc();
+    }
 
     // roles matrix (edited as a draft, saved together)
     host.querySelectorAll("[data-rk]").forEach((c) => c.addEventListener("change", () => {

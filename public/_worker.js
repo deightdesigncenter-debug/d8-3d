@@ -208,7 +208,8 @@ async function handleApi(request, env, url) {
   if (delMsg && method === "DELETE") return can("messages.view") ? deleteMessage(env, delMsg[1]) : deny();
 
   if (path === "/api/admin/jobs" && method === "GET") return listJobs(env, null, who);
-  if (path === "/api/admin/users" && method === "GET") return can("customers.view") ? listUsers(env) : deny();
+  // accounts that signed in with Google: customers.view for the customer pages, staff.manage to grant workspace access
+  if (path === "/api/admin/users" && method === "GET") return can("customers.view") || can("staff.manage") ? listUsers(env) : deny();
 
   return json({ error: "Không tìm thấy." }, 404);
 }

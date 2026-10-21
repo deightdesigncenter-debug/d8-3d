@@ -171,6 +171,15 @@
   .dash li .a { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; color: var(--muted); white-space: nowrap; }
   .dash .none { color: var(--muted); font-size: 14px; margin: 0; }
   .dash-quick { display: none; }
+  .gate .pw-box { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .gate .pw-box summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .gate .pw-box[open] summary { margin-bottom: 14px; }
+  .gate .who-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .ac-row { display: grid; grid-template-columns: minmax(0, 1fr) 230px auto; gap: 10px 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+  .ac-row b { color: var(--navy); font-weight: 600; }
+  .ac-row small { display: block; color: var(--muted); font-size: 12px; word-break: break-all; }
+  .ac-row .input { height: 40px; }
+  @media (max-width: 640px) { .ac-row { grid-template-columns: minmax(0, 1fr) auto; } .ac-row > div:first-child { grid-column: 1 / -1; } }
   @media (max-width: 1099px) {
     .band-btns.home-q { display: none; }
     .dash-quick { display: flex; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1; }
@@ -521,11 +530,12 @@
     <!-- Sign in -->
     <section class="card gate panel" id="gate" hidden>
       <img class="lock-mark" src="/brand/symbol.svg" alt="">
-      <h2 class="h-caps">Đăng nhập khu làm việc</h2>
-      <p class="muted" style="margin:6px 0 0;line-height:1.7">Dùng tài khoản Google đã được quản trị cấp quyền (quản trị, kỹ thuật viên, QC). Mật khẩu quản trị vẫn dùng được khi cần.</p>
+      <h2 class="h-caps" id="gateTitle">Đăng nhập khu làm việc</h2>
+      <p class="muted" id="gateIntro" style="margin:6px 0 0;line-height:1.7">Chỉ dành cho tài khoản Google đã được quản trị cấp quyền (quản trị, kỹ thuật viên, QC). Tài khoản khách hàng chỉ dùng trang web và cổng khách hàng.</p>
       <div id="gateWho"></div>
+      <div id="gateIn">
       <div class="gbtn" id="gbtn"></div>
-      <div class="divider">hoặc dùng mật khẩu</div>
+      <details class="pw-box"><summary>Chủ tài khoản: đăng nhập bằng mật khẩu</summary>
       <form id="loginForm">
         <label class="field-label" for="pw">Mật khẩu</label>
         <div class="row-inline">
@@ -535,6 +545,8 @@
         <label class="check"><input type="checkbox" id="remember"> Ghi nhớ trên máy này (không chọn khi dùng máy chung)</label>
         <p class="error" id="loginError" hidden></p>
       </form>
+      </details>
+      </div>
     </section>
 
     <!-- Dashboard -->
