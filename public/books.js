@@ -11,7 +11,7 @@
   const fmtDay = (d) => (d ? d.slice(8, 10) + "/" + d.slice(5, 7) + "/" + d.slice(0, 4) : "");
   const vnToday = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
   const addDays = (d, n) => new Date(Date.parse(d + "T00:00:00Z") + n * 86400000).toISOString().slice(0, 10);
-  const KINDS = { clinic: "Phòng khám", lab: "Lab", doctor: "Bác sĩ", platform: "Nền tảng", other: "Khác" };
+  const KINDS = { clinic: "Phòng khám", lab: "Labo", doctor: "Bác sĩ", platform: "Nền tảng", other: "Khác" };
   const UNIT = { unit: "răng / đơn vị", arch: "hàm", case: "ca", hour: "giờ" };
   const noDb = (host, err) => { host.innerHTML = D8.noDbPanel(err); };
   const isNoDb = (err) => err && err.data && err.data.code === "no_db";
@@ -19,7 +19,7 @@
   /* ============================================================ customers */
   async function drawCustomers() {
     const W = ws();
-    W.setBand("Khách hàng", "Phòng khám, lab, bác sĩ: mã khách, tiền tệ, công nợ", {
+    W.setBand("Khách hàng", "Phòng khám, labo, bác sĩ: mã khách, tiền tệ, công nợ", {
       right: `<div class="band-btns">${can("customers.edit") ? '<a class="btn btn-cream small" href="#customers/new">+ Khách mới</a><a class="btn btn-light small" href="#import/customers">Nhập Excel</a>' : ""}${can("export.csv") ? '<button class="btn btn-light small" type="button" id="cuExport">Xuất Excel</button>' : ""}</div>` });
     W.show("p-customers", true);
     const host = $("p-customers");
@@ -514,7 +514,7 @@
         contact: ["Người liên hệ", "lien he"], email: ["Email"], phone: ["Điện thoại / WhatsApp", "dien thoai", "whatsapp", "phone"], address: ["Địa chỉ", "dia chi"], terms: ["Điều khoản thanh toán", "dieu khoan"], note: ["Ghi chú", "ghi chu", "note"] },
       need: ["code", "name"],
       template: () => [{ name: "Khách hàng", cols: [{ h: "Mã khách", w: 12 }, { h: "Tên khách", w: 32 }, { h: "Loại", w: 14 }, { h: "Quốc gia", w: 12 }, { h: "Tiền tệ", w: 9 }, { h: "Người liên hệ", w: 20 }, { h: "Email", w: 26 }, { h: "Điện thoại / WhatsApp", w: 18 }, { h: "Địa chỉ", w: 26 }, { h: "Điều khoản thanh toán", w: 26 }, { h: "Ghi chú", w: 26 }],
-        rows: [["JAKE", "Dr Jake – Colorado", "Bác sĩ", "USA", "USD", "Dr Jake", "", "", "", "Trả từng ca qua WhatsApp / Payoneer", ""], ["ANNIE", "All Smiles (Dr Annie)", "Nền tảng", "USA", "USD", "Dr Annie", "", "", "", "Ứng trước 200 USD, trừ dần", ""], ["VCAD", "VCAD Lab", "Lab", "Việt Nam", "VND", "", "", "", "", "", ""]] }],
+        rows: [["JAKE", "Dr Jake – Colorado", "Bác sĩ", "USA", "USD", "Dr Jake", "", "", "", "Trả từng ca qua WhatsApp / Payoneer", ""], ["ANNIE", "All Smiles (Dr Annie)", "Nền tảng", "USA", "USD", "Dr Annie", "", "", "", "Ứng trước 200 USD, trừ dần", ""], ["VCAD", "VCAD Lab", "Labo", "Việt Nam", "VND", "", "", "", "", "", ""]] }],
       row: (g) => ({ code: g("code"), name: g("name"), kind: kindOf(g("kind")), country: g("country"), currency: String(g("currency") || "").toUpperCase(), contact: g("contact"), email: g("email"), phone: g("phone"), address: g("address"), terms: g("terms"), note: g("note") }) },
     products: { title: "Mã hàng", perm: "pricing.manage", desc: "Danh mục mã hàng chung. Mã có rồi thì cập nhật tên, nhóm, đơn vị, giá mặc định.",
       cols: { code: ["Mã hàng", "ma hang", "code"], name: ["Tên tiếng Việt", "ten hang", "ten tieng viet", "ten"], name_en: ["Tên tiếng Anh", "ten tieng anh", "name"], grp: ["Nhóm dịch vụ", "nhom"], unit: ["Tính theo", "don vi", "don vi tinh", "unit"],

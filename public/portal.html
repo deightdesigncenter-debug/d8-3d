@@ -15,8 +15,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-21.3">
-<link rel="stylesheet" href="/case.css?v=2026-10-21.3">
+<link rel="stylesheet" href="/brand.css?v=2026-10-21.4">
+<link rel="stylesheet" href="/case.css?v=2026-10-21.4">
 <style>
   body { background: var(--paper); }
 </style>
@@ -30,7 +30,7 @@ window.D8_DICT = {
   "p.si.l1": ["Send scans, Rx and notes in one form", "Gửi file scan, phiếu chỉ định và ghi chú trong một biểu mẫu"],
   "p.si.l2": ["Follow each case from received to delivered", "Theo dõi từng ca từ lúc nhận đến khi giao"],
   "p.si.l3": ["Open 3D previews and approve in one click", "Mở bản xem 3D và duyệt chỉ với một cú nhấp"],
-  "p.si.l4": ["Message our designers and download final STL", "Nhắn tin với kỹ thuật viên và tải file STL hoàn chỉnh"],
+  "p.si.l4": ["Message our designers and download final STL", "Nhắn tin với kỹ thuật viên thiết kế và tải file STL hoàn chỉnh"],
   "p.si.title": ["Sign in", "Đăng nhập"],
   "p.si.p": ["Use the Google account you want your cases linked to. No password to remember.", "Dùng tài khoản Google bạn muốn gắn với các ca của mình. Không cần nhớ mật khẩu."],
   "p.si.new": ["New to D.EIGHT? Your portal is created the first time you sign in.", "Lần đầu dùng D.EIGHT? Cổng của bạn được tạo ngay khi đăng nhập lần đầu."],
@@ -81,9 +81,9 @@ window.D8_DICT = {
   "p.fl.closed": ["This case is closed for new files. Send them in a message link or open a new case.", "Ca này không nhận thêm file. Gửi link trong tin nhắn hoặc mở ca mới."],
   "p.drop.t": ["Drop scans here or click to choose", "Kéo file scan vào đây hoặc bấm để chọn"],
   "p.drop.s": ["STL, PLY, OBJ, exocad or 3Shape exports, photos, ZIP · up to 300 MB per case", "STL, PLY, OBJ, file xuất exocad hoặc 3Shape, ảnh, ZIP · tối đa 300 MB mỗi ca"],
-  "p.drop.dicom": ["For DICOM/CBCT, zip the folder first.", "Với DICOM/CBCT, hãy nén cả thư mục thành ZIP trước."],
+  "p.drop.dicom": ["For DICOM/CBCT, zip the folder first.", "Với phim CBCT (DICOM), hãy nén cả thư mục thành ZIP trước."],
   "p.ms.h": ["Messages", "Tin nhắn"],
-  "p.ms.sub": ["Talk directly with the designer on this case.", "Trao đổi trực tiếp với kỹ thuật viên phụ trách ca này."],
+  "p.ms.sub": ["Talk directly with the designer on this case.", "Trao đổi trực tiếp với kỹ thuật viên thiết kế phụ trách ca này."],
   "p.ms.none": ["No messages yet. Ask a question or add details here.", "Chưa có tin nhắn. Đặt câu hỏi hoặc bổ sung thông tin tại đây."],
   "p.ms.ph": ["Write a message…", "Viết tin nhắn…"],
   "p.ms.phc": ["Describe the changes you'd like (tooth, area, what to adjust)…", "Mô tả chỉnh sửa bạn muốn (răng nào, vùng nào, chỉnh thế nào)…"],
@@ -103,7 +103,7 @@ window.D8_DICT = {
   "p.dt.notes": ["Notes", "Ghi chú"],
   "p.dt.links": ["Links", "Link"],
   "p.nf.h": ["Send a new case", "Gửi ca mới"],
-  "p.nf.serif": ["Scans, Rx and notes in one go", "File scan, chỉ định và ghi chú một lần"],
+  "p.nf.serif": ["Scans, Rx and notes in one go", "File scan, phiếu chỉ định và ghi chú trong một lần gửi"],
   "p.nf.s1": ["Case details", "Thông tin ca"],
   "p.nf.s2": ["Files", "File"],
   "p.nf.s3": ["Notes &amp; instructions", "Ghi chú &amp; yêu cầu"],
@@ -121,7 +121,7 @@ window.D8_DICT = {
   "p.nf.shadeph": ["e.g. A2", "VD: A2"],
   "p.nf.needed": ["Needed by", "Cần trước ngày"],
   "p.nf.notes": ["Instructions", "Yêu cầu thiết kế"],
-  "p.nf.notesph": ["Cement gap, minimum thickness, implant system and library, contacts, occlusion, anything we should know…", "Khoảng xi măng, độ dày tối thiểu, hệ implant và thư viện, điểm tiếp xúc, khớp cắn, mọi điều cần lưu ý…"],
+  "p.nf.notesph": ["Cement gap, minimum thickness, implant system and library, contacts, occlusion, anything we should know…", "Khe hở xi măng, độ dày tối thiểu, hệ implant và thư viện, điểm tiếp xúc, khớp cắn, mọi điều cần lưu ý…"],
   "p.nf.links": ["File links (optional)", "Link file (không bắt buộc)"],
   "p.nf.linksh": ["Already shared the files on WeTransfer, Google Drive or Dropbox? Paste the links here.", "Đã gửi file qua WeTransfer, Google Drive hoặc Dropbox? Dán link vào đây."],
   "p.nf.addlink": ["Add link", "Thêm link"],
@@ -135,15 +135,15 @@ window.D8_DICT = {
   "p.nf.done": ["Case sent. We'll confirm it shortly.", "Đã gửi ca. Chúng tôi sẽ xác nhận sớm."],
   "p.tips.h": ["Good to include", "Nên gửi kèm"],
   "p.tips.1": ["Upper, lower and bite scans (STL or PLY)", "File scan hàm trên, hàm dưới và khớp cắn (STL hoặc PLY)"],
-  "p.tips.2": ["Implant system, platform and scan body", "Hệ implant, kích thước kết nối và scan body"],
+  "p.tips.2": ["Implant system, platform and scan body", "Hệ implant, kích thước kết nối (platform) và scan body"],
   "p.tips.3": ["Pre-op or wax-up scans for full-mouth cases", "File scan trước điều trị hoặc wax-up cho ca toàn hàm"],
   "p.tips.4": ["A smile photo for anterior and smile design work", "Ảnh nụ cười cho ca răng trước và thiết kế nụ cười"],
-  "p.tips.5": ["DICOM/CBCT (zipped) for surgical guides", "DICOM/CBCT (đã nén ZIP) cho máng hướng dẫn phẫu thuật"],
+  "p.tips.5": ["DICOM/CBCT (zipped) for surgical guides", "Phim CBCT (DICOM, đã nén ZIP) cho máng hướng dẫn phẫu thuật"],
   "p.pf.h": ["Profile", "Hồ sơ"],
   "p.pf.serif": ["So we know who we're designing for", "Để chúng tôi biết mình đang thiết kế cho ai"],
   "p.pf.google": ["Google account", "Tài khoản Google"],
   "p.pf.name": ["Name", "Họ tên"],
-  "p.pf.practice": ["Lab or practice", "Lab hoặc phòng khám"],
+  "p.pf.practice": ["Lab or practice", "Labo hoặc phòng khám"],
   "p.pf.country": ["Country", "Quốc gia"],
   "p.pf.phone": ["Phone or WhatsApp", "Điện thoại hoặc WhatsApp"],
   "p.pf.save": ["Save profile", "Lưu hồ sơ"],
@@ -179,9 +179,9 @@ window.D8_DICT = {
   "p.trial": ["<b>Free trial:</b> your first 2 cases are free, up to US$50 in total.", "<b>Dùng thử miễn phí:</b> 2 ca đầu tiên được miễn phí, tổng giá trị đến 50 USD."],
   "p.ms.wa": ["Urgent? WhatsApp Danny Do.", "Cần gấp? Nhắn WhatsApp cho Danny Do."],
   "p.ms.wamsg": ["Hi Danny, about case {id}: ", "Chào Danny, về ca {id}: "],
-  "ai.rx.h": ["Fill the form from your Rx", "Điền phiếu tự động từ Rx"],
+  "ai.rx.h": ["Fill the form from your Rx", "Điền phiếu tự động từ phiếu chỉ định"],
   "ai.rx.p": ["Paste the text of your prescription or take a photo of the paper Rx. The fields below are filled in for you to check. Patient details are ignored.", "Dán nội dung phiếu chỉ định hoặc chụp ảnh phiếu giấy. Các ô bên dưới sẽ được điền sẵn để bạn kiểm tra. Thông tin bệnh nhân được bỏ qua."],
-  "ai.rx.ph": ["e.g. Upper 11, 21 e.max crowns, shade A2, cement gap 0.05, needed Friday", "VD: Mão e.max 11, 21 hàm trên, màu A2, khoảng xi măng 0,05, cần thứ Sáu"],
+  "ai.rx.ph": ["e.g. Upper 11, 21 e.max crowns, shade A2, cement gap 0.05, needed Friday", "VD: Mão e.max 11, 21 hàm trên, màu A2, khe hở xi măng 0,05, cần thứ Sáu"],
   "ai.rx.photo": ["Photo of Rx", "Chụp phiếu"],
   "ai.rx.read": ["Fill the form", "Điền phiếu"],
   "ai.rx.busy": ["Reading…", "Đang đọc…"],
@@ -193,17 +193,17 @@ window.D8_DICT = {
   "chk.send": ["Send anyway", "Vẫn gửi"],
   "chk.implant_system": ["The implant system and platform are not filled in.", "Chưa điền hệ implant và kích thước kết nối."],
   "chk.scan_body": ["The scan body is not specified.", "Chưa ghi loại scan body."],
-  "chk.dicom": ["Surgical guides need the DICOM/CBCT data (zip the folder, or add a link).", "Ca máng phẫu thuật cần dữ liệu DICOM/CBCT (nén thư mục thành ZIP hoặc gửi link)."],
-  "chk.sleeve": ["The implant system or guided kit / sleeve is not specified.", "Chưa ghi hệ implant hoặc bộ khoan / ống dẫn."],
-  "chk.bite": ["Only one scan file. Did you include the opposing arch and bite?", "Chỉ có một file scan. Bạn đã gửi hàm đối diện và khớp cắn chưa?"],
+  "chk.dicom": ["Surgical guides need the DICOM/CBCT data (zip the folder, or add a link).", "Ca máng phẫu thuật cần phim CBCT (DICOM): nén thư mục thành ZIP hoặc gửi link."],
+  "chk.sleeve": ["The implant system or guided kit / sleeve is not specified.", "Chưa ghi hệ implant hoặc bộ khoan hướng dẫn / ống dẫn khoan."],
+  "chk.bite": ["Only one scan file. Did you include the opposing arch and bite?", "Chỉ có một file scan. Bạn đã gửi hàm đối diện và scan khớp cắn chưa?"],
   "chk.teeth": ["Tooth numbers are missing.", "Chưa ghi số răng."],
   "chk.material": ["The material is missing.", "Chưa ghi vật liệu."],
   "chk.photo": ["A smile photo helps a lot for smile design.", "Ảnh nụ cười rất cần cho ca thiết kế nụ cười."],
   "chk.patient": ["This may contain a patient name or detail: “{found}”. Please remove it.", "Có thể chứa tên hoặc thông tin bệnh nhân: “{found}”. Vui lòng xóa đi."]
 };
 </script>
-<script src="/shell.js?v=2026-10-21.3" defer></script>
-<script src="/portal.js?v=2026-10-21.3" defer></script>
+<script src="/shell.js?v=2026-10-21.4" defer></script>
+<script src="/portal.js?v=2026-10-21.4" defer></script>
 </head>
 <body data-page="portal" data-title-key="title">
 <div id="d8-header"></div>

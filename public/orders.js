@@ -125,14 +125,14 @@
       if (q.has("from") || q.has("to")) { L.preset = "custom"; L.from = q.get("from") || ""; L.to = q.get("to") || ""; }
     }
     const W = ws();
-    W.setBand("Đơn hàng", "Sổ đơn hàng: tìm theo mã đơn, bệnh nhân, nha khoa, bác sĩ hoặc lab", {
+    W.setBand("Đơn hàng", "Sổ đơn hàng: tìm theo mã đơn, bệnh nhân, nha khoa, bác sĩ hoặc labo", {
       right: `<div class="band-btns">${can("orders.edit") ? `<a class="btn btn-cream small" href="#orders/new">${ICON.plus}Đơn mới</a><a class="btn btn-light small" href="#import/orders">Nhập Excel</a>` : ""}${can("export.csv") ? `<button class="btn btn-light small" type="button" id="oExport">${ICON.xl}Xuất Excel</button>` : ""}</div>` });
     W.show("p-orders", true);
     const host = $("p-orders");
     if (!host.dataset.built) {
       host.dataset.built = "1";
       host.innerHTML = `<div class="o-tools">
-          <div class="o-search"><input class="input pt-search" type="search" id="oQ" placeholder="Mã đơn, bệnh nhân, nha khoa, bác sĩ, lab, mã của khách…" aria-label="Tìm đơn hàng" autocomplete="off"></div>
+          <div class="o-search"><input class="input pt-search" type="search" id="oQ" placeholder="Mã đơn, bệnh nhân, nha khoa, bác sĩ, labo, mã của khách…" aria-label="Tìm đơn hàng" autocomplete="off"></div>
           <div class="o-filt">
             <select class="input" id="oPreset" aria-label="Thời gian">${PRESETS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
             <span class="o-range" id="oRange" hidden><input class="input" type="date" id="oFrom" aria-label="Từ ngày"><span>–</span><input class="input" type="date" id="oTo" aria-label="Đến ngày"></span>
@@ -276,12 +276,12 @@
             <div><label class="field-label" for="ofDue">Hạn giao</label><input class="input" type="datetime-local" id="ofDue" value="${esc(toLocalInput(src.due_at && order ? src.due_at : 0))}"></div>
           </div>
           <div class="of-grid2">
-            <div><label class="field-label" for="ofCust">Khách hàng (lab / phòng khám / bác sĩ trả tiền)</label>
+            <div><label class="field-label" for="ofCust">Khách hàng (labo / phòng khám / bác sĩ trả tiền)</label>
               <input class="input" id="ofCust" list="ofCustList" autocomplete="off" placeholder="Gõ mã hoặc tên khách" value="${esc(D8.book.custLabel(cust0))}"${portal || parent ? " disabled" : ""} required>
               <datalist id="ofCustList">${custs.filter((c) => c.active).map((c) => `<option value="${esc(D8.book.custLabel(c))}"></option>`).join("")}</datalist>
-              <p class="hint" id="ofCustHint">${cust0 ? esc(cust0.kind === "lab" ? "Lab" : "Khách") + " · tiền " + esc(cust0.currency) : can("customers.edit") ? '<a href="#customers/new">+ Thêm khách mới</a>' : ""}</p></div>
+              <p class="hint" id="ofCustHint">${cust0 ? esc(cust0.kind === "lab" ? "Labo" : "Khách") + " · tiền " + esc(cust0.currency) : can("customers.edit") ? '<a href="#customers/new">+ Thêm khách mới</a>' : ""}</p></div>
             <div><label class="field-label" for="ofRef">Mã của khách <span class="opt">(mã ca bên khách, nếu có)</span></label><input class="input" id="ofRef" maxlength="80" value="${esc(src.ref || "")}" placeholder="VD: KN261000966, GC021"></div>
-            <div><label class="field-label" for="ofClinic">Nha khoa / phòng khám</label><input class="input" id="ofClinic" maxlength="120" list="ofClinicList" value="${esc(src.clinic || "")}" placeholder="Khi khách là lab: phòng khám cuối"><datalist id="ofClinicList"></datalist></div>
+            <div><label class="field-label" for="ofClinic">Nha khoa / phòng khám</label><input class="input" id="ofClinic" maxlength="120" list="ofClinicList" value="${esc(src.clinic || "")}" placeholder="Khi khách là labo: phòng khám cuối"><datalist id="ofClinicList"></datalist></div>
             <div><label class="field-label" for="ofDoctor">Bác sĩ</label><input class="input" id="ofDoctor" maxlength="120" list="ofDoctorList" value="${esc(src.doctor || "")}"><datalist id="ofDoctorList"></datalist></div>
             <div class="span2"><label class="field-label" for="ofPatient">Bệnh nhân</label><input class="input" id="ofPatient" maxlength="120" value="${esc(src.patient || "")}" placeholder="Tên hoặc mã bệnh nhân"></div>
           </div>
@@ -392,7 +392,7 @@
       const v = $("ofCust").value.trim(), code = v.split(" — ")[0].trim().toUpperCase();
       const c = custs.find((x) => x.code === code) || custs.find((x) => D8.book.custLabel(x) === v);
       st.cust = c || null;
-      $("ofCustHint").innerHTML = c ? esc((c.kind === "lab" ? "Lab" : "Khách") + " · tiền " + c.currency) : v ? '<span class="bad">Không có khách này.</span>' + (can("customers.edit") ? ' <a href="#customers/new">+ Thêm khách mới</a>' : "") : "";
+      $("ofCustHint").innerHTML = c ? esc((c.kind === "lab" ? "Labo" : "Khách") + " · tiền " + c.currency) : v ? '<span class="bad">Không có khách này.</span>' + (can("customers.edit") ? ' <a href="#customers/new">+ Thêm khách mới</a>' : "") : "";
       $("ofSumCust").textContent = c ? c.name : "Chưa chọn khách";
       if (c && $("ofCur") && !order) $("ofCur").value = c.currency;
       loadPrices();

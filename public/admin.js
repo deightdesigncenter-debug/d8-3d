@@ -923,7 +923,7 @@
         <form class="add-row" id="stAdd"><input class="input" type="email" id="stEmail" placeholder="Email Google của nhân sự mới" required autocomplete="off"><select class="input" id="stRole">${roleOpts("designer")}</select><button class="btn btn-primary" type="submit">Thêm nhân sự</button></form>
         <p class="error" id="stErr" hidden></p></section>
       ${staffData.accounts ? `<section class="card" id="stAccounts"><div class="card-head"><div><h2 class="h-caps">Cấp quyền cho tài khoản khách</h2><p class="muted" style="margin:6px 0 0;font-size:13px;line-height:1.6">Tài khoản đã đăng nhập Google ở cổng khách hàng nhưng chưa được cấp quyền: chỉ thấy trang web và cổng khách hàng, bị khóa khu làm việc. Chọn vai trò rồi bấm <b>Cấp quyền</b> (bấm 2 lần để xác nhận) để đưa vào nhân sự.</p></div></div>
-        <input class="input" id="acQ" type="search" placeholder="Tìm theo tên, email, lab / phòng khám" autocomplete="off" style="margin-bottom:6px"><div id="acList"></div></section>` : ""}
+        <input class="input" id="acQ" type="search" placeholder="Tìm theo tên, email, labo / phòng khám" autocomplete="off" style="margin-bottom:6px"><div id="acList"></div></section>` : ""}
       <section class="card"><div class="card-head"><div><h2 class="h-caps">Vai trò &amp; quyền</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tick quyền cho từng vai trò. Thêm vai trò mới (ví dụ Trưởng nhóm) nếu cần.</p></div></div>
         ${matrix}
         <div class="add-row"><input class="input" id="rNew" placeholder="Tên vai trò mới, ví dụ Trưởng nhóm" maxlength="60"><button class="btn small" type="button" id="rAdd">+ Thêm vai trò</button><button class="btn btn-primary" type="button" id="rSave">Lưu vai trò &amp; quyền</button></div>
