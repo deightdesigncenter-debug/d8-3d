@@ -745,16 +745,10 @@
     host.innerHTML = D8.skel.card(4);
     let s, st;
     try { [s, st] = await Promise.all([api("/api/settings"), api("/api/book/status")]); } catch (err) { host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-    // what this deployment actually has, so a binding set on the wrong environment or under another name shows up here
-    const seen = (st.bindings || []).map((b) => `<code>${esc(b.name)}</code> (${esc(b.kind)})`).join(", ");
     host.innerHTML = `<section class="card"><h2 class="h-caps">Cơ sở dữ liệu đơn hàng</h2>
-        ${st.db ? `<div class="pt-alert ok"><div>Đã kết nối (Cloudflare D1${st.dbName && st.dbName !== "DB" ? `, tên biến <code>${esc(st.dbName)}</code>` : ""}). ${st.orders} đơn hàng · ${st.customers} khách hàng · ${st.products} mã hàng.</div></div>`
-          : `<div class="pt-alert warn"><div><b>Chưa kết nối.</b> Bản web đang chạy chưa nhận được cơ sở dữ liệu D1.${st.bindings ? ` Máy chủ đang thấy: ${seen || "không có binding nào"} — chưa có D1.` : ""}
-            <p style="margin:10px 0 4px"><b>Nếu đã tạo <code>d8-db</code> và thêm binding mà vẫn thấy dòng này</b>, thường là do một trong ba chỗ:</p>
-            <ol><li>Binding được thêm cho môi trường <b>Preview</b> thay vì <b>Production</b>: Workers &amp; Pages › <b>d8-3d</b> › Settings › chọn <b>Production</b> ở đầu trang › Bindings › Add › <b>D1 database</b>: tên biến <code>DB</code>, chọn <code>d8-db</code> › Save.</li>
-              <li>Chưa triển khai lại sau khi thêm binding: Deployments › bản <b>Production</b> mới nhất › <b>⋯</b> › <b>Retry deployment</b> (binding chỉ có hiệu lực từ lần triển khai sau khi lưu).</li>
-              <li>Cơ sở dữ liệu tạo ở một tài khoản Cloudflare khác với tài khoản chứa d8-3d.</li></ol>
-            <p style="margin:6px 0 0">Chưa tạo thì: Storage &amp; Databases › D1 SQL Database › <b>Create</b>, tên <code>d8-db</code>, rồi làm bước 1 và 2 ở trên. Bảng dữ liệu tự tạo ở lần mở đầu tiên.</p></div></div>`}</section>
+        ${st.db ? `<div class="pt-alert ok"><div>Đã kết nối (Cloudflare D1). ${st.orders} đơn hàng · ${st.customers} khách hàng · ${st.products} mã hàng.</div></div>`
+          : `<div class="pt-alert warn"><div><b>Chưa kết nối.</b> Sổ đơn hàng, khách hàng, bảng giá, báo cáo cần cơ sở dữ liệu D1 (miễn phí):
+            <ol><li>Cloudflare › Storage &amp; Databases › D1 › <b>Create</b>, tên <code>d8-db</code>.</li><li>Workers &amp; Pages › <b>d8-3d</b> › Settings › Bindings › Add › <b>D1 database</b>: tên biến <code>DB</code>, chọn <code>d8-db</code>.</li><li>Deployments › <b>Retry deployment</b>. Bảng dữ liệu tự tạo ở lần mở đầu tiên.</li></ol></div></div>`}</section>
       <section class="card"><h2 class="h-caps">Thanh toán của khách</h2>
         <label class="switch"><input type="checkbox" id="setPay"${s.settings.onlinePay ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Thanh toán online trên cổng khách hàng (PayPal / Stripe)</b></label>
         <p class="hint">Đang ${s.settings.onlinePay ? "bật" : "tắt"}. Khi tắt, khách không thấy nút trả tiền; công nợ và tiền khách trả ghi ở sổ thanh toán của từng khách.</p>
