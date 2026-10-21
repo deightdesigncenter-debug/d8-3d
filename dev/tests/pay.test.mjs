@@ -5,6 +5,8 @@ import { B, ok, done, signin, follow } from "./lib.mjs";
 const cust = await signin("payer" + Date.now() + "@lab.example", "Pay Lab");
 const admin = await signin("d.eightdesigncenter@gmail.com", "D.EIGHT");
 const other = await signin("other" + Date.now() + "@lab.example", "Other Lab");
+// these checks need online payment and the automatic free trial, both off by default
+await admin("/api/settings", { method: "POST", body: { onlinePay: true, autoTrial: true } });
 
 const cfg = await (await fetch(B + "/api/config")).json();
 ok(cfg.pay && cfg.pay.paypal && cfg.pay.stripe, "config reports both providers");
@@ -107,4 +109,5 @@ let last;
 for (let i = 0; i < 6; i++) last = await cust(`/api/jobs/${j6.id}/pay`, { method: "POST", body: { via: i % 2 ? "stripe" : "paypal" } });
 ok(last.status === 429, "too many attempts are limited (" + last.status + ")");
 
+await admin("/api/settings", { method: "POST", body: { onlinePay: false, autoTrial: false } });
 done();

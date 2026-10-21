@@ -1,2 +1,7 @@
+# The site is not open to search engines yet. 3D preview links stay readable for the
+# link-preview crawlers of chat apps (Messenger, Zalo, WhatsApp…); those pages are marked noindex.
 User-agent: *
+Allow: /v/
+Allow: /og/
+Allow: /brand/
 Disallow: /

@@ -1,5 +1,5 @@
 """Rough speed check on a slow phone profile (4x CPU slowdown): time until each main screen is usable,
-long main-thread tasks, and layout shift. Prints a table; fails if a screen takes over 2.5 s locally."""
+long main-thread tasks, and layout shift. Prints a table; fails if a screen takes over 2.5 s locally or shifts (CLS > 0.01)."""
 import sys, os, json, time
 from playwright.sync_api import sync_playwright
 B = os.environ.get("D8_BASE", "http://localhost:8788")
@@ -25,7 +25,7 @@ with sync_playwright() as p:
         ms = int((time.time() - t0) * 1000)
         long_ms = int(pg.evaluate("window.__long || 0")); cls = round(pg.evaluate("window.__cls || 0"), 3)
         rows.append((name, ms, long_ms, cls))
-        if ms > 2500 or cls > 0.1: bad.append(name)
+        if ms > 2500 or cls > 0.01: bad.append(name)  # the owner's rule: no layout shift
     b.close()
 print("%-18s %8s %12s %6s" % ("screen", "ready ms", "long tasks", "CLS"))
 for r in rows: print("%-18s %8d %12d %6.3f" % r)

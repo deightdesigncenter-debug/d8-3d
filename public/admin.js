@@ -60,15 +60,16 @@
   let busy = false;
   const aiTried = new Set(); // cases whose summary was requested automatically in this visit
   const payChecked = new Set(); // cases whose open payments were checked with PayPal/Stripe in this visit
-  let payCfg = {};
-  D8.config().then((c) => { payCfg = (c && c.pay) || {}; });
+  let payCfg = {}, dbOn = false;
+  D8.config().then((c) => { payCfg = (c && c.pay) || {}; dbOn = !!(c && c.db); });
+  const payOnline = () => !!(payCfg.paypal || payCfg.stripe);
   const VIA = { paypal: "PayPal", stripe: "Thẻ (Stripe)", manual: "Chuyển khoản / thủ công", claim: "khách tự chuyển (chuyển khoản / Payoneer…)" };
   let jobWho = "";
   const TRY_STATE = { open: "đang chờ khách trả", held: "PayPal đang giữ tiền để xét duyệt", paid: "đã trả", dead: "đã hủy / hết hạn" };
 
   /* ------------------------------------------------------------ band + panels */
   const BANDS = {
-    jobs: ["Ca hàng", "Ca khách gửi qua cổng khách hàng"],
+    jobs: ["Ca cổng khách", "Ca khách gửi qua cổng khách hàng (cũng có trong Đơn hàng)"],
     denied: ["Không có quyền", "Nhờ quản trị cấp thêm quyền"],
     links: ["Link xem 3D", "Gửi bác sĩ xem thiết kế ngay trên trình duyệt"],
     messages: ["Tin nhắn", "Từ mục Liên hệ trên trang web"],
@@ -85,6 +86,16 @@
     $("bandEyebrow").hidden = !!opts.back;
     $("bandRight").innerHTML = opts.right || "";
   }
+  // shared with orders.js / books.js / snap.js
+  D8.wsRoutes = D8.wsRoutes || [];
+  D8.ws = {
+    show: (id, loading) => show(id, loading), setBand: (t, s, o) => setBand(t, s, o), armed: (b, fn) => armed(b, fn),
+    team: () => team, teamName: (e) => teamName(e), loadTeam: () => loadTeam(), mode: () => mode,
+    denied: () => { setBand(...BANDS.denied); show("p-denied"); }, setNavCount: (h, n) => setNavCount(h, n),
+    createLink: (f, label, days, onProgress, og) => createLink(f, label, days, onProgress, og),
+    legacyCustomers: () => { setBand(...BANDS.customers); show("p-customers"); $("p-customers").innerHTML = legacyCustomersHtml; loadCustomers(); },
+  };
+  let legacyCustomersHtml = "";
   let animKey = null; // fade a screen in once per route, not on every refresh
   function show(id, isLoading) {
     $("booting").hidden = true;
@@ -107,10 +118,14 @@
     mode = null;
     setBand(...BANDS.gate);
     show("gate");
-    $("gateWho").innerHTML = u ? `<p class="who">Bạn đang đăng nhập bằng <b>${esc(u.email)}</b>. Tài khoản này chưa được cấp quyền vào khu làm việc. Nhờ quản trị thêm email này ở mục Nhân sự &amp; phân quyền.
-      <button class="btn small" type="button" id="gateOut" style="margin-top:10px">Đăng xuất tài khoản này</button></p>` : "";
+    // a signed-in customer only gets the website and the customer portal: no sign-in form, just the way back
+    $("gateWho").innerHTML = u ? `<p class="who">Bạn đang đăng nhập bằng <b>${esc(u.email)}</b> — tài khoản khách hàng, không vào được khu làm việc. Bạn vẫn dùng trang web và cổng khách hàng như bình thường. Nếu bạn là kỹ thuật viên của D.EIGHT, nhờ quản trị cấp quyền cho email này.</p>
+      <div class="who-btns"><a class="btn btn-primary small" href="/">Về trang web</a><a class="btn small" href="/portal">Cổng khách hàng</a><button class="btn small" type="button" id="gateOut">Đăng xuất để đổi tài khoản</button></div>` : "";
+    $("gateIn").hidden = !!u;
+    $("gateIntro").hidden = !!u;
+    $("gateTitle").textContent = u ? "Chỉ dành cho đội D.EIGHT" : "Đăng nhập khu làm việc";
     if (u) $("gateOut").onclick = D8.signOut;
-    D8.renderGoogleButton($("gbtn"), null, { width: 320 });
+    else D8.renderGoogleButton($("gbtn"), null, { width: 320 });
   }
   document.addEventListener("d8:user", (e) => {
     if (mode || !e.detail) return;
@@ -132,14 +147,16 @@
     document.body.dataset.authed = "1";
     document.body.dataset.authMode = m;
     D8.renderHeader();
-    ["jobCsv", "custCsv", "msgCsv"].forEach((id) => { $(id).hidden = !can("export.csv"); });
-    await loadTeam();
+    ["jobCsv", "msgCsv"].forEach((id) => { $(id).hidden = !can("export.csv"); });
+    legacyCustomersHtml = $("p-customers").innerHTML;
+    await Promise.all([loadTeam(), D8.config()]);
     route();
     // Each listing is a KV "list" request (1,000 a day on the free plan), so load once and refresh sparingly.
     const h = location.hash.replace(/^#/, "") || "home";
     if (h !== "jobs" && h !== "home") loadJobs(true);
     if (h !== "messages" && can("messages.view")) refreshMessages(true);
     setInterval(() => { if (!document.hidden && !busy && (!$("p-jobs").hidden || !$("p-home").hidden)) loadJobs(true); }, 300000);
+    setInterval(() => { if (!document.hidden && dbOn && D8.refreshOrderBadge) D8.refreshOrderBadge(); }, 60000);
   }
 
   /* ------------------------------------------------------------ router */
@@ -151,12 +168,13 @@
     const denied = () => { setBand(...BANDS.denied); show("p-denied"); };
     if ((m = h.match(/^jobs\/(.+)$/)) && ID_RE.test(m[1])) return openCase(m[1]);
     current = null;
+    const qi = h.indexOf("?"), hp = qi < 0 ? h : h.slice(0, qi), hq = new URLSearchParams(qi < 0 ? "" : h.slice(qi + 1));
+    for (const r of D8.wsRoutes) { const mm = hp.match(r.re); if (mm) { if (dbOn && D8.refreshOrderBadge) D8.refreshOrderBadge(); return r.fn(mm, hq); } }
     if ((m = h.match(/^customers\/(.+)$/))) { let e = ""; try { e = decodeURIComponent(m[1]); } catch {} return can("customers.view") && e ? openCustomer(e) : denied(); }
     if (h === "links") { if (!can("links.manage")) return denied(); setBand(...BANDS.links); show("p-links"); return refreshList(); }
     if (h === "messages") { if (!can("messages.view")) return denied(); setBand(...BANDS.messages); show("p-messages"); return refreshMessages(); }
     if (h === "customers") { if (!can("customers.view")) return denied(); setBand(...BANDS.customers); show("p-customers"); return loadCustomers(); }
     if (h === "staff") { if (!can("staff.manage")) return denied(); show("p-staff"); return drawStaff(); }
-    if (h === "prices") { if (!can("pricing.manage")) return denied(); show("p-prices"); return drawPrices(); }
     if (h === "jobs") {
       setBand(...BANDS.jobs);
       show("p-jobs");
@@ -166,6 +184,7 @@
     show("p-home");
     drawHome();
     loadJobs(false, 30000);
+    if (dbOn && D8.refreshOrderBadge) D8.refreshOrderBadge();
   }
   window.addEventListener("hashchange", route);
 
@@ -255,30 +274,6 @@
     if (sel && !items.some((x) => x[0] === sel)) items.push([sel, teamName(sel) + " (không còn quyền)"]);
     return '<option value="">— Chưa giao —</option>' + items.map(([v, l]) => `<option value="${esc(v)}"${v === sel ? " selected" : ""}>${esc(l)}</option>`).join("");
   };
-  // Teeth / units / arches in a case, for price suggestions ("11, 21", "14-24", "3-14" in Universal)
-  const FDI_ORDER = [[18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28], [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38]];
-  function countUnits(teeth, numbering) {
-    const set = new Set(), arches = new Set();
-    const archOf = (n) => (numbering === "UNS" ? (n <= 16 ? 0 : 1) : FDI_ORDER[0].includes(n) ? 0 : FDI_ORDER[1].includes(n) ? 1 : -1);
-    const valid = (n) => (numbering === "UNS" ? n >= 1 && n <= 32 : archOf(n) >= 0);
-    for (const tok of String(teeth || "").replace(/[–—]/g, "-").split(/[,;\s]+/).filter(Boolean)) {
-      const r = /^(\d{1,2})-(\d{1,2})$/.exec(tok);
-      if (r) {
-        const a = +r[1], b = +r[2];
-        if (!valid(a) || !valid(b)) continue;
-        if (numbering === "UNS") { for (let n = Math.min(a, b); n <= Math.max(a, b); n++) set.add(n); }
-        else if (archOf(a) === archOf(b)) { const row = FDI_ORDER[archOf(a)], i = row.indexOf(a), k = row.indexOf(b); row.slice(Math.min(i, k), Math.max(i, k) + 1).forEach((n) => set.add(n)); }
-      } else if (/^\d{1,2}$/.test(tok) && valid(+tok)) set.add(+tok);
-    }
-    set.forEach((n) => arches.add(archOf(n)));
-    return { units: set.size, arches: arches.size };
-  }
-  const priceCache = new Map();
-  async function priceListFor(owner) {
-    if (!priceCache.has(owner)) priceCache.set(owner, api("/api/prices/" + encodeURIComponent(owner)).catch(() => null));
-    return priceCache.get(owner);
-  }
-  const UNIT_LABEL = { unit: "răng / đơn vị", arch: "hàm", case: "ca" };
 
   function drawCase(j) {
     const seen = adminSeen(); seen[j.id] = j.updated; const ks = Object.keys(seen); if (ks.length > 500) delete seen[ks[0]]; store.set("d8-admin-seen", seen); updateJobCount();
@@ -337,7 +332,7 @@
           ${canSubmit ? `<button class="btn btn-primary small" type="button" id="wfSubmit"${designs.length ? "" : " disabled"}>Gửi QC</button>${designs.length ? "" : '<span class="hint" style="margin:0;align-self:center">Tải file thiết kế lên trước.</span>'}` : ""}
           ${canQc ? `<button class="btn btn-ok small" type="button" id="wfPass">${ICON.check}Đạt</button><button class="btn small btn-danger" type="button" id="wfFail">Không đạt, trả KTV sửa</button>` : ""}
           ${canReopen ? `<button class="btn small" type="button" id="wfReopen">Mở lại để sửa</button>` : ""}</div></div>` : ""}
-      ${can("cases.notes") ? `<form class="compose" id="teamForm" style="margin-top:18px"><label class="field-label" for="teamBox">Ghi chú nội bộ</label>
+      ${can("cases.notes") && j.orderId && dbOn ? `<div style="margin-top:18px"><span class="field-label">Chat nội bộ · ${esc(j.order || "")}</span><div id="jobChat"></div></div>` : can("cases.notes") ? `<form class="compose" id="teamForm" style="margin-top:18px"><label class="field-label" for="teamBox">Ghi chú nội bộ</label>
           <textarea class="input" id="teamBox" maxlength="2000" rows="2" style="min-height:70px" placeholder="Trao đổi trong đội (khách không thấy)…"></textarea>
           <div class="wf-actions"><button class="btn small" type="submit" id="teamSend">Thêm ghi chú</button></div></form>
         <div class="team">${team_.length ? team_.map((n) => `<div class="n k-${esc(n.kind || "note")}"><small>${esc(teamName(n.by) || n.name || "")} · ${esc(D8.fmtDate(n.at, true))}</small><p>${esc(noteText(n))}</p></div>`).join("") : '<p class="muted" style="margin:0">Chưa có ghi chú.</p>'}</div>` : ""}
@@ -400,9 +395,11 @@
       </form>` : ""}
     </section>` : "";
 
-    // billing
+    // billing (with the order book on, money lives in the order; this card is for online payment)
     let billing = "";
-    if (can("billing.view") && "pay" in j) {
+    const orderCard = j.orderId && dbOn ? `<section class="card" id="jobOrder"><div class="card-head-row"><h2 class="h-caps">Đơn hàng</h2><a class="btn small" href="#orders/${esc(j.orderId)}">Mở đơn</a></div>
+      <p class="job-ocode">${esc(j.order || "")}</p><div id="jobOrderBody"><p class="muted" style="margin:0">Đang tải…</p></div></section>` : "";
+    if (can("billing.view") && "pay" in j && (!dbOn || payOnline() || ["due", "check"].includes(j.pay))) {
       const tu = trialUse(j.owner);
       const left = TRIAL_CREDIT - tu.used;
       const tries = (j.payTries || []).filter((t) => t.state !== "paid");
@@ -421,7 +418,6 @@
           ${openTry ? `<button class="btn small" type="button" id="payCheck" style="margin:0 0 14px">Kiểm tra thanh toán</button>` : ""}` : ""}
         ${edit ? `<form id="billForm" style="display:grid;gap:12px">
           <div><label class="field-label" for="billPrice">Giá ca (USD)</label><input class="input" id="billPrice" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.price === "number" ? j.price : ""}" placeholder="VD: 35"></div>
-          <div id="billSuggest"></div>
           <div><label class="field-label" for="billDue">Số tiền khách cần trả (USD)</label><input class="input" id="billDue" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.due === "number" ? j.due : ""}" placeholder="Để trống = bằng giá ca">
             <p class="hint" style="margin:6px 0 0">Dùng khi chỉ thu một phần (ví dụ phần vượt mức dùng thử bạn đã thương lượng).</p></div>
           <div><label class="field-label" for="billPay">Thanh toán</label><select class="input" id="billPay">${Object.entries(PAY_LABEL).filter(([k]) => k !== "check" || j.pay === "check").map(([k, l]) => `<option value="${k}"${(j.pay || "") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
@@ -453,10 +449,17 @@
           <div id="aiSumBody">${j.ai && j.ai.sum ? `<p class="ai-sum">${esc(j.ai.sum)}</p><p class="ai-meta">Tạo lúc ${esc(D8.fmtDate(j.ai.sumAt, true))}${j.ai.sumUpd < j.updated ? " · <b>ca đã có cập nhật sau bản tóm tắt này</b>" : ""}. AI có thể sai, đối chiếu lại phiếu gốc.</p>` : '<p class="muted" style="margin:0">AI đọc phiếu chỉ định và tin nhắn của khách rồi tóm tắt bằng tiếng Việt.</p>'}</div></section>` : ""}
           <section class="card"><h2 class="h-caps" style="margin-bottom:16px">Thông tin ca</h2><dl class="dl">${det}</dl>
           ${j.notes ? `<p class="grp" style="margin-top:20px">Yêu cầu của khách</p><p class="notes">${esc(j.notes)}</p>` : ""}</section>
-          ${billing}</aside>
+          ${orderCard}${billing}</aside>
       </div>`;
     const th = $("thread");
     if (th) { th.scrollTop = th.scrollHeight; D8.wireThread(th, j, "vi"); }
+    if ($("jobChat") && D8.orderChat) D8.orderChat($("jobChat"), j.orderId);
+    if ($("jobOrderBody")) api("/api/orders/" + j.orderId).then((d) => {
+      const o = d.order, box = $("jobOrderBody"); if (!box || !current || current.id !== j.id) return;
+      box.innerHTML = `<dl class="dl"><div><dt>Khách</dt><dd>${esc(o.customer_code + " — " + o.customer_name)}</dd></div><div><dt>Hạng mục</dt><dd>${esc(o.items_text || "Chưa có")}</dd></div>
+        ${"total" in o ? `<div><dt>Thành tiền</dt><dd>${esc(D8.fmtMoney(o.total, o.currency))}</dd></div><div><dt>Còn nợ</dt><dd>${esc(D8.fmtMoney(o.due, o.currency))}</dd></div>` : ""}</dl>
+        ${can("orders.edit") || can("billing.edit") ? `<p class="hint"><a href="#orders/${o.id}/edit">Thêm hạng mục, sửa giá ›</a></p>` : ""}`;
+    }).catch((err) => { const box = $("jobOrderBody"); if (box) box.innerHTML = `<p class="hint">${esc(err.message)}</p>`; });
     wireCase(j);
   }
 
@@ -581,19 +584,6 @@
           redraw((await post("/billing", { price: raw === "" ? null : Number(raw), due: rawDue === "" ? null : Number(rawDue), pay: $("billPay").value, trial: $("billTrial").checked })).job);
           D8.done($("billForm").querySelector("[type=submit]"), "Đã lưu");
         } catch (err) { D8.busy(b, false); D8.toast(err.message); }
-      });
-      // price suggestion from the customer's price list (or the default list)
-      if (j.owner && j.service) priceListFor(j.owner).then((d) => {
-        const box = $("billSuggest"); if (!d || !box || !current || current.id !== j.id) return;
-        const items = d.custom ? d.list.items : (d.fallback.items || []);
-        const row = items.find((x) => x.service === j.service);
-        if (!row) { box.innerHTML = `<p class="hint" style="margin:0">Chưa có giá cho dịch vụ này trong bảng giá ${d.custom ? "riêng của khách" : "mặc định"}.</p>`; return; }
-        const c = countUnits(j.teeth, j.numbering);
-        const qty = row.unit === "case" ? 1 : row.unit === "arch" ? Math.max(1, c.arches) : Math.max(1, c.units);
-        const total = Math.round(row.price * qty * 100) / 100;
-        box.innerHTML = `<p class="suggest">Theo bảng giá ${d.custom ? "riêng của khách" : "mặc định"}: <b>${esc(money(total))}</b> (${esc(row.name || D8.svcLabel(row.service))} ${esc(money(row.price))} / ${esc(UNIT_LABEL[row.unit])}${row.unit === "case" ? "" : " × " + qty})
-          <br><button class="btn small" type="button" id="useSuggest">Dùng giá này</button></p>`;
-        $("useSuggest").addEventListener("click", () => { $("billPrice").value = total; $("billPrice").focus(); });
       });
     }
     const payOk = $("payOk"), payNo = $("payNo");
@@ -746,15 +736,16 @@
 
   /* ------------------------------------------------------------ customers */
   async function loadCustomers() {
-    if (!users.length) $("custBody").innerHTML = D8.skel.tableRows(7, 4);
+    if (!users.length && $("custBody")) $("custBody").innerHTML = D8.skel.tableRows(7, 4);
     try {
       const [u] = await Promise.all([api("/api/admin/users"), jobs.length ? null : loadJobs(true)]);
       users = u.users || [];
       $("custErr").hidden = true;
       drawCustomers();
-    } catch (err) { $("custErr").textContent = err.message; $("custErr").hidden = false; }
+    } catch (err) { if ($("custErr")) { $("custErr").textContent = err.message; $("custErr").hidden = false; } }
   }
   function drawCustomers() {
+    if (!$("custQ")) return;
     const q = $("custQ").value.toLowerCase();
     const per = {}; jobs.forEach((x) => { per[x.owner] = (per[x.owner] || 0) + 1; });
     const shown = users.filter((u) => !q || (u.name + " " + u.email + " " + u.practice + " " + u.country).toLowerCase().includes(q));
@@ -765,13 +756,34 @@
       : `<tr><td colspan="7" class="muted">${users.length ? "Không có khách nào khớp." : "Chưa có khách nào đăng nhập."}</td></tr>`;
     $("custBody").querySelectorAll("[data-owner]").forEach((a) => a.addEventListener("click", () => { jobFilter = "all"; jobQuery = a.dataset.owner; $("jobQ").value = jobQuery; }));
   }
-  $("custQ").addEventListener("input", drawCustomers);
+  document.addEventListener("input", (e) => { if (e.target && e.target.id === "custQ" && !$("cuQ")) drawCustomers(); });
 
   /* ------------------------------------------------------------ dashboard */
+  let dashBusy = false;
   function drawHome() {
     const host = $("dash");
     const u = D8.user;
-    setBand("Xin chào" + (u && u.name ? ", " + u.name : ""), u ? (u.roleLabel || "") + " · việc cần làm hôm nay" : "Việc cần làm hôm nay");
+    // Quick buttons sit in the band on wide screens; on narrower ones they would wrap under the title and push the
+    // page down after load (layout shift), so there they open the dashboard instead (.dash-quick).
+    const quick = dbOn && can("orders.edit");
+    setBand("Xin chào" + (u && u.name ? ", " + u.name : ""), u ? (u.roleLabel || "") + " · việc cần làm hôm nay" : "Việc cần làm hôm nay",
+      { right: quick ? '<div class="band-btns home-q"><a class="btn btn-cream small" href="#orders/new">+ Đơn mới</a><a class="btn btn-light small" href="#orders">Tìm đơn</a></div>' : "" });
+    if (dbOn && D8.ordersDash) {
+      if (!host.dataset.dash) host.innerHTML = D8.skel.card(4) + D8.skel.card(4) + D8.skel.card(4);
+      if (dashBusy) return;
+      dashBusy = true;
+      const seen = adminSeen();
+      const portal = [];
+      const row = (x) => `<li><a href="#jobs/${esc(x.id)}"><span class="t">${esc(x.order || x.id)} · ${esc(x.title)}</span><span class="i">${esc(x.ownerName || "")}</span><span class="a">${esc(D8.ago(x.updated))}</span></a></li>`;
+      const pcard = (title, list, empty) => `<section class="card"><div class="dash-h"><h2 class="h-caps">${esc(title)}</h2><b>${list.length}</b></div>${list.length ? `<ul>${list.slice(0, 6).map(row).join("")}</ul>` : `<p class="none">${esc(empty)}</p>`}</section>`;
+      if (can("cases.chat_read")) portal.push(pcard("Khách vừa nhắn (cổng khách)", jobs.filter((x) => needsReply(x, seen)), "Không có tin nhắn mới của khách."));
+      if (can("billing.edit") && payOnline()) portal.push(pcard("Thanh toán online chờ xác nhận", jobs.filter((x) => x.pay === "check"), "Không có khoản nào chờ xác nhận."));
+      if (can("messages.view")) { const unread = messages.filter((x) => !seenMsgs.has(x.id)).length; portal.push(`<section class="card"><div class="dash-h"><h2 class="h-caps">Tin nhắn từ trang web</h2><b>${unread}</b></div><p class="none">${unread ? "Có tin nhắn mới chưa đọc." : "Không có tin nhắn mới."} <a href="#messages">Mở hộp thư</a></p></section>`); }
+      const head = quick ? '<div class="dash-quick"><a class="btn btn-primary small" href="#orders/new">+ Đơn mới</a><a class="btn small" href="#orders">Tìm đơn</a></div>' : "";
+      D8.ordersDash(host, portal.join(""), head).then((ok) => { host.dataset.dash = "1"; dashBusy = false; if (!ok) { dbOn = false; drawHome(); } })
+        .catch((err) => { dashBusy = false; host.innerHTML = `<p class="error">${esc(err.message)}</p>`; });
+      return;
+    }
     if (!jobsAt && !jobs.length) { host.innerHTML = D8.skel.card(4) + D8.skel.card(4) + D8.skel.card(4); return; }
     const me = myEmail(), seen = adminSeen(), keyMode = mode === "key";
     const open = (x) => !["delivered", "cancelled"].includes(x.status);
@@ -794,60 +806,6 @@
     host.querySelectorAll("[data-who]").forEach((a) => a.addEventListener("click", () => { jobWho = a.dataset.who; $("jobWho").value = jobWho; jobFilter = "all"; }));
   }
 
-  /* ------------------------------------------------------------ price lists */
-  const UNITS = [["unit", "/ răng – đơn vị"], ["arch", "/ hàm"], ["case", "/ ca"]];
-  async function priceEditor(host, key) {
-    host.innerHTML = D8.skel.card(4);
-    let data;
-    try { data = await api("/api/prices/" + encodeURIComponent(key)); } catch (err) { host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-    const isDefault = key === "default";
-    let items = (data.custom || isDefault ? data.list.items : []).map((x) => ({ ...x }));
-    let note = (data.custom || isDefault ? data.list.note : "") || "";
-    const fallback = (data.fallback && data.fallback.items) || [];
-    const draw = () => {
-      host.innerHTML = `<div class="tbl-wrap"><table class="grid-tbl" style="min-width:640px"><thead><tr><th>Dịch vụ</th><th>Hạng mục</th><th class="unit">Tính theo</th><th class="num">Giá (USD)</th><th class="x"></th></tr></thead><tbody>
-        ${items.map((x, i) => `<tr>
-          <td><select class="input" data-i="${i}" data-k="service">${["", ...D8.SERVICES].map((s) => `<option value="${esc(s)}"${s === x.service ? " selected" : ""}>${esc(s ? D8.svcLabel(s) : "— Chọn dịch vụ —")}</option>`).join("")}</select></td>
-          <td><input class="input" data-i="${i}" data-k="name" maxlength="80" value="${esc(x.name || "")}" placeholder="VD: Mão zirconia trên implant"></td>
-          <td class="unit"><select class="input" data-i="${i}" data-k="unit">${UNITS.map(([u, l]) => `<option value="${u}"${u === x.unit ? " selected" : ""}>${l}</option>`).join("")}</select></td>
-          <td class="num"><input class="input" type="number" min="0" step="0.01" inputmode="decimal" data-i="${i}" data-k="price" value="${x.price ?? ""}"></td>
-          <td class="x"><button class="iconbtn del" type="button" data-rm="${i}" aria-label="Xóa dòng">${ICON.trash}</button></td></tr>`).join("")
-          || `<tr><td colspan="5" class="muted">${isDefault ? "Chưa có dòng giá nào." : "Khách này đang dùng bảng giá mặc định" + (fallback.length ? " (" + fallback.length + " dòng)" : "") + ". Thêm dòng để đặt giá riêng cho khách."}</td></tr>`}
-        </tbody></table></div>
-        <div class="wf-actions"><button class="btn small" type="button" data-add>+ Thêm dòng</button>${!isDefault && fallback.length && !items.length ? '<button class="btn small" type="button" data-copy>Chép từ bảng giá mặc định</button>' : ""}</div>
-        <label class="field-label" style="margin-top:16px" for="pn-${esc(key)}">Ghi chú (chỉ nội bộ)</label><textarea class="input" id="pn-${esc(key)}" data-note rows="2" maxlength="600" style="min-height:64px">${esc(note)}</textarea>
-        <div class="wf-actions"><button class="btn btn-primary small" type="button" data-save>Lưu bảng giá</button>${!isDefault && data.custom ? '<button class="btn small btn-danger" type="button" data-reset>Bỏ giá riêng, dùng bảng mặc định</button>' : ""}</div>
-        <p class="error" data-err hidden></p>`;
-      host.querySelectorAll("[data-i]").forEach((el) => el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => { const x = items[+el.dataset.i]; x[el.dataset.k] = el.dataset.k === "price" ? el.value : el.value; }));
-      host.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => { items.splice(+b.dataset.rm, 1); draw(); }));
-      host.querySelector("[data-add]").addEventListener("click", () => { items.push({ service: "", name: "", unit: "unit", price: "" }); draw(); });
-      const cp = host.querySelector("[data-copy]"); if (cp) cp.addEventListener("click", () => { items = fallback.map((x) => ({ ...x })); draw(); });
-      host.querySelector("[data-note]").addEventListener("input", (e) => { note = e.target.value; });
-      const err = host.querySelector("[data-err]");
-      host.querySelector("[data-save]").addEventListener("click", async (e) => {
-        const b = e.currentTarget; err.hidden = true;
-        if (items.some((x) => x.price === "" || isNaN(Number(x.price)))) { err.textContent = "Điền giá cho mọi dòng (số USD)."; err.hidden = false; return; }
-        D8.busy(b, true);
-        try {
-          const r = await api("/api/prices/" + encodeURIComponent(key), { method: "POST", body: { items: items.map((x) => ({ ...x, price: Number(x.price) })), note } });
-          data = { ...data, list: r.list, custom: r.custom }; items = r.list.items.map((x) => ({ ...x })); priceCache.clear();
-          draw(); D8.done(host.querySelector("[data-save]"), "Đã lưu");
-        } catch (ex) { D8.busy(b, false); err.textContent = ex.message; err.hidden = false; }
-      });
-      const rs = host.querySelector("[data-reset]");
-      if (rs) armed(rs, async () => { await api("/api/prices/" + encodeURIComponent(key), { method: "POST", body: { reset: true } }); priceCache.clear(); data.custom = false; items = []; note = ""; draw(); D8.toast("Khách dùng lại bảng giá mặc định."); });
-    };
-    draw();
-  }
-  function drawPrices() {
-    setBand("Bảng giá", "Giá mặc định cho mọi khách; đặt giá riêng trong hồ sơ từng khách");
-    $("p-prices").innerHTML = `<section class="card"><h2 class="h-caps">Bảng giá mặc định</h2>
-      <p class="sub">Khách không bao giờ thấy bảng giá. Khi báo giá một ca, hệ thống gợi ý số tiền theo bảng giá riêng của khách (nếu có) hoặc bảng này, nhân với số răng / số hàm trong phiếu.</p>
-      <div id="defPrices"></div></section>
-      ${can("customers.view") ? `<section class="card"><h2 class="h-caps">Giá riêng theo khách</h2><p class="sub">Mở <a href="#customers">Khách hàng</a>, chọn một khách rồi chỉnh mục Bảng giá riêng.</p></section>` : ""}`;
-    priceEditor($("defPrices"), "default");
-  }
-
   /* ------------------------------------------------------------ one customer */
   async function openCustomer(email) {
     setBand("Khách hàng", email, { back: true, backHref: "#customers", backText: "Khách hàng" });
@@ -867,16 +825,46 @@
             <span class="meta">Gửi ${esc(D8.fmtDate(x.created, true))} · cập nhật ${esc(D8.ago(x.updated))}</span>
             <span class="right">${stChip(x.status)}${x.trial ? '<span class="badge-trial">Dùng thử</span>' : ""}${payChip(x)}</span></a>`).join("")}</div>` : '<p class="muted" style="margin:0">Khách chưa gửi ca nào.</p>'}
         </section>
-        ${can("pricing.manage") ? `<section class="card"><h2 class="h-caps">Bảng giá riêng</h2><p class="sub">Chỉ đội D.EIGHT thấy. Để trống thì khách dùng bảng giá mặc định.</p><div id="custPrices"></div></section>` : ""}
+        ${dbOn ? `<section class="card"><h2 class="h-caps">Hồ sơ khách hàng</h2><div id="custLink"><p class="muted" style="margin:0">Đang tải…</p></div></section>` : ""}
       </div><aside>
         <section class="card"><h2 class="h-caps" style="margin-bottom:16px">Hồ sơ</h2><dl class="dl">
           <div><dt>Tên</dt><dd>${esc(u.name || "—")}</dd></div><div><dt>Email</dt><dd><a href="mailto:${esc(email)}">${esc(email)}</a></dd></div>
           <div><dt>Lab / phòng khám</dt><dd>${esc(u.practice || "—")}</dd></div><div><dt>Quốc gia</dt><dd>${esc(u.country || "—")}</dd></div>
           <div><dt>Điện thoại</dt><dd>${esc(u.phone || "—")}</dd></div>
           <div><dt>Đăng nhập đầu</dt><dd>${u.created ? esc(D8.fmtDate(u.created)) : "—"}</dd></div><div><dt>Gần nhất</dt><dd>${u.last ? esc(D8.ago(u.last)) : "—"}</dd></div></dl></section>
+        ${can("staff.manage") ? `<section class="card" id="custAccess"><h2 class="h-caps" style="margin-bottom:12px">Khu làm việc</h2><p class="muted" style="margin:0">Đang tải…</p></section>` : ""}
         ${can("billing.view") ? `<section class="card"><h2 class="h-caps" style="margin-bottom:12px">Dùng thử</h2><p class="muted" style="margin:0">${tu.cases ? `${tu.cases} ca dùng thử, tổng giá ${esc(money(tu.used))} / mức ${esc(money(TRIAL_CREDIT))}. Phần vượt do bạn thương lượng với khách.` : "Không có ca dùng thử."}</p></section>` : ""}
       </aside></div>`;
-    if ($("custPrices")) priceEditor($("custPrices"), email);
+    if ($("custAccess")) drawAccess(email, u);
+    if ($("custLink") && D8.book) D8.book.customers().then((cs) => {
+      const c = cs.find((x) => (x.logins || []).includes(email)), box = $("custLink"); if (!box) return;
+      box.innerHTML = c ? `<p style="margin:0 0 12px">Tài khoản này thuộc khách <b>${esc(c.code)}</b> — ${esc(c.name)}. Đơn hàng, bảng giá riêng và công nợ ở hồ sơ khách.</p><a class="btn small btn-primary" href="#cust/${c.id}">Mở hồ sơ khách</a>`
+        : `<p style="margin:0 0 12px">Chưa gắn vào khách nào.</p><a class="btn small" href="#customers">Gắn ở danh sách khách hàng</a>`;
+    }).catch(() => {});
+  }
+
+  // A customer account is locked out of the workspace until someone with staff.manage grants it a role.
+  async function drawAccess(email, u) {
+    let d;
+    try { d = await api("/api/staff"); } catch { if ($("custAccess")) $("custAccess").hidden = true; return; }
+    const box = $("custAccess");
+    if (!box) return;
+    const head = '<h2 class="h-caps" style="margin-bottom:12px">Khu làm việc</h2>';
+    const rec = d.staff.find((x) => x.email === email);
+    if (rec) {
+      box.innerHTML = head + `<p style="margin:0 0 12px;line-height:1.6">Tài khoản này là nhân sự: <b>${esc(rec.owner ? "Chủ tài khoản" : (d.roles[rec.role] || {}).label || rec.role)}</b>${rec.active === false ? " (đang khóa)" : ""}.</p><a class="btn small" href="#staff">Sửa ở Nhân sự &amp; phân quyền</a>`;
+      return;
+    }
+    box.innerHTML = head + `<p class="muted" style="margin:0 0 12px;line-height:1.6">Tài khoản khách hàng: chỉ thấy trang web và cổng khách hàng, bị khóa khu làm việc.</p>
+      <label class="field-label" for="caRole">Vai trò khi cấp quyền</label>
+      <select class="input" id="caRole">${Object.entries(d.roles).map(([k, r]) => `<option value="${esc(k)}"${k === "designer" ? " selected" : ""}>${esc(r.label)}</option>`).join("")}</select>
+      <button class="btn btn-primary small" type="button" id="caGrant" style="margin-top:12px">Cấp quyền khu làm việc</button><p class="hint" style="margin:8px 0 0">Bấm 2 lần để xác nhận.</p>`;
+    armed($("caGrant"), async () => {
+      await api("/api/staff", { method: "POST", body: { email, role: $("caRole").value, perms: null, active: true, name: (u && u.name) || "" } });
+      staffData = null; loadTeam();
+      D8.toast("Đã cấp quyền: " + email + " vào được khu làm việc.");
+      drawAccess(email, u);
+    });
   }
 
   /* ------------------------------------------------------------ staff and permissions */
@@ -885,7 +873,11 @@
     setBand("Nhân sự & phân quyền", "Ai vào được khu làm việc và được làm gì");
     const host = $("p-staff");
     if (!staffData) host.innerHTML = D8.skel.card(5) + D8.skel.card(6);
-    try { staffData = await api("/api/staff"); roleDraft = JSON.parse(JSON.stringify(staffData.roles)); }
+    try {
+      const [s, u] = await Promise.all([api("/api/staff"), api("/api/admin/users").catch(() => null)]);
+      staffData = s; staffData.accounts = u ? u.users || [] : null;
+      roleDraft = JSON.parse(JSON.stringify(staffData.roles));
+    }
     catch (err) { host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
     renderStaff();
   }
@@ -930,6 +922,8 @@
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nhân sự</th><th>Vai trò</th><th>Quyền</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
         <form class="add-row" id="stAdd"><input class="input" type="email" id="stEmail" placeholder="Email Google của nhân sự mới" required autocomplete="off"><select class="input" id="stRole">${roleOpts("designer")}</select><button class="btn btn-primary" type="submit">Thêm nhân sự</button></form>
         <p class="error" id="stErr" hidden></p></section>
+      ${staffData.accounts ? `<section class="card" id="stAccounts"><div class="card-head"><div><h2 class="h-caps">Cấp quyền cho tài khoản khách</h2><p class="muted" style="margin:6px 0 0;font-size:13px;line-height:1.6">Tài khoản đã đăng nhập Google ở cổng khách hàng nhưng chưa được cấp quyền: chỉ thấy trang web và cổng khách hàng, bị khóa khu làm việc. Chọn vai trò rồi bấm <b>Cấp quyền</b> (bấm 2 lần để xác nhận) để đưa vào nhân sự.</p></div></div>
+        <input class="input" id="acQ" type="search" placeholder="Tìm theo tên, email, lab / phòng khám" autocomplete="off" style="margin-bottom:6px"><div id="acList"></div></section>` : ""}
       <section class="card"><div class="card-head"><div><h2 class="h-caps">Vai trò &amp; quyền</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tick quyền cho từng vai trò. Thêm vai trò mới (ví dụ Trưởng nhóm) nếu cần.</p></div></div>
         ${matrix}
         <div class="add-row"><input class="input" id="rNew" placeholder="Tên vai trò mới, ví dụ Trưởng nhóm" maxlength="60"><button class="btn small" type="button" id="rAdd">+ Thêm vai trò</button><button class="btn btn-primary" type="button" id="rSave">Lưu vai trò &amp; quyền</button></div>
@@ -953,6 +947,28 @@
     host.querySelectorAll("[data-active]").forEach((b) => b.addEventListener("click", () => { const s = staff[+b.dataset.active]; save(s, { active: s.active === false }, b); }));
     host.querySelectorAll("[data-remove]").forEach((b) => armed(b, async () => { await api("/api/staff/" + encodeURIComponent(staff[+b.dataset.remove].email), { method: "DELETE" }); await drawStaff(); loadTeam(); D8.toast("Đã xóa nhân sự."); }));
     $("stAdd").addEventListener("submit", (e) => { e.preventDefault(); save({ email: $("stEmail").value.trim(), role: $("stRole").value }, {}, $("stAdd").querySelector("[type=submit]")); });
+    // customer accounts (signed in, not staff) that can be granted workspace access
+    if ($("acList")) {
+      const staffMails = new Set(staff.map((s) => s.email));
+      const pool = staffData.accounts.filter((a) => !staffMails.has(a.email));
+      const drawAc = () => {
+        const fold = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase().trim();
+        const q = fold($("acQ").value);
+        const hit = pool.filter((a) => !q || fold([a.name, a.email, a.practice].join(" ")).includes(q));
+        $("acList").innerHTML = hit.length ? hit.slice(0, 8).map((a) => `<div class="ac-row"><div><b>${esc(a.name || a.email.split("@")[0])}</b><small>${esc(a.email)}${a.practice ? " · " + esc(a.practice) : ""}${a.last ? " · đăng nhập " + esc(D8.ago(a.last)) : ""}</small></div>
+            <select class="input" data-acrole="${esc(a.email)}" aria-label="Vai trò cho ${esc(a.email)}">${roleOpts("designer")}</select>
+            <button class="btn small btn-primary" type="button" data-grant="${esc(a.email)}">Cấp quyền</button></div>`).join("")
+            + (hit.length > 8 ? `<p class="hint" style="margin:10px 0 0">Còn ${hit.length - 8} tài khoản nữa — gõ để tìm.</p>` : "")
+          : `<p class="muted" style="margin:8px 0 0">${pool.length ? "Không có tài khoản nào khớp." : "Chưa có tài khoản khách nào đăng nhập."}</p>`;
+        $("acList").querySelectorAll("[data-grant]").forEach((b) => armed(b, async () => {
+          const email = b.dataset.grant, role = $("acList").querySelector(`[data-acrole="${CSS.escape(email)}"]`).value;
+          await api("/api/staff", { method: "POST", body: { email, role, perms: null, active: true, name: (pool.find((a) => a.email === email) || {}).name || "" } });
+          await drawStaff(); loadTeam(); D8.toast("Đã cấp quyền: " + email + " vào được khu làm việc.");
+        }));
+      };
+      $("acQ").addEventListener("input", drawAc);
+      drawAc();
+    }
 
     // roles matrix (edited as a draft, saved together)
     host.querySelectorAll("[data-rk]").forEach((c) => c.addEventListener("change", () => {
@@ -982,11 +998,12 @@
       ...jobs.map((x) => [x.id, new Date(x.created).toLocaleString("vi-VN"), x.ownerName || userName(x.owner), x.owner, x.title, D8.svcLabel(x.service),
         D8.statusLabel(x.status), x.trial ? "Có" : "", typeof x.price === "number" ? x.price : "", PAY_LABEL[x.pay || ""], new Date(x.updated).toLocaleString("vi-VN")])]);
   });
-  $("custCsv").addEventListener("click", () => {
+  document.addEventListener("click", (e) => { if (e.target && e.target.id === "custCsv") custCsv(); });
+  const custCsv = () => {
     const per = {}; jobs.forEach((x) => { per[x.owner] = (per[x.owner] || 0) + 1; });
     csvDownload("D8-khach-hang-" + today() + ".csv", [["Tên", "Email", "Lab / phòng khám", "Quốc gia", "Điện thoại", "Số ca", "Đăng nhập lần đầu", "Lần gần nhất"],
       ...users.map((u) => [u.name, u.email, u.practice, u.country, u.phone, per[u.email] || 0, u.created ? new Date(u.created).toLocaleString("vi-VN") : "", u.last ? new Date(u.last).toLocaleString("vi-VN") : ""])]);
-  });
+  };
   $("msgCsv").addEventListener("click", () => {
     csvDownload("D8-tin-nhan-" + today() + ".csv", [["Ngày", "Tên", "Email", "Lab / phòng khám", "Quốc gia", "Chủ đề", "Nội dung"],
       ...messages.map((m) => [new Date(m.created).toLocaleString("vi-VN"), m.name, m.email, m.practice, m.country, m.service, m.message])]);
@@ -1047,7 +1064,7 @@
     const head = await f.slice(0, 4096).text();
     if (!/<html|<!doctype|<\!--/i.test(head)) throw new Error("File này không phải file HTML.");
   }
-  async function createLink(f, label, days, onProgress) {
+  async function createLink(f, label, days, onProgress, og = {}) {
     await checkHtml(f);
     onProgress(0, "Đang chuẩn bị và nén file…");
     const prepared = await withStorageShim(f);
@@ -1057,6 +1074,7 @@
     const data = await xhrUpload(body, {
       "X-Case-Label": encodeURIComponent(label), "X-Expire-Days": String(days), "X-Content-Encoding": gz ? "gzip" : "identity",
       "X-Original-Size": String(prepared.size), "Content-Type": "application/octet-stream",
+      "X-OG-Title": encodeURIComponent(og.title || ""), "X-OG-Desc": encodeURIComponent(og.desc || ""), "X-Order-Id": String(og.orderId || 0),
     }, (p) => onProgress(p, p < 1 ? "Đang tải lên " + Math.round(p * 100) + "% (" + fmtMB(body.size) + ")" : "Đang lưu…"));
     onProgress(1, "Xong.");
     return data;
@@ -1084,31 +1102,80 @@
     if (!file) return;
     $("uploadError").hidden = true; $("create").disabled = true; busy = true;
     try {
-      const data = await createLink(file, $("label").value.trim(), selectedDays(), setProgress);
+      const used = file, ord = linkOrder;
+      const data = await createLink(file, $("label").value.trim(), selectedDays(), setProgress, { title: $("label").value.trim(), desc: $("ogDesc") ? $("ogDesc").value.trim() : "", orderId: ord ? ord.id : 0 });
       pending.set(data.id, data);
       showResult(data);
       resetForm();
       refreshList();
+      if (ord) api(`/api/orders/${ord.id}/previews`, { method: "POST", body: { linkId: data.id } }).then(() => D8.toast("Đã gắn link vào đơn " + ord.code + ".")).catch((e) => D8.toast(e.message));
+      snapFor(used, data);
     } catch (err) { showUploadError(err.message); $("create").disabled = !file; }
     finally { busy = false; setTimeout(() => { $("progress").hidden = true; }, 1200); }
   });
   function resetForm(keepLabel) {
     file = null;
     $("file").value = "";
-    if (!keepLabel) $("label").value = "";
+    if (!keepLabel) { $("label").value = ""; if ($("ogDesc")) $("ogDesc").value = ""; if ($("ogOrder")) $("ogOrder").value = ""; linkOrder = null; ogLooked = ""; if ($("ogOrderHint")) $("ogOrderHint").textContent = ""; }
     drop.classList.remove("has-file");
     $("dropTitle").textContent = "Kéo file HTML xuất từ exocad vào đây";
     $("dropSub").textContent = "hoặc bấm để chọn file";
     $("create").disabled = true;
   }
 
+  // preview picture for chat apps: capture the design, frame it, upload it
+  let snapCtl = null, linkOrder = null;
+  async function snapFor(f, item) {
+    if (!D8.snap || !$("snapBox")) return;
+    if (snapCtl) { snapCtl.destroy(); snapCtl = null; }
+    const box = $("snapBox"), say = (t) => { $("snapSay").textContent = t; };
+    box.hidden = false; $("snapStage").innerHTML = ""; $("snapImg").src = "/og/" + item.id + ".jpg";
+    $("snapT").textContent = item.title || item.label || "3D design preview"; $("snapD").textContent = item.desc || "D.EIGHT DESIGN CENTER"; $("snapHost").textContent = location.host;
+    const put = async (url) => {
+      const blob = await D8.snap.compose(url);
+      $("snapImg").src = URL.createObjectURL(blob);
+      const r = await fetch(`/api/cases/${item.id}/og`, { method: "PUT", headers: { ...D8.authHeaders(), "Content-Type": "image/jpeg" }, body: blob, credentials: "same-origin" });
+      if (!r.ok) throw new Error("Không lưu được ảnh xem trước.");
+    };
+    say("Đang mở thiết kế để chụp ảnh xem trước…");
+    $("snapTake").disabled = true;
+    const ctl = snapCtl = D8.snap.open(f, $("snapStage"));
+    $("snapTake").onclick = async (e) => { const b = e.currentTarget; D8.busy(b, true); try { const s = await ctl.capture(); if (!s.url) throw new Error("Không chụp được."); await put(s.url); D8.done(b, "Đã lưu ảnh"); say("Đã lưu ảnh xem trước theo góc này."); } catch (ex) { D8.busy(b, false); D8.toast(ex.message); } };
+    $("snapDef").onclick = async (e) => { const b = e.currentTarget; D8.busy(b, true); try { await put(""); D8.done(b, "Đã dùng"); say("Đang dùng ảnh mặc định của D.EIGHT."); } catch (ex) { D8.busy(b, false); D8.toast(ex.message); } };
+    try {
+      const r = await ctl.ready;
+      if (snapCtl !== ctl) return;
+      if (!r.exocad) { await put(""); say("Không phải bản xem trước exocad: dùng ảnh mặc định."); return; }
+      const s = await ctl.capture();
+      await put(s.url || "");
+      $("snapTake").disabled = false;
+      say(s.url ? "Đã lưu ảnh xem trước. Muốn góc khác: xoay mô hình trong khung rồi bấm Chụp góc này." : "Không chụp được 3D, đang dùng ảnh mặc định.");
+    } catch (ex) { say(ex.message); }
+  }
+  let ogLooked = "";
+  if ($("ogOrder")) $("ogOrder").addEventListener("change", async () => {
+    // the hint keeps its line while looking up, so nothing below moves (a click on "Tạo link" must not miss)
+    const code = $("ogOrder").value.trim();
+    if (code === ogLooked) return;
+    ogLooked = code; linkOrder = null;
+    if (!code) { $("ogOrderHint").textContent = ""; return; }
+    try {
+      const d = await api("/api/orders?status=&limit=5&q=" + encodeURIComponent(code));
+      const o = d.items.find((x) => x.code === code) || d.items[0];
+      if (!o) { $("ogOrderHint").textContent = "Không tìm thấy đơn này."; return; }
+      linkOrder = o;
+      const t = D8.ogText(o, (o.previews || []).length, true);
+      $("label").value = t.title; $("ogDesc").value = t.desc;
+      $("ogOrderHint").textContent = "Đơn " + o.code + " · " + o.customer_name + (o.patient ? " · " + o.patient : "");
+    } catch (err) { $("ogOrderHint").textContent = err.message; }
+  });
   function messageEn(item) {
-    const what = item.label ? item.label : "your case";
+    const what = item.title || item.label || "your case";
     return "Hi Dr. [Name],\n\nThe 3D design for " + what + " is ready for your review. It opens in any browser on your phone or computer, no software needed:\n\n" +
       item.url + "\n\nThe link is available until " + fmtDateEn(item.expires) + ". Let me know if you would like any adjustments.\n\nD.EIGHT DESIGN CENTER";
   }
   function messageVi(item) {
-    const what = item.label ? item.label : "ca của bác sĩ";
+    const what = item.title || item.label || "ca của bác sĩ";
     return "Chào bác sĩ [Tên],\n\nThiết kế 3D cho " + what + " đã sẵn sàng để bác sĩ xem. Bác sĩ mở được bằng bất kỳ trình duyệt nào trên điện thoại hoặc máy tính, không cần cài phần mềm:\n\n" +
       item.url + "\n\nLink dùng được đến " + fmtDateVi(item.expires) + ". Nếu cần chỉnh sửa gì, bác sĩ cứ báo cho tôi.\n\nD.EIGHT DESIGN CENTER";
   }

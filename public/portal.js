@@ -151,7 +151,7 @@
     const rows = shown.map((x) => {
       const fresh = x.lastBy === "admin" && (seen[x.id] || 0) < x.updated;
       return `<a class="pt-row" href="#/case/${esc(x.id)}">
-        <div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
+        <div><span class="id">${esc(x.order || x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
         <span class="meta">${esc(T("p.sent").replace("{d}", D8.fmtDate(x.created)))} · ${esc(T("p.updated").replace("{t}", D8.ago(x.updated)))}</span>
         <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${x.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>` : x.pay === "check" ? `<span class="pay pay-check">${esc(T("bill.check"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
     }).join("");
@@ -253,6 +253,7 @@
     const det = [
       ["p.dt.service", svcLabel(j.service)], ["p.dt.teeth", j.teeth ? j.teeth + " (" + (j.numbering === "UNS" ? "Universal" : "FDI") + ")" : ""],
       ["p.dt.material", j.material], ["p.dt.shade", j.shade], ["p.dt.needed", j.neededBy ? D8.fmtDate(Date.parse(j.neededBy + "T12:00:00")) : ""],
+      ...(j.order ? [["p.dt.order", j.order]] : []),
       ["p.dt.sent", D8.fmtDate(j.created, true)],
     ].filter((r) => r[1]).map(([k, v]) => [T(k), v]).concat(D8.rxRows(j.rx))
       .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
@@ -285,7 +286,7 @@
     }
 
     page(band(`<div><a class="pt-back" href="#/">${ICON.back}${esc(T("p.back"))}</a>
-        <h1>${esc(j.title)}</h1><p class="muted" style="margin:8px 0 0;color:var(--on-brand-2)">${esc(j.id)} · ${esc(T("p.c.sent").replace("{d}", D8.fmtDate(j.created)))}</p></div>
+        <h1>${esc(j.title)}</h1><p class="muted" style="margin:8px 0 0;color:var(--on-brand-2)">${esc(j.order ? T("p.order").replace("{c}", j.order) : j.id)} · ${esc(T("p.c.sent").replace("{d}", D8.fmtDate(j.created)))}</p></div>
         <div>${stChip(st)}</div>`), `
       <ol class="pt-steps" aria-label="Progress">${steps}</ol>
       ${alerts.join("")}${payBox}

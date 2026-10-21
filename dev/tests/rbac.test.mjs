@@ -4,6 +4,8 @@ import { B, PW, ok, done, signin, follow, uniq } from "./lib.mjs";
 
 const OWNER = "d.eightdesigncenter@gmail.com";
 const owner = await signin(OWNER, "D.EIGHT");
+// these checks need online payment and the automatic free trial, both off by default
+await owner("/api/settings", { method: "POST", body: { onlinePay: true, autoTrial: true } });
 const designerEmail = uniq("ktv") + "@d8.example", qcEmail = uniq("qc") + "@d8.example", leadEmail = uniq("lead") + "@d8.example";
 const custEmail = uniq("lab") + "@lab.example";
 const cust = await signin(custEmail, "Lab Customer");
@@ -192,4 +194,5 @@ ok(r.status === 200, "password acts as owner");
 r = await fetch(B + "/api/ping", { headers: { "X-Upload-Key": "wrong" } });
 ok(r.status === 401, "wrong password rejected");
 
+await owner("/api/settings", { method: "POST", body: { onlinePay: false, autoTrial: false } });
 done();

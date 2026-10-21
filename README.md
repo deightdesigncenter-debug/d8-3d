@@ -4,7 +4,7 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 
 - Trang web: `https://3d.d8designcenter.com/` (địa chỉ tạm: `https://d8-3d.pages.dev`)
 - Cổng khách hàng: `/portal`
-- Quản trị: `/admin` (Ca hàng, Link xem 3D, Tin nhắn, Khách hàng) và `/stl`
+- Quản trị: `/admin` (Đơn hàng, Ca cổng khách, Khách hàng, Mã hàng & bảng giá, Báo cáo, Nhập Excel, Nhân sự, Cài đặt, Link xem 3D, Tin nhắn) và `/stl`
 - Link gửi bác sĩ: `/v/<mã>`
 - Pháp lý: `/privacy`, `/terms` (Google yêu cầu khi cho khách đăng nhập)
 
@@ -12,6 +12,8 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 
 - **Khách hàng** đăng nhập bằng Google (Google Identity Services). Máy chủ kiểm tra chữ ký ID token bằng khóa công khai của Google (RS256), rồi đặt cookie phiên `d8s` (ký HMAC, HttpOnly, SameSite=Lax, 30 ngày). Không lưu mật khẩu, chỉ nhận tên, email, ảnh đại diện.
 - **Chủ tài khoản**: email trong `ADMIN_EMAILS` (mặc định `d.eightdesigncenter@gmail.com`) luôn là Quản trị, đủ mọi quyền, không bị khóa hay xóa được. Mật khẩu `UPLOAD_PASSWORD` vẫn dùng được như tài khoản chủ (header `X-Upload-Key`, chỉ gửi từ trang quản trị).
+- **Ai thấy gì**: chưa đăng nhập → chỉ trang web giới thiệu (không có liên kết nào vào khu làm việc). Đăng nhập Google mà chưa được cấp quyền → tài khoản khách hàng: trang web + cổng khách hàng; mở `/admin` hay `/stl` chỉ thấy thẻ "Chỉ dành cho đội D.EIGHT", mọi API khu làm việc trả 403. Được cấp quyền → nút **Quản trị** hiện ở đầu trang, vào khu làm việc với đúng quyền của vai trò. Gỡ quyền → về lại tài khoản khách hàng.
+- **Cấp quyền cho tài khoản khách**: ở **Nhân sự & phân quyền → Cấp quyền cho tài khoản khách** (danh sách người đã đăng nhập Google, tìm theo tên / email / lab), chọn vai trò rồi bấm **Cấp quyền** 2 lần; hoặc mở tài khoản đó ở Khách hàng → thẻ **Khu làm việc**.
 - **Nhân sự** (Quản trị, Kỹ thuật viên thiết kế, QC, và vai trò tự tạo): chủ thêm email Google ở **Workspace → Nhân sự & phân quyền**; người đó đăng nhập Google là vào được khu làm việc với đúng quyền của mình. Ai không có trong danh sách là khách hàng.
 - Chống giả mạo yêu cầu: yêu cầu ghi từ trang khác bị chặn (kiểm tra `Origin`), yêu cầu dùng cookie phải có header `X-D8: 1`.
 - Client ID Google (công khai) nằm trong `_worker.js` (`GOOGLE_CLIENT_ID`), có thể ghi đè bằng biến môi trường cùng tên. Không cần client secret.
@@ -21,9 +23,9 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - Gửi ca mới: mã tham chiếu, dịch vụ, răng (FDI/Universal), vật liệu, màu, ngày cần, yêu cầu, link file và file tải lên.
 - File được nén gzip trong trình duyệt khi có lợi, chia phần 20 MB, lưu KV khóa `jf:<ca>:<file>:<phần>`, tự xóa sau 60 ngày. Tối đa 300 MB mỗi ca.
 - Trạng thái: Đã nhận → (Cần bổ sung) → Đang thiết kế → Chờ duyệt → Đã duyệt → Đã giao (hoặc Đã hủy).
-- Khách xem link 3D, bấm **Duyệt thiết kế**, nhắn tin, tải file hoàn chỉnh (từng file hoặc cả ca dạng ZIP). Mã ca dạng `D8-YYMMDD-XXXX`.
+- Khách xem link 3D, bấm **Duyệt thiết kế**, nhắn tin, tải file hoàn chỉnh (từng file hoặc cả ca dạng ZIP). Mỗi ca gửi qua cổng khách tự thành một đơn trong sổ đơn hàng và khách thấy **mã đơn** `yy/mm/dd/xx` (mã nội bộ của ca vẫn là `D8-YYMMDD-XXXX`, dùng trong đường dẫn).
 - Phiếu chỉ định có thêm ô riêng theo dịch vụ (implant, All-on-X, máng, hàm tháo lắp…), lưu ở `rx` của ca.
-- **Dùng thử miễn phí:** 2 ca đầu của mỗi khách tự được đánh dấu `trial` (tổng giá trị đến 50 USD; hằng số `TRIAL_CASES`, `TRIAL_CREDIT_USD` trong `_worker.js`).
+- **Dùng thử miễn phí:** trang web giới thiệu 2 ca đầu miễn phí (tổng đến 50 USD). Việc tự đánh dấu 2 ca đầu là `trial` **tắt mặc định** (bạn tự thương lượng, đặt "Miễn phí" trong đơn); bật lại ở **Cài đặt**.
 - Danh sách ca của khách đọc từ chỉ mục `own:<email>` (không tốn lượt "list" của KV).
 
 ## Workspace – khu làm việc (`/admin`)
@@ -31,15 +33,42 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 Trang riêng cho đội D.EIGHT (thanh bên trái, không có menu trang web), liên kết qua lại với trang web và cổng khách hàng bằng nút chuyển ở đầu trang. Mỗi người chỉ thấy mục và nút mình có quyền; máy chủ kiểm tra lại mọi quyền.
 
 - **Tổng quan**: việc của mình (ca được giao thiết kế, chờ QC, đã qua QC chờ gửi khách, ca chưa giao KTV, khách vừa nhắn, thanh toán chờ xác nhận, tin nhắn web).
-- **Phân quyền**: 21 quyền chia nhóm (ca hàng, thiết kế & QC, tin nhắn, tiền, quản lý). Vai trò mặc định: *Quản trị* (tất cả), *Kỹ thuật viên thiết kế* (tải file khách, tải file thiết kế, gửi QC, ghi chú nội bộ, đọc tin nhắn, AI, link 3D), *QC* (như KTV nhưng duyệt QC thay vì thiết kế). Tạo thêm vai trò (ví dụ Trưởng nhóm), tick quyền theo bảng, hoặc đặt quyền riêng cho từng người. Người không có quyền "Xem tất cả ca" chỉ thấy ca được giao cho mình; không có quyền "Xem email khách" thì không thấy email; không có quyền tiền thì không thấy giá.
+- **Phân quyền**: 28 quyền chia nhóm (đơn hàng, ca hàng, thiết kế & QC, tin nhắn, tiền, quản lý). Vai trò mặc định: *Quản trị* (tất cả), *Kỹ thuật viên thiết kế* (tải file khách, tải file thiết kế, gửi QC, ghi chú nội bộ, đọc tin nhắn, AI, link 3D), *QC* (như KTV nhưng duyệt QC thay vì thiết kế). Tạo thêm vai trò (ví dụ Trưởng nhóm), tick quyền theo bảng, hoặc đặt quyền riêng cho từng người. Người không có quyền "Xem tất cả ca" chỉ thấy ca được giao cho mình; không có quyền "Xem email khách" thì không thấy email; không có quyền tiền thì không thấy giá. KTV mặc định chỉ thấy đơn mình làm (không thấy giá, bảng giá, công nợ, khách hàng, báo cáo).
 - **Quy trình một ca**: giao KTV + QC → KTV tải file thiết kế (nội bộ, khách không thấy; file HTML exocad bấm **Xem 3D**) → **Gửi QC** → QC **Đạt** hoặc **Không đạt** (bắt buộc ghi lỗi, ca quay lại KTV) → người có quyền giao: **Gửi khách xem 3D** (tạo link từ file HTML) hoặc **Giao file đã chọn cho khách**. Mọi bước ghi vào **Ghi chú nội bộ** (khách không thấy).
 - **Ca hàng**: lọc theo trạng thái và người làm (của tôi, chưa giao KTV, chờ QC, đã qua QC, thanh toán chờ xác nhận), tìm theo mã/tên/khách. Trong từng ca: đổi trạng thái, tải file của khách, tạo link 3D, giao file STL, nhắn tin với mẫu soạn sẵn.
-- **Bảng giá**: bảng giá mặc định và bảng giá riêng từng khách (dịch vụ, hạng mục, tính theo răng / hàm / ca). Khi báo giá một ca, hệ thống gợi ý số tiền theo số răng trong phiếu. Khách không bao giờ thấy bảng giá.
 - **Link xem 3D**: tạo link gửi bác sĩ như trước (QR, tin nhắn tiếng Anh kèm bản tiếng Việt).
 - **Tin nhắn**: tin từ form Liên hệ trên trang web, tự xóa sau 180 ngày.
-- **Khách hàng**: các tài khoản đã đăng nhập; bấm vào khách để xem hồ sơ, các ca, dùng thử và bảng giá riêng.
-- **Báo giá & thanh toán** trong từng ca: giá ca (USD), số tiền khách cần trả (để trống = bằng giá ca, dùng khi chỉ thu phần vượt dùng thử), trạng thái Chưa báo giá / Miễn phí (dùng thử) / Chờ thanh toán / Đã thanh toán; hiện số tiền dùng thử đã dùng / 50 USD của khách. **Giá chỉ admin thấy**: khách chỉ thấy số tiền khi ca ở trạng thái Chờ thanh toán (hoặc số đã trả).
+- **Ca cổng khách**: ca khách gửi qua cổng khách hàng (file, tin nhắn với khách, bản 3D, giao file); mỗi ca có thẻ **Đơn hàng** và chat nội bộ theo mã đơn.
+- **Báo giá & thanh toán online** trong từng ca (chỉ hiện khi bật thanh toán online): giá ca (USD), số tiền khách cần trả (để trống = bằng giá ca, dùng khi chỉ thu phần vượt dùng thử), trạng thái Chưa báo giá / Miễn phí (dùng thử) / Chờ thanh toán / Đã thanh toán; hiện số tiền dùng thử đã dùng / 50 USD của khách. **Giá chỉ admin thấy**: khách chỉ thấy số tiền khi ca ở trạng thái Chờ thanh toán (hoặc số đã trả).
 - **Xuất CSV** (mở bằng Excel): ca hàng, khách hàng, tin nhắn.
+
+## Sổ đơn hàng (cơ sở dữ liệu D1, binding `DB`)
+
+Xương sống của khu làm việc: mọi đơn (nhập tay, nhập Excel, khách gửi qua cổng) nằm trong một cơ sở dữ liệu Cloudflare D1. Bảng dữ liệu tự tạo lần đầu dùng (`SCHEMA_V1` trong `_worker.js`): `customers`, `customer_logins`, `products`, `prices`, `tech_rates`, `orders`, `order_items`, `payments`, `order_msgs`, `order_reads`.
+
+- **Mã đơn** `yy/mm/dd/xx` theo ngày nhận (giờ Việt Nam), `xx` = 01, 02… đếm lại mỗi ngày, chung cho mọi khách (tiếp nối số lớn nhất của ngày đó). **Làm lại** thêm `R1, R2…` (vd `26/10/20/03R1`), **làm tiếp giai đoạn** thêm `C1, C2…` (`26/10/20/03C1`), làm lại một giai đoạn thành `…C1R1`. Đơn cũ giữ được mã đã có (gõ mã khi nhập). Đơn làm lại mặc định "Bảo hành (miễn phí)", đổi được.
+- **Tìm đơn** theo mã đơn (có hoặc không dấu `/`), bệnh nhân, nha khoa, bác sĩ, lab / mã khách, mã của khách; gõ không dấu vẫn tìm được. Lọc theo trạng thái, thời gian, khách, KTV, loại đơn (mới / R / C), còn nợ.
+- **Đơn hàng**: nhiều hạng mục (mã hàng, răng, số lượng tự theo số răng, đơn giá theo bảng giá của khách), phụ phí % (vd +50% làm gấp trong ngày), cộng/trừ, tính tiền / miễn phí / bảo hành, tiền tệ USD hoặc VND theo khách. Quy trình: Mới nhận → Đang thiết kế → Chờ QC → (QC trả sửa) → Đã qua QC → Chờ bác sĩ duyệt → Đã duyệt → Đã giao; Tạm dừng, Hủy (ghi lý do).
+- **Chat nội bộ theo mã đơn** (KTV – QC – quản trị, khách không thấy): tin nhắn, ảnh chụp màn hình (dán Ctrl+V), sự kiện quy trình; chấm đỏ đơn có tin chưa đọc, số trên menu Đơn hàng. Ca từ cổng khách dùng chung chat này.
+- **Khách hàng**: mỗi khách một mã (JAKE, ANNIE…), loại, tiền tệ, liên hệ, điều khoản thanh toán; gắn tài khoản Google của cổng khách để đơn tự vào đúng khách. Trang khách: số đơn, doanh thu, đã thu, còn nợ, tiền ứng trước còn lại, đơn gần đây, bảng giá riêng, sổ thanh toán.
+- **Mã hàng & bảng giá**: một danh mục mã hàng chung (có danh mục mẫu 20 mã để sửa), giá mặc định USD/VND, giá riêng từng khách, đổi mã thì đơn và bảng giá tự đổi theo. **Tiền công KTV**: giá công theo mã hàng cho từng KTV (hoặc chung), công mỗi đơn = số lượng × giá công.
+- **Thanh toán**: ghi nhận tiền khách trả (PayPal, Payoneer, Remitly, chuyển khoản, tiền mặt, ứng trước…). Tiền trả cho một đơn vào đơn đó; tiền ứng trước / trả gộp tự trừ vào đơn cũ nhất còn nợ; phần dư là tiền ứng trước còn lại. Hủy đơn thì tiền của đơn đó thành tiền ứng trước.
+- **Báo cáo**: theo tuần / tháng / năm, theo ngày nhận hoặc ngày giao, theo tiền tệ: số ca, đơn vị, làm lại, doanh thu, đã thu, còn nợ, tiền thực nhận, công KTV; biểu đồ đã thu / còn nợ và số ca; theo khách, theo KTV (QC trả về, làm lại), theo mã hàng; công nợ hiện tại; tiền ứng trước còn lại.
+- **Xuất Excel** (.xlsx tạo trong trình duyệt, `public/xlsx.js`): tổng hợp theo kỳ, đơn hàng, hạng mục, thanh toán, theo khách, theo KTV, công nợ.
+- **Nhập Excel**: khách hàng, mã hàng, bảng giá (dạng mỗi khách một cột như file xuất ra, hoặc dạng dòng), đơn hàng cũ (nhiều dòng cùng một ký hiệu ở cột Mã đơn = một đơn nhiều hạng mục), thanh toán. Có file mẫu, xem trước từng dòng, báo lỗi, báo đơn có thể trùng; chạy thử phía máy chủ trước khi ghi.
+- **Quyền**: `orders.view` (xem mọi đơn; không có thì chỉ thấy đơn mình làm KTV/QC), `orders.edit`, `orders.delete`, `billing.view` (thấy tiền), `billing.edit`, `pricing.manage`, `techpay.manage`, `techpay.own`, `customers.view`, `customers.edit`, `reports.view`, `export.csv`. **KTV mặc định không thấy giá, công nợ, liên hệ khách, tiền công của người khác**; KTV được cấp `orders.edit` nhập đơn thì giá vẫn tự lấy theo bảng giá và vẫn không thấy giá.
+- Giới hạn gói miễn phí D1 (50 truy vấn mỗi yêu cầu, 100 giá trị mỗi truy vấn): ghi nhiều dòng dùng `json_each`; bộ giả lập đếm truy vấn để bắt lỗi vượt giới hạn.
+
+## Link xem 3D có ảnh xem trước
+
+- Trang bác sĩ `/v/<mã>` có thẻ `og:title`, `og:description`, `og:image` (`/og/<mã>.jpg`) nên Messenger, Zalo, WhatsApp hiện ảnh, tiêu đề kiểu "Patient: … - Second design" và dòng "Code: 26/10/20/03 | Nha khoa | Bác sĩ".
+- Khi tạo link (trang Link xem 3D hoặc trong đơn hàng), file exocad mở trong khung sandbox, chụp góc nhìn 3D (xoay rồi bấm **Chụp góc này** để chọn góc khác), ghép khung D.EIGHT, lưu KV `og:<mã>`. Không chụp được thì dùng ảnh mặc định `public/brand/og-3d.jpg`.
+- `robots.txt` cho phép `/v/` và `/og/` để ứng dụng chat đọc được (trang vẫn `noindex`).
+
+## Cài đặt (`/admin#settings`, cần quyền Nhân sự)
+
+- **Thanh toán online (PayPal / Stripe): tắt mặc định.** Khi tắt, khách không thấy nút trả tiền, công nợ ghi ở sổ thanh toán. Lưu ở KV `cfg:settings`.
+- **Tự đánh dấu 2 ca đầu là dùng thử: tắt mặc định.**
 
 ## Dịch tin nhắn Anh ↔ Việt
 
@@ -111,7 +140,7 @@ Tách các lớp lưới 3D trong file HTML của exocad thành file STL, xử l
 ## Cài đặt trên Cloudflare (dự án Pages `d8-3d`)
 
 - **Build:** repo này, nhánh `main`, build command để trống, output `public`.
-- **Bindings:** KV namespace, biến `CASES`, kho `d8-3d-cases`. Tùy chọn: **Workers AI** tên `AI` (dịch tin nhắn); **R2 bucket** tên `FILES` (lưu file ca, 10 GB miễn phí; khi có, file mới lưu vào R2, file cũ trong KV vẫn tải được). Với R2, đặt Lifecycle rule xóa object có tiền tố `jf:` sau 60 ngày.
+- **Bindings:** KV namespace, biến `CASES`, kho `d8-3d-cases`. **D1 database, biến `DB`, cơ sở dữ liệu `d8-db`** (sổ đơn hàng; tạo ở Workers & Pages → D1 SQL Database → Create, rồi thêm binding trong Settings → Bindings của Pages `d8-3d`, sau đó Retry deployment; bảng tự tạo lần đầu dùng). Tùy chọn: **Workers AI** tên `AI` (dịch tin nhắn); **R2 bucket** tên `FILES` (lưu file ca, 10 GB miễn phí; khi có, file mới lưu vào R2, file cũ trong KV vẫn tải được). Với R2, đặt Lifecycle rule xóa object có tiền tố `jf:` sau 60 ngày.
 - **Variables and secrets:** `UPLOAD_PASSWORD` (mật khẩu quản trị; cũng dùng làm khóa ký cookie phiên, đổi mật khẩu sẽ đăng xuất mọi người). Tùy chọn: `ADMIN_EMAILS` (danh sách email quản trị, cách nhau bằng dấu phẩy), `GOOGLE_CLIENT_ID`, thanh toán `PAYPAL_CLIENT_ID` + `PAYPAL_CLIENT_SECRET` (+ `PAYPAL_ENV=live`), `STRIPE_SECRET_KEY` (xem mục Thanh toán).
 - **Custom domain:** `3d.d8designcenter.com` (cần bản ghi CNAME `3d` trỏ về `d8-3d.pages.dev` khi đã có tên miền).
 - **Google Auth Platform:** thêm địa chỉ trang web vào *Authorized JavaScript origins* của OAuth client; trang Branding cần link trang chủ, `/privacy`, `/terms`.
@@ -135,7 +164,7 @@ node server.mjs ../public 8788 mat-khau-thu
 dev/tests/run.sh /tmp/d8-shots    # API + trình duyệt (máy tính, điện thoại, sáng/tối), tốc độ, không có lỗi trang
 ```
 
-Gồm: phân quyền và quy trình KTV → QC → giao khách (`rbac.test.mjs`), thanh toán (`pay.test.mjs`), Workspace (`workspace_ui.py`), cổng khách hàng (`portal_ui.py`), trang web và giao diện chung (`site_ui.py`), tốc độ và độ ổn định bố cục trên điện thoại chậm (`perf.py`). Chạy hai lần: có và không có PayPal/Stripe/AI.
+Gồm: phân quyền và quy trình KTV → QC → giao khách (`rbac.test.mjs`), sổ đơn hàng: mã đơn R/C, quyền KTV, thanh toán, báo cáo, nhập Excel, ảnh xem trước (`orders.test.mjs`, `orders_ui.py`), khu làm việc khi chưa có D1 (`nodb_ui.py`), ai thấy gì: khách vãng lai / khách hàng / được cấp quyền (`access_ui.py`), thanh toán (`pay.test.mjs`), Workspace (`workspace_ui.py`), cổng khách hàng (`portal_ui.py`), trang web và giao diện chung (`site_ui.py`), tốc độ và độ ổn định bố cục trên điện thoại chậm (`perf.py`). Chạy hai lần: có và không có PayPal/Stripe/AI.
 
 ## Giới hạn gói miễn phí (Cloudflare KV)
 
