@@ -539,7 +539,7 @@
           ["A2", "2026-10-05", "JAKE", "Smile Co", "Dr Jake", "John Smith", "", "CR", "11, 21", 2, "", 50, "Tính tiền", "Đã giao", "2026-10-05", "", "", "", "", "", "", "Zirconia", "A2", "Làm gấp trong ngày"],
           ["A2", "2026-10-05", "JAKE", "", "", "", "", "IMC", "36", 1, "", "", "", "", "", "", "", "", "", "", "", "", "", ""]] },
         { name: "Hướng dẫn", filter: false, cols: [{ h: "Cột", w: 22 }, { h: "Cách ghi", w: 90 }], rows: [
-          ["Mã đơn", "Để trống: tự tạo mã yy/mm/dd/xx theo Ngày nhận. Ghi mã thật (VD 26/10/20/03) nếu đơn đã có mã. Ghi cùng một ký hiệu (VD A1) cho các dòng của cùng một đơn."],
+          ["Mã đơn", "Để trống: tự tạo mã yymmddxx theo Ngày nhận (VD 26102101 = ca 01 ngày 21/10/2026). Ghi mã thật nếu đơn đã có mã: 26102101, làm lại 26102101R1, làm tiếp giai đoạn 2 26102101C2, làm lại rồi làm tiếp 26102101R1C2 (đơn gốc nên ở dòng trên). Ghi cùng một ký hiệu (VD A1) cho các dòng của cùng một đơn."],
           ["Ngày nhận", "dd/mm/yyyy, ví dụ 05/10/2026."], ["Mã khách", "Mã khách đã có trong mục Khách hàng (nhập khách trước)."], ["Mã hàng", "Mã trong danh mục Mã hàng & bảng giá."],
           ["Số lượng", "Để trống: 1 (hoặc số răng ở cột Răng với mã tính theo răng)."], ["Đơn giá", "Để trống: lấy theo bảng giá của khách (hoặc giá mặc định)."],
           ["Tính phí", "Tính tiền / Miễn phí / Bảo hành."], ["Trạng thái", "Để trống = Đã giao. Có thể ghi: Mới nhận, Đang thiết kế, Chờ QC, Chờ bác sĩ duyệt, Bác sĩ đã duyệt, Đã giao, Tạm dừng, Đã hủy."],
@@ -549,7 +549,7 @@
       cols: { day: ["Ngày", "ngay", "ngay nhan tien"], customer: ["Mã khách", "ma khach"], amount: ["Số tiền", "so tien", "amount"], currency: ["Tiền tệ", "tien te"], method: ["Hình thức", "hinh thuc"], ref: ["Mã giao dịch", "ma giao dich"], order_code: ["Mã đơn", "cho don", "ma don"], note: ["Ghi chú", "ghi chu"] },
       need: ["day", "amount"],
       template: () => [{ name: "Thanh toán", cols: [{ h: "Ngày", t: "d", w: 12 }, { h: "Mã khách", w: 10 }, { h: "Số tiền", t: "n", w: 12 }, { h: "Tiền tệ", w: 8 }, { h: "Hình thức", w: 16 }, { h: "Mã giao dịch", w: 18 }, { h: "Mã đơn", w: 14 }, { h: "Ghi chú", w: 26 }],
-        rows: [["2026-09-01", "ANNIE", 200, "USD", "Payoneer", "", "", "Ứng trước"], ["2026-10-06", "JAKE", 157.5, "USD", "PayPal", "", "26/10/05/01", ""]] }],
+        rows: [["2026-09-01", "ANNIE", 200, "USD", "Payoneer", "", "", "Ứng trước"], ["2026-10-06", "JAKE", 157.5, "USD", "PayPal", "", "26100501", ""]] }],
       row: (g) => ({ day: g("day"), customer: g("customer"), amount: g("amount"), currency: String(g("currency") || "").toUpperCase(), method: methodOf(g("method")), ref: g("ref"), order_code: g("order_code"), note: g("note") }) },
   };
   const fold = (s) => D8X.fold(s);
@@ -715,8 +715,9 @@
       const items = grp.lines.map((r) => ({ product: String(r.g("product") || "").trim().toUpperCase(), teeth: String(r.g("teeth") || ""), qty: r.g("qty") !== "" ? r.g("qty") : D8.teethCount(r.g("teeth")) || 1,
         ...(r.g("price") !== "" ? { price: r.g("price") } : {}), note: "" })).filter((x) => x.product);
       if (!items.length) errs.push("thiếu Mã hàng");
-      const code = String(g("code") || "").trim();
-      const data = { key: grp.key, label: code || "dòng " + grp.first.line, row: grp.first.line, code: /^\d{2}\/\d{2}\/\d{2}\/\d{2,4}$/.test(code) ? code : "", day, customer: String(g("customer") || "").trim().toUpperCase(),
+      // a real order code (26102101, 26102101R1C2, old style 26/10/21/01) is kept; any other mark only groups the lines
+      const code = String(g("code") || "").trim(), ncode = code.toUpperCase().replace(/[\s/._-]+/g, "");
+      const data = { key: grp.key, label: code || "dòng " + grp.first.line, row: grp.first.line, code: /^\d{8,9}(?:[RC]\d{1,3})*$/.test(ncode) ? ncode : "", day, customer: String(g("customer") || "").trim().toUpperCase(),
         clinic: g("clinic"), doctor: g("doctor"), patient: g("patient"), ref: String(g("ref") || ""), service: grpOf(g("service")), material: g("material"), shade: String(g("shade") || ""), notes: g("notes"),
         status: st || "delivered", dday: dday && !dday.startsWith("INVALID") ? dday : "", designer: g("designer"), qc: g("qc"), adj_pct: g("adj_pct") || 0, charge: chargeOf(g("charge")),
         paid: g("paid"), pay_day: payDay && !payDay.startsWith("INVALID") ? payDay : "", pay_method: methodOf(g("pay_method")), items };

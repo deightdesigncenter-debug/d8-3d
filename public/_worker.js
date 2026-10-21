@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-21.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-21.2"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -192,7 +192,7 @@ async function handleApi(request, env, url) {
   if (path.startsWith("/api/prices/")) return handlePrices(request, env, url, who);
   if (/^\/api\/(orders|customers|products|prices|payments|techrates|reports|export|import|settings|book)(\/|$)/.test(path)) {
     try { return await handleBook(request, env, url, who); }
-    catch (err) { if (err && err.status) return json({ error: err.message, code: err.code || "" }, err.status); throw err; }
+    catch (err) { if (err && err.status) return json({ error: err.message, code: err.code || "", ...(err.dupes ? { dupes: err.dupes } : {}), ...(err.id ? { id: err.id } : {}) }, err.status); throw err; }
   }
   const og = path.match(/^\/api\/cases\/([^/]+)\/og$/);
   if (og && method === "PUT") return can("links.manage") || can("cases.deliver") ? putOgImage(request, env, og[1]) : deny();
@@ -919,7 +919,7 @@ function jobMeta(job) {
     sz: Math.round((job.files || []).reduce((t, f) => t + (f.stored || 0), 0) / 1048576),
     sv: String(job.service || "").slice(0, 40), on: String(job.ownerName || "").slice(0, 40), tr: job.trial ? 1 : 0,
     p: typeof job.price === "number" ? job.price : null, py: job.pay || "",
-    d: String(job.designer || "").slice(0, 120), q: String(job.qcBy || "").slice(0, 120), g: job.stage || "", oc: job.order || "", oi: job.orderId || 0 };
+    d: String(job.designer || "").slice(0, 120), q: String(job.qcBy || "").slice(0, 120), g: job.stage || "", oc: normCode(job.order), oi: job.orderId || 0 };
 }
 async function saveJob(env, job) {
   await env.CASES.put("job:" + job.id, JSON.stringify(job), { metadata: jobMeta(job) });
@@ -952,7 +952,7 @@ async function listOwnJobs(env, email) {
   rows.forEach((r, i) => {
     const m = r && r.metadata;
     if (m) items.push({ id: ids[i], owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
-      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, pay: m.py || "", order: m.oc || "" });
+      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, pay: m.py || "", order: normCode(m.oc) });
   });
   items.sort((a, b) => b.updated - a.updated);
   return json({ items });
@@ -968,7 +968,7 @@ async function listJobs(env, owner, who) {
       if (owner && m.o !== owner) continue;
       items.push({ id: k.name.slice(4), owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
       service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "",
-      designer: m.d || "", qcBy: m.q || "", stage: m.g || "", order: m.oc || "", orderId: m.oi || 0 });
+      designer: m.d || "", qcBy: m.q || "", stage: m.g || "", order: normCode(m.oc), orderId: m.oi || 0 });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
@@ -994,6 +994,7 @@ async function jobView(env, job, who = null) {
     if (m && m.e > Date.now()) previews.push({ id: pid, label: m.l || "", expires: m.e, url: "/v/" + pid });
   }
   const { ai, payTries, price, due, team, designer, qcBy, stage, qc, ...rest } = job;
+  if (rest.order) rest.order = normCode(rest.order);
   const num = (v) => (typeof v === "number" ? v : null);
   if (who) {
     const v = { ...rest, designer: designer || "", qcBy: qcBy || "", stage: stage || "", qc: qc || null, previews,
@@ -1450,17 +1451,20 @@ async function handleJobs(request, env, url, who) {
 /* ============================================== Order book (Cloudflare D1 database, binding "DB") */
 // The backbone of the workspace: customers (clinics, labs, doctors), product codes, price lists per customer,
 // KTV pay rates, orders with their items, redo (R) / next-stage (C) orders, payments and the team chat per order.
-// Order code: yy/mm/dd/xx (date received, Vietnam time; xx = 01, 02… per day), redo adds R1, R2…, a next stage C1, C2…
+// Order code: yymmddxx (date received, Vietnam time; xx = 01, 02… per day, e.g. 26102101). Stage 1 is the plain code;
+// the next stage adds C2, then C3…; a redo adds R1, R2…; a redo then its next stage: 26102101R1C2; a redone stage: 26102101C2R1.
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const validDay = (d) => DAY_RE.test(d || "") && !isNaN(Date.parse(d + "T00:00:00Z")) && new Date(d + "T00:00:00Z").toISOString().slice(0, 10) === d;
-const CODE_RE = /^(\d{2})\/(\d{2})\/(\d{2})\/(\d{2,4})((?:[RC]\d{1,3})*)$/;
+const CODE_RE = /^(\d{2})(\d{2})(\d{2})(\d{2,3})((?:[RC]\d{1,3})*)$/;
+// typed codes may still carry the old separators (26/10/21/01, 26-10-21-01): drop them
+const normCode = (v) => String(v == null ? "" : v).toUpperCase().replace(/[\s/._-]+/g, "").slice(0, 30);
 const PCODE_RE = /^[A-Z0-9][A-Z0-9._-]{0,23}$/;   // product code
 const CCODE_RE = /^[A-Z0-9][A-Z0-9._-]{0,15}$/;   // customer code
 const ORDER_STATUS = ["new", "design", "qc", "fix", "ready", "review", "revise", "approved", "delivered", "hold", "cancelled"];
@@ -1479,14 +1483,20 @@ const numv = (v) => { const n = typeof v === "number" ? v : Number(String(v == n
 const rnd = (v, cur) => (cur === "VND" ? Math.round(v) : Math.round(v * 100) / 100);
 const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/\s+/g, " ").trim();
 const bookErr = (msg, status = 400) => Object.assign(new Error(msg), { status });
-const codeOf = (day, seq) => day.slice(2, 4) + "/" + day.slice(5, 7) + "/" + day.slice(8, 10) + "/" + String(seq).padStart(2, "0");
-function parseCode(code) {
-  const m = CODE_RE.exec(code || "");
+const codeOf = (day, seq) => day.slice(2, 4) + day.slice(5, 7) + day.slice(8, 10) + String(seq).padStart(2, "0");
+// stage = the last C number (1 when there is none); kind = what the last letter says
+function parseCode(raw) {
+  const code = normCode(raw);
+  const m = CODE_RE.exec(code);
   if (!m) return null;
   const day = "20" + m[1] + "-" + m[2] + "-" + m[3];
   if (!validDay(day)) return null;
   const suf = m[5] || "";
-  return { day, seq: +m[4], base: code, root: code.slice(0, code.length - suf.length), kind: !suf ? "new" : /R\d+$/.test(suf) ? "redo" : "continue" };
+  const cs = [...suf.matchAll(/C(\d+)/g)];
+  if (cs.some((x) => +x[1] < 2) || /R0|C0/.test(suf)) return null;
+  return { code, day, seq: +m[4], base: code, root: code.slice(0, code.length - suf.length), suf,
+    kind: !suf ? "new" : /R\d+$/.test(suf) ? "redo" : "continue", stage: cs.length ? +cs[cs.length - 1][1] : 1,
+    parent: suf ? code.replace(/[RC]\d+$/, "") : "" };
 }
 
 const SCHEMA_V1 = [
@@ -1541,6 +1551,32 @@ const SCHEMA_V1 = [
   `CREATE INDEX IF NOT EXISTS msg_order ON order_msgs (order_id, id)`,
 ];
 
+// v2: codes without "/", patient key + indexes for the "this order is already in the book" check, files in the team chat
+const SCHEMA_V2 = [
+  `ALTER TABLE orders ADD COLUMN pkey TEXT NOT NULL DEFAULT ''`,
+  `CREATE INDEX IF NOT EXISTS o_pkey ON orders (pkey)`,
+  `CREATE INDEX IF NOT EXISTS o_ref ON orders (customer_id, ref)`,
+  `CREATE INDEX IF NOT EXISTS o_base ON orders (base)`,
+  `CREATE TABLE IF NOT EXISTS order_files (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, msg_id INTEGER NOT NULL DEFAULT 0,
+    fid TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL DEFAULT 0, stored INTEGER NOT NULL DEFAULT 0, parts INTEGER NOT NULL DEFAULT 1,
+    gz INTEGER NOT NULL DEFAULT 0, st TEXT NOT NULL DEFAULT 'kv', by TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS f_order ON order_files (order_id, fid)`,
+];
+async function migrateV2(DB) {
+  for (const sql of SCHEMA_V2) {
+    try { await DB.prepare(sql).run(); }
+    catch (err) { if (!/duplicate column|already exists/i.test(String(err && err.message))) throw err; }
+  }
+  // old codes 26/10/21/01 → 26102101; base = the code of stage 1 (yymmddxx); patient key for the duplicate check
+  const list = await rows(DB.prepare("SELECT id, code, patient, ref, doctor, clinic FROM orders WHERE code LIKE '%/%' OR pkey = '' AND patient != ''"));
+  if (list.length) try {
+    const fix = list.map((o) => { const code = normCode(o.code), pc = parseCode(code); return { id: o.id, code, base: pc ? pc.root : code, pkey: fold(o.patient), search: searchText({ ...o, code }) }; });
+    for (let i = 0; i < fix.length; i += 500) {
+      await DB.prepare(`UPDATE orders SET code = json_extract(j.value, '$.code'), base = json_extract(j.value, '$.base'), pkey = json_extract(j.value, '$.pkey'),
+        search = json_extract(j.value, '$.search') FROM json_each(?) j WHERE orders.id = json_extract(j.value, '$.id')`).bind(JSON.stringify(fix.slice(i, i + 500))).run();
+    }
+  } catch (err) { console.error("order code migration", err && err.message); }
+}
 let DB_SCHEMA_OK = 0;
 const noDb = () => bookErr("Chưa kết nối cơ sở dữ liệu. Trong Cloudflare: Pages › d8-3d › Settings › Bindings, thêm D1 database tên biến DB, rồi Retry deployment.", 503);
 async function bookDb(env) {
@@ -1548,10 +1584,9 @@ async function bookDb(env) {
   if (DB_SCHEMA_OK !== DB_VERSION) {
     let v = 0;
     try { const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'schema'").first(); v = r ? +r.v : 0; } catch { v = 0; }
-    if (v < DB_VERSION) {
-      await env.DB.batch([...SCHEMA_V1.map((s) => env.DB.prepare(s)),
-        env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION))]);
-    }
+    if (v < 1) await env.DB.batch(SCHEMA_V1.map((s) => env.DB.prepare(s)));
+    if (v < 2) await migrateV2(env.DB);
+    if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }
   return env.DB;
@@ -1589,7 +1624,7 @@ function seesOrder(who, o) {
 }
 function orderOut(o, who) {
   const out = {
-    id: o.id, code: o.code, base: o.base, kind: o.kind, parent_id: o.parent_id || null, customer_id: o.customer_id,
+    id: o.id, code: o.code, base: o.base, kind: o.kind, parent_id: o.parent_id || null, customer_id: o.customer_id, stage: (parseCode(o.code) || {}).stage || 1,
     customer_code: o.customer_code || "", customer_name: o.customer_name || "", clinic: o.clinic, doctor: o.doctor, patient: o.patient, ref: o.ref,
     service: o.service, teeth: o.teeth, material: o.material, shade: o.shade, notes: o.notes, status: o.status, designer: o.designer, qc: o.qc,
     received_at: o.received_at, day: o.day, due_at: o.due_at || 0, delivered_at: o.delivered_at || 0, dday: o.dday || "", units: o.units,
@@ -1679,17 +1714,38 @@ async function nextSeq(DB, day) {
   const r = await DB.prepare("SELECT COALESCE(MAX(seq), 0) AS n FROM orders WHERE cday = ? AND kind = 'new'").bind(day).first();
   return (r ? r.n : 0) + 1;
 }
-// Redo of 01 → 01R1, again → 01R2; next stage of 01 → 01C1, then 01C2; redo of a stage 01C1 → 01C1R1.
+// Redo: 26102101 → R1, a redo of that (or of the original again) → R2; a stage: 26102101C2 → C2R1.
+// Next stage: 26102101 → C2, then C3 (stage 1 is the plain code); after a redo: 26102101R1 → R1C2; R1C2 → R1C3.
 async function childCode(DB, parent, kind) {
-  let base = parent.code.replace(/R\d+$/, "");
-  if (kind === "continue") base = base.replace(/C\d+$/, "");
-  const L = kind === "redo" ? "R" : "C";
-  const list = await rows(DB.prepare("SELECT code FROM orders WHERE code LIKE ?").bind(base + L + "%"));
-  let n = 0;
-  for (const x of list) { const m = new RegExp("^" + L + "(\\d+)$").exec(x.code.slice(base.length)); if (m) n = Math.max(n, +m[1]); }
-  return base + L + (n + 1);
+  const code = normCode(parent.code);
+  if (kind === "redo") {
+    const base = code.replace(/R\d+$/, "");
+    const list = await rows(DB.prepare("SELECT code FROM orders WHERE code LIKE ?").bind(base + "R%"));
+    let n = 0;
+    for (const x of list) { const m = /^R(\d+)$/.exec(x.code.slice(base.length)); if (m) n = Math.max(n, +m[1]); }
+    return base + "R" + (n + 1);
+  }
+  const pc = parseCode(code), stage = (pc ? pc.stage : 1) + 1;
+  const next = /C\d+$/.test(code) ? code.replace(/C\d+$/, "C" + stage) : code + "C" + stage;
+  const have = await DB.prepare("SELECT id FROM orders WHERE code = ?").bind(next).first();
+  if (have) throw Object.assign(bookErr("Đã có đơn giai đoạn " + stage + ": " + next + ".", 409), { code: "exists", id: have.id });
+  return next;
 }
-const searchText = (o) => fold([o.code, o.code.replace(/\//g, ""), o.ref, o.patient, o.doctor, o.clinic].join(" "));
+const searchText = (o) => fold([o.code, o.ref, o.patient, o.doctor, o.clinic].join(" "));
+// "Is this order already in the book?": same customer and the customer's own case number, or the same patient
+// (any customer when none is chosen) received within the last 45 days. Index o_ref / o_pkey keep this cheap.
+async function findDupes(DB, who, q) {
+  const pk = fold(q.patient), ref = clip(q.ref, 80), cid = +q.customer_id || 0, since = (q.now || Date.now()) - 45 * DAY_MS;
+  const w = [], a = [];
+  if (cid && ref) { w.push("(o.customer_id = ? AND o.ref = ?)"); a.push(cid, ref); }
+  if (pk.length >= 3) { w.push("(o.pkey = ? AND o.received_at >= ?" + (cid ? " AND o.customer_id = ?" : "") + ")"); a.push(pk, since, ...(cid ? [cid] : [])); }
+  if (!w.length) return [];
+  const list = await rows(DB.prepare(`SELECT o.id, o.code, o.kind, o.patient, o.ref, o.clinic, o.doctor, o.day, o.status, o.designer, o.qc, o.created_by, o.created_at,
+      o.source, o.job_id, o.customer_id, c.code AS customer_code, c.name AS customer_name,
+      (SELECT group_concat(CASE WHEN qty = CAST(qty AS INTEGER) THEN CAST(qty AS INTEGER) ELSE qty END || '× ' || product, ', ') FROM order_items WHERE order_id = o.id) AS items_text
+    FROM orders o JOIN customers c ON c.id = o.customer_id WHERE (${w.join(" OR ")}) AND o.status != 'cancelled' AND o.id != ? ORDER BY o.received_at DESC LIMIT 6`).bind(...a, +q.exclude || 0));
+  return list.map((o) => ({ ...o, match: cid && ref && o.customer_id === cid && o.ref === ref ? "ref" : "patient", canOpen: seesOrder(who, o) }));
+}
 const custSearch = (c) => fold([c.code, c.name, c.contact, c.email, c.country].join(" "));
 
 /* ---- customers for portal sign-ins */
@@ -1982,6 +2038,11 @@ async function handleBook(request, env, url, who) {
     return json({ code: codeOf(day, await nextSeq(DB, day)), day });
   }
   if (path === "/api/orders/dash" && method === "GET") return orderDash(DB, who, now);
+  // while an order is typed in: is it already in the book? (only what is needed to recognise it, never money)
+  if (path === "/api/orders/dupes" && method === "GET") {
+    if (!who.can("orders.edit")) return deny();
+    return json({ dupes: await findDupes(DB, who, { customer_id: P.get("customer"), patient: P.get("patient"), ref: P.get("ref"), exclude: P.get("exclude"), now }) });
+  }
   if (path === "/api/orders/unread" && method === "GET") {
     const sc = orderScope(who);
     if (!who.can("cases.notes")) return json({ count: 0 });
@@ -1995,6 +2056,63 @@ async function handleBook(request, env, url, who) {
     const b = await body();
     const o = await createOrder(env, DB, b, who, now);
     return json({ order: o }, 201);
+  }
+  // files in the team chat: PUT parts /files/<fid>/<n>, then POST /files {files, text}; GET /files/<fid> downloads
+  if ((m = path.match(/^\/api\/orders\/(\d+)\/files(?:\/([A-Za-z0-9]{10})(?:\/(\d{1,2}))?)?$/))) {
+    const id = +m[1];
+    const o = await DB.prepare("SELECT id, designer, qc, status FROM orders WHERE id = ?").bind(id).first();
+    if (!o || !seesOrder(who, o)) return json({ error: "Không tìm thấy đơn hàng." }, 404);
+    if (!who.can("cases.notes")) return deny();
+    const pkey = (fid, n) => "ofp:" + id + ":" + fid + ":" + n;
+    if (m[2] && m[3] && method === "PUT") {
+      const n = +m[3], len = parseInt(request.headers.get("Content-Length") || "0", 10);
+      if (n >= FILE_MAX_PARTS) return json({ error: "File quá lớn (tối đa 300 MB)." }, 413);
+      if (!len) return json({ error: "File trống." }, 400);
+      if (len > CHUNK_MAX + 1024) return json({ error: "Phần file quá lớn." }, 413);
+      const used = await DB.prepare("SELECT COALESCE(SUM(stored), 0) AS n FROM order_files WHERE order_id = ?").bind(id).first();
+      if (used.n + len > JOB_FILES_MAX) return json({ error: "Đơn này đã dùng hết 300 MB cho file trong chat." }, 413);
+      await partStore(env, activeStore(env)).put(pkey(m[2], n), await request.arrayBuffer());
+      return json({ ok: true });
+    }
+    if (!m[2] && method === "POST") {
+      const b = await body();
+      const st = activeStore(env), store = partStore(env, st);
+      const files = [];
+      for (const x of (Array.isArray(b.files) ? b.files : []).slice(0, 10)) {
+        if (!FID_RE.test(x.fid || "") || files.some((y) => y.fid === x.fid)) continue;
+        const parts = Math.max(1, Math.min(FILE_MAX_PARTS, parseInt(x.parts, 10) || 1));
+        if (!(await store.exists(pkey(x.fid, parts - 1)))) continue;
+        files.push({ order_id: id, fid: x.fid, name: clip(x.name, 160) || "file", size: Math.max(0, Math.round(+x.size || 0)), stored: Math.max(0, Math.round(+x.stored || 0)),
+          parts, gz: x.gz ? 1 : 0, st, by: actor, at: now });
+      }
+      if (!files.length) return json({ error: "Không nhận được file. Thử gửi lại." }, 400);
+      const text = clip(b.text, 4000);
+      const msg = await DB.prepare("INSERT INTO order_msgs (order_id, at, by, name, kind, text) VALUES (?, ?, ?, ?, 'msg', ?) RETURNING id").bind(id, now, actor, actorName, text).first();
+      await DB.batch([jsonInsert(DB, "order_files", ["order_id", "msg_id", "fid", "name", "size", "stored", "parts", "gz", "st", "by", "at"], files.map((f) => ({ ...f, msg_id: msg.id }))),
+        DB.prepare("UPDATE orders SET last_msg_at = ?, last_msg_by = ? WHERE id = ?").bind(now, actor, id),
+        DB.prepare("INSERT OR REPLACE INTO order_reads (email, order_id, at) VALUES (?, ?, ?)").bind(actor, id, now)]);
+      return json({ ok: true, files: files.length });
+    }
+    if (m[2] && !m[3] && method === "GET") {
+      const f = await DB.prepare("SELECT * FROM order_files WHERE order_id = ? AND fid = ?").bind(id, m[2]).first();
+      if (!f) return json({ error: "Không tìm thấy file." }, 404);
+      const store = partStore(env, f.st || "kv");
+      const first = await store.stream(pkey(f.fid, 0));
+      if (!first) return json({ error: "File đã hết hạn lưu." }, 410);
+      const { readable, writable } = new TransformStream();
+      (async () => {
+        try {
+          await first.pipeTo(writable, { preventClose: true });
+          for (let i = 1; i < f.parts; i++) { const s2 = await store.stream(pkey(f.fid, i)); if (!s2) throw new Error("missing part " + i); await s2.pipeTo(writable, { preventClose: true }); }
+          await writable.close();
+        } catch (e) { try { await writable.abort(e); } catch {} }
+      })();
+      const headers = new Headers({ "Content-Type": "application/octet-stream", "Content-Disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(f.name),
+        "Cache-Control": "private, no-store", ...PRIVATE_HEADERS });
+      if (f.gz) headers.set("Content-Encoding", "gzip");
+      return new Response(readable, { headers, encodeBody: f.gz ? "manual" : "automatic" });
+    }
+    return json({ error: "Method not allowed." }, 405);
   }
   if ((m = path.match(/^\/api\/orders\/(\d+)(\/[a-z]+)?(\/\d+)?(\/img)?$/))) {
     const id = +m[1], sub = m[2] || "";
@@ -2026,12 +2144,18 @@ async function handleBook(request, env, url, who) {
       const kids = await DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE parent_id = ?").bind(id).first();
       if (kids.n) return json({ error: "Đơn đã có đơn làm lại / làm tiếp. Xóa các đơn đó trước." }, 409);
       await DB.batch([DB.prepare("DELETE FROM order_items WHERE order_id = ?").bind(id), DB.prepare("DELETE FROM order_msgs WHERE order_id = ?").bind(id),
+        DB.prepare("DELETE FROM order_files WHERE order_id = ?").bind(id),
         DB.prepare("DELETE FROM order_reads WHERE order_id = ?").bind(id), DB.prepare("UPDATE payments SET order_id = NULL WHERE order_id = ?").bind(id),
         DB.prepare("DELETE FROM orders WHERE id = ?").bind(id)]);
       await reallocate(DB, [o.customer_id]);
       return json({ ok: true });
     }
     if (sub === "/act" && method === "POST") return orderAction(env, DB, o, await body(), who, now);
+    if (sub === "/next" && method === "GET") {
+      if (!who.can("orders.edit")) return deny();
+      const kind = P.get("kind") === "continue" ? "continue" : "redo";
+      return json({ code: await childCode(DB, o, kind), kind, stage: ((parseCode(o.code) || {}).stage || 1) + (kind === "continue" ? 1 : 0) });
+    }
     if (sub === "/previews" && method === "POST") {
       if (!(who.can("links.manage") || who.can("cases.deliver"))) return deny();
       const b = await body();
@@ -2058,7 +2182,11 @@ async function handleBook(request, env, url, who) {
       }
       if (method === "GET") {
         const after = parseInt(P.get("after") || "0", 10) || 0;
-        const list = await rows(DB.prepare(`SELECT id, at, by, name, kind, text, img != '' AS img FROM order_msgs WHERE order_id = ? AND id > ? ORDER BY id DESC LIMIT 300`).bind(id, after));
+        const [ml, fl] = await DB.batch([DB.prepare(`SELECT id, at, by, name, kind, text, img != '' AS img FROM order_msgs WHERE order_id = ? AND id > ? ORDER BY id DESC LIMIT 300`).bind(id, after),
+          DB.prepare("SELECT msg_id, fid, name, size FROM order_files WHERE order_id = ? AND msg_id > ? ORDER BY id").bind(id, after)]);
+        const list = ml.results || [], byMsg = new Map();
+        for (const f of fl.results || []) { if (!byMsg.has(f.msg_id)) byMsg.set(f.msg_id, []); byMsg.get(f.msg_id).push({ fid: f.fid, name: f.name, size: f.size }); }
+        for (const x of list) if (byMsg.has(x.id)) x.files = byMsg.get(x.id);
         if (P.get("read") !== "0" && who.email) await DB.prepare("INSERT OR REPLACE INTO order_reads (email, order_id, at) VALUES (?, ?, ?)").bind(who.email, id, now).run();
         return json({ msgs: list.reverse() });
       }
@@ -2262,13 +2390,13 @@ async function saveCustomers(DB, list, now, partial) {
 async function savePayments(DB, list, actor, now, partial) {
   const errors = [], set = [];
   const custs = await rows(DB.prepare("SELECT id, code, currency FROM customers"));
-  const orderCodes = list.map((x) => clip(x.order_code, 30)).filter(Boolean);
+  const orderCodes = list.map((x) => normCode(x.order_code)).filter(Boolean);
   const orders = orderCodes.length ? await rows(DB.prepare("SELECT id, code, customer_id, currency FROM orders WHERE code IN (SELECT value FROM json_each(?))").bind(JSON.stringify(orderCodes))) : [];
   const ids = list.map((x) => +x.order_id).filter(Boolean);
   const byId = ids.length ? await rows(DB.prepare("SELECT id, code, customer_id, currency FROM orders WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids))) : [];
   list.forEach((x, i) => {
     const where = "Dòng " + (x.row || i + 1);
-    let ord = x.order_id ? byId.find((o) => o.id === +x.order_id) : x.order_code ? orders.find((o) => o.code === clip(x.order_code, 30)) : null;
+    let ord = x.order_id ? byId.find((o) => o.id === +x.order_id) : x.order_code ? orders.find((o) => o.code === normCode(x.order_code)) : null;
     if ((x.order_id || x.order_code) && !ord) return errors.push({ row: i, msg: where + ": không tìm thấy đơn " + clip(x.order_code || x.order_id, 30) + "." });
     let cust = x.customer_id ? custs.find((c) => c.id === +x.customer_id) : x.customer ? custs.find((c) => c.code === ucode(x.customer)) : null;
     if (!cust && ord) cust = custs.find((c) => c.id === ord.customer_id);
@@ -2321,7 +2449,7 @@ function cleanItems(input, prev, prods, priceOf, cur, canPrice) {
 }
 const ORDER_COLS = ["code", "base", "cday", "seq", "kind", "parent_id", "customer_id", "clinic", "doctor", "patient", "ref", "service", "teeth", "material", "shade",
   "notes", "status", "designer", "qc", "received_at", "day", "due_at", "delivered_at", "dday", "currency", "units", "subtotal", "adj_pct", "adj_amount", "total",
-  "charge", "paid", "tech_cost", "tech_currency", "qc_fails", "source", "job_id", "login", "previews", "last_msg_at", "last_msg_by", "created_by", "created_at", "updated_at", "search"];
+  "charge", "paid", "tech_cost", "tech_currency", "qc_fails", "source", "job_id", "login", "previews", "last_msg_at", "last_msg_by", "created_by", "created_at", "updated_at", "search", "pkey"];
 const ITEM_COLS = ["order_id", "product", "name", "teeth", "qty", "price", "amount", "note", "sort"];
 function parseWhen(v, fallback) {
   if (typeof v === "number" && v > 0) return v;
@@ -2357,21 +2485,26 @@ async function createOrder(env, DB, b, who, now) {
   let status = ORDER_STATUS.includes(b.status) && (who.can("cases.status") || who.viaKey) ? b.status : designer ? "design" : "new";
   const delivered = status === "delivered" ? parseWhen(b.delivered, now) : 0;
   const base = {
-    kind, parent_id: parent ? parent.id : null, customer_id: cust.id, clinic: clip(b.clinic, 120), doctor: clip(b.doctor, 120), patient: clip(b.patient, 120),
+    kind, parent_id: parent ? parent.id : null, customer_id: cust.id, clinic: clip(b.clinic, 120), doctor: clip(b.doctor, 120), patient: clip(b.patient, 120), pkey: fold(clip(b.patient, 120)),
     ref: clip(b.ref, 80), service: clip(b.service, 60), teeth: clip(b.teeth, 160), material: clip(b.material, 120), shade: clip(b.shade, 40), notes: clip(b.notes, 4000),
     status, designer, qc, received_at: received, day, due_at: parseWhen(b.due, 0), delivered_at: delivered, dday: delivered ? vnDay(delivered) : "",
     currency: cur, units: t.units, subtotal: t.subtotal, adj_pct: adjPct, adj_amount: adjAmt, total: t.total, charge, paid: 0, tech_cost: 0, tech_currency: "",
     qc_fails: 0, source: "manual", job_id: "", login: "", previews: "[]", last_msg_at: 0, last_msg_by: "", created_by: who.email || "D.EIGHT", created_at: now, updated_at: now,
   };
+  // the form asks first whether this order is already in the book (an admin may have entered it)
+  if (b.check_dupes && kind === "new") {
+    const dupes = await findDupes(DB, who, { customer_id: cust.id, patient: base.patient, ref: base.ref, now });
+    if (dupes.length) throw Object.assign(bookErr("Đơn này có thể đã có: " + dupes.map((x) => x.code).join(", ") + ".", 409), { code: "dupe", dupes });
+  }
   // the code: typed in (old orders), from the parent (R / C), or the next number of the day
   let codes;
   if (b.code && kind === "new") {
-    const pc = parseCode(String(b.code).trim());
-    if (!pc || pc.kind !== "new") throw bookErr("Mã đơn không đúng dạng yy/mm/dd/xx, ví dụ " + codeOf(day, 1) + ".");
-    codes = [{ code: String(b.code).trim(), base: String(b.code).trim(), cday: pc.day, seq: pc.seq }];
+    const pc = parseCode(b.code);
+    if (!pc || pc.kind !== "new") throw bookErr("Mã đơn không đúng dạng yymmddxx, ví dụ " + codeOf(day, 1) + ".");
+    codes = [{ code: pc.code, base: pc.code, cday: pc.day, seq: pc.seq }];
   } else if (parent) {
     const code = await childCode(DB, parent, kind);
-    codes = [{ code, base: code, cday: parent.cday, seq: parent.seq }];
+    codes = [{ code, base: (parseCode(code) || {}).root || parent.base, cday: parent.cday, seq: parent.seq }];
   } else {
     const seq = await nextSeq(DB, day);
     codes = [0, 1, 2].map((k) => ({ code: codeOf(day, seq + k), cday: day, seq: seq + k })).map((c) => ({ ...c, base: c.code }));
@@ -2401,6 +2534,7 @@ async function updateOrder(env, DB, o, b, who, now) {
   const set = {}, msgs = [];
   if (canEdit) {
     for (const k of ["clinic", "doctor", "patient"]) if (k in b) set[k] = clip(b[k], 120);
+    if ("patient" in set) set.pkey = fold(set.patient);
     for (const [k, n] of [["ref", 80], ["service", 60], ["teeth", 160], ["material", 120], ["shade", 40], ["notes", 4000]]) if (k in b) set[k] = clip(b[k], n);
     if ("due" in b) set.due_at = parseWhen(b.due, 0);
     if ("received" in b && !o.job_id) { set.received_at = parseWhen(b.received, o.received_at); set.day = vnDay(set.received_at); }
@@ -2409,9 +2543,9 @@ async function updateOrder(env, DB, o, b, who, now) {
       if (!c) throw bookErr("Không tìm thấy khách hàng.");
       set.customer_id = c.id;
     }
-    if ("code" in b && b.code && b.code !== o.code && o.kind === "new" && !o.job_id) {
-      const pc = parseCode(String(b.code).trim());
-      if (!pc || pc.kind !== "new") throw bookErr("Mã đơn không đúng dạng yy/mm/dd/xx.");
+    if ("code" in b && b.code && normCode(b.code) !== o.code && o.kind === "new" && !o.job_id) {
+      const pc = parseCode(b.code);
+      if (!pc || pc.kind !== "new") throw bookErr("Mã đơn không đúng dạng yymmddxx, ví dụ 26102101.");
       const kids = await DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE parent_id = ?").bind(o.id).first();
       if (kids.n) throw bookErr("Đơn đã có đơn làm lại / làm tiếp nên không đổi mã được.", 409);
       if (await DB.prepare("SELECT 1 AS x FROM orders WHERE code = ?").bind(pc.base).first()) throw bookErr("Mã đơn " + pc.base + " đã có.", 409);
@@ -2519,7 +2653,7 @@ async function listOrders(DB, who, P, now) {
   w.push(sc.sql); a.push(...sc.args);
   const q = fold(P.get("q") || "").slice(0, 60);
   for (const term of q.split(" ").filter(Boolean).slice(0, 4)) {
-    const t = term.slice(0, 40).replace(/[%_]/g, "");
+    const t = (/^[\d/rc-]+$/.test(term) ? term.replace(/[/-]/g, "") : term).slice(0, 40).replace(/[%_]/g, "");
     if (!t) continue;
     w.push("(o.search LIKE ? OR c.search LIKE ?)"); a.push("%" + t + "%", "%" + t + "%");
   }
@@ -2666,7 +2800,7 @@ async function importOrders(env, DB, list, who, now, partial, dry) {
     return r ? r.email : null;
   };
   const errors = [], ready = [];
-  const typed = list.map((x) => clip(x.code, 30)).filter((c) => parseCode(c));
+  const typed = list.map((x) => parseCode(x.code)).filter(Boolean).map((pc) => pc.code);
   const taken = new Set(typed.length ? (await rows(DB.prepare("SELECT code FROM orders WHERE code IN (SELECT value FROM json_each(?))").bind(JSON.stringify(typed)))).map((x) => x.code) : []);
   list.forEach((x, i) => {
     const where = "Đơn " + (x.label || x.code || x.key || i + 1) + (x.row ? " (dòng " + x.row + ")" : "");
@@ -2679,20 +2813,19 @@ async function importOrders(env, DB, list, who, now, partial, dry) {
     const designer = staffByKey(x.designer), qc = staffByKey(x.qc);
     if (designer === null) return errors.push({ row: i, msg: where + ": KTV \"" + clip(x.designer, 40) + "\" chưa có trong Nhân sự." });
     if (qc === null) return errors.push({ row: i, msg: where + ": QC \"" + clip(x.qc, 40) + "\" chưa có trong Nhân sự." });
-    let code = clip(x.code, 30);
-    const pc = parseCode(code);
-    if (code && pc && pc.kind !== "new") return errors.push({ row: i, msg: where + ": đơn làm lại / làm tiếp (R, C) hãy tạo từ đơn gốc trong trang đơn hàng." });
+    // a typed code is kept (26102101, old style 26/10/21/01 too); R / C codes are linked to their parent code after the insert
+    const pc = parseCode(x.code);
+    let code = pc ? pc.code : "";
     if (pc && taken.has(code)) return errors.push({ row: i, msg: where + ": mã " + code + " đã có." });
     if (pc) taken.add(code);
-    if (!pc) code = "";
     const status = ORDER_STATUS.includes(x.status) ? x.status : "delivered";
-    const charge = CHARGES.includes(x.charge) ? x.charge : "charge";
+    const charge = CHARGES.includes(x.charge) ? x.charge : pc && pc.kind === "redo" ? "warranty" : "charge";
     const adjPct = canPrice ? Math.max(-100, Math.min(1000, numv(x.adj_pct) || 0)) : 0;
     const t = totalsOf(r.items, adjPct, 0, charge, cur);
     const received = dayStart(x.day) + 9 * 3600000;
     const dd = status === "delivered" ? (validDay(x.dday) ? x.dday : x.day) : "";
     ready.push({ i, where, cust, cur, items: r.items, code, pc, o: {
-      kind: "new", parent_id: null, customer_id: cust.id, clinic: clip(x.clinic, 120), doctor: clip(x.doctor, 120), patient: clip(x.patient, 120), ref: clip(x.ref, 80),
+      kind: pc ? pc.kind : "new", parent_id: null, customer_id: cust.id, clinic: clip(x.clinic, 120), doctor: clip(x.doctor, 120), patient: clip(x.patient, 120), pkey: fold(clip(x.patient, 120)), ref: clip(x.ref, 80),
       service: clip(x.service, 60), teeth: clip(x.teeth, 160), material: clip(x.material, 120), shade: clip(x.shade, 40), notes: clip(x.notes, 4000), status, designer, qc,
       received_at: received, day: x.day, due_at: 0, delivered_at: dd ? dayStart(dd) + 17 * 3600000 : 0, dday: dd, currency: cur, units: t.units, subtotal: t.subtotal,
       adj_pct: adjPct, adj_amount: 0, total: t.total, charge, paid: 0, tech_cost: 0, tech_currency: "", qc_fails: 0, source: "import", job_id: "", login: "", previews: "[]",
@@ -2706,7 +2839,7 @@ async function importOrders(env, DB, list, who, now, partial, dry) {
   const next = new Map(days.map((d) => [d, ((maxes.find((x) => x.cday === d) || {}).m || 0) + 1]));
   for (const r of ready) if (r.code) { const s = next.get(r.pc.day); if (s && s <= r.pc.seq) next.set(r.pc.day, r.pc.seq + 1); }
   for (const r of ready) {
-    if (r.code) Object.assign(r.o, { code: r.code, base: r.code, cday: r.pc.day, seq: r.pc.seq });
+    if (r.code) Object.assign(r.o, { code: r.code, base: r.pc.root, cday: r.pc.day, seq: r.pc.seq });
     else { const s = next.get(r.o.day); next.set(r.o.day, s + 1); Object.assign(r.o, { code: codeOf(r.o.day, s), base: codeOf(r.o.day, s), cday: r.o.day, seq: s }); }
     r.o.search = searchText(r.o);
   }
@@ -2738,6 +2871,9 @@ async function importOrders(env, DB, list, who, now, partial, dry) {
   }
   const q = [];
   if (items.length) q.push(jsonInsert(DB, "order_items", ITEM_COLS, items));
+  const kids = ready.filter((r) => r.pc && r.pc.parent && idOf.get(r.o.code)).map((r) => ({ id: idOf.get(r.o.code), p: r.pc.parent }));
+  if (kids.length) q.push(DB.prepare(`UPDATE orders SET parent_id = (SELECT p.id FROM orders p WHERE p.code = json_extract(j.value, '$.p'))
+    FROM json_each(?) j WHERE orders.id = json_extract(j.value, '$.id')`).bind(JSON.stringify(kids)));
   if (pays.length) q.push(jsonInsert(DB, "payments", ["customer_id", "order_id", "day", "paid_at", "amount", "currency", "method", "ref", "note", "created_by", "created_at"], pays));
   q.push(DB.prepare(TECH_COST_SQL + "id IN (SELECT value FROM json_each(?))").bind(JSON.stringify([...idOf.values()])));
   await DB.batch(q);

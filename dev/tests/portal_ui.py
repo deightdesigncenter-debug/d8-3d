@@ -51,7 +51,7 @@ with sync_playwright() as p:
         # with the order book (D1) the case gets an order code yy/mm/dd/xx, shown to the customer instead of D8-…
         oc = pg.evaluate("D8.api('/api/jobs/' + location.hash.split('/')[2]).then((r) => r.job.order || '')")
         if oc:
-            ok(re.match(r"^\d{2}/\d{2}/\d{2}/\d{2,4}$", oc) is not None, name + ": order code " + oc)
+            ok(re.match(r"^\d{8,9}$", oc) is not None, name + ": order code " + oc)
             ok(oc in pg.inner_text(".pt-band"), name + ": order code in the case header")
         ok(pg.eval_on_selector_all(".files li", "e=>e.length") >= 2, name + ": files attached")
         pg.fill("#composer", "Hi, please keep the screw access palatal on 12 and 22."); pg.click("#sendMsg"); pg.wait_for_timeout(700)

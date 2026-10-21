@@ -534,7 +534,8 @@
       x.send(blob);
     });
   }
-  D8.uploadJobFiles = async function (jobId, files, opts = {}) {
+  // gzip where it helps, split into 20 MB parts, PUT each part to <base>/<fid>/<n>; returns what to attach
+  D8.uploadParts = async function (base, files, opts = {}) {
     const say = opts.onProgress || (() => {});
     const metas = [];
     files = Array.from(files);
@@ -557,7 +558,7 @@
         let tries = 0;
         for (;;) {
           try {
-            await putPart(`/api/jobs/${encodeURIComponent(jobId)}/files/${fid}/${n}`, part, (loaded) => {
+            await putPart(`${base}/${fid}/${n}`, part, (loaded) => {
               const filePct = (n * CHUNK + loaded) / Math.max(1, blob.size);
               say({ text: D8.t("up.send").replace("{name}", name).replace("{i}", i + 1).replace("{n}", files.length).replace("{pct}", Math.min(100, Math.round(filePct * 100))),
                     pct: Math.round(((i + Math.min(1, filePct)) / files.length) * 100) });
@@ -572,7 +573,12 @@
       metas.push({ fid, name, size: file.size, stored: blob.size, parts, gz });
     }
     say({ text: D8.t("up.attach"), pct: 100 });
-    return D8.api(`/api/jobs/${encodeURIComponent(jobId)}/files`, { method: "POST", body: { files: metas, deliver: !!opts.deliver, ...(opts.kind ? { kind: opts.kind } : {}) } });
+    return metas;
+  };
+  D8.uploadJobFiles = async function (jobId, files, opts = {}) {
+    const base = `/api/jobs/${encodeURIComponent(jobId)}/files`;
+    const metas = await D8.uploadParts(base, files, opts);
+    return D8.api(base, { method: "POST", body: { files: metas, deliver: !!opts.deliver, ...(opts.kind ? { kind: opts.kind } : {}) } });
   };
 
   let configP = null;

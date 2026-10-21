@@ -23,7 +23,7 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - Gửi ca mới: mã tham chiếu, dịch vụ, răng (FDI/Universal), vật liệu, màu, ngày cần, yêu cầu, link file và file tải lên.
 - File được nén gzip trong trình duyệt khi có lợi, chia phần 20 MB, lưu KV khóa `jf:<ca>:<file>:<phần>`, tự xóa sau 60 ngày. Tối đa 300 MB mỗi ca.
 - Trạng thái: Đã nhận → (Cần bổ sung) → Đang thiết kế → Chờ duyệt → Đã duyệt → Đã giao (hoặc Đã hủy).
-- Khách xem link 3D, bấm **Duyệt thiết kế**, nhắn tin, tải file hoàn chỉnh (từng file hoặc cả ca dạng ZIP). Mỗi ca gửi qua cổng khách tự thành một đơn trong sổ đơn hàng và khách thấy **mã đơn** `yy/mm/dd/xx` (mã nội bộ của ca vẫn là `D8-YYMMDD-XXXX`, dùng trong đường dẫn).
+- Khách xem link 3D, bấm **Duyệt thiết kế**, nhắn tin, tải file hoàn chỉnh (từng file hoặc cả ca dạng ZIP). Mỗi ca gửi qua cổng khách tự thành một đơn trong sổ đơn hàng và khách thấy **mã đơn** `yymmddxx`, ví dụ `26102101` (mã nội bộ của ca vẫn là `D8-YYMMDD-XXXX`, dùng trong đường dẫn).
 - Phiếu chỉ định có thêm ô riêng theo dịch vụ (implant, All-on-X, máng, hàm tháo lắp…), lưu ở `rx` của ca.
 - **Dùng thử miễn phí:** trang web giới thiệu 2 ca đầu miễn phí (tổng đến 50 USD). Việc tự đánh dấu 2 ca đầu là `trial` **tắt mặc định** (bạn tự thương lượng, đặt "Miễn phí" trong đơn); bật lại ở **Cài đặt**.
 - Danh sách ca của khách đọc từ chỉ mục `own:<email>` (không tốn lượt "list" của KV).
@@ -44,12 +44,27 @@ Trang riêng cho đội D.EIGHT (thanh bên trái, không có menu trang web), l
 
 ## Sổ đơn hàng (cơ sở dữ liệu D1, binding `DB`)
 
-Xương sống của khu làm việc: mọi đơn (nhập tay, nhập Excel, khách gửi qua cổng) nằm trong một cơ sở dữ liệu Cloudflare D1. Bảng dữ liệu tự tạo lần đầu dùng (`SCHEMA_V1` trong `_worker.js`): `customers`, `customer_logins`, `products`, `prices`, `tech_rates`, `orders`, `order_items`, `payments`, `order_msgs`, `order_reads`.
+Xương sống của khu làm việc: mọi đơn (nhập tay, nhập Excel, khách gửi qua cổng) nằm trong một cơ sở dữ liệu Cloudflare D1. Bảng dữ liệu tự tạo lần đầu dùng và tự nâng cấp khi có phiên bản mới (`SCHEMA_V1`, `SCHEMA_V2` trong `_worker.js`):
 
-- **Mã đơn** `yy/mm/dd/xx` theo ngày nhận (giờ Việt Nam), `xx` = 01, 02… đếm lại mỗi ngày, chung cho mọi khách (tiếp nối số lớn nhất của ngày đó). **Làm lại** thêm `R1, R2…` (vd `26/10/20/03R1`), **làm tiếp giai đoạn** thêm `C1, C2…` (`26/10/20/03C1`), làm lại một giai đoạn thành `…C1R1`. Đơn cũ giữ được mã đã có (gõ mã khi nhập). Đơn làm lại mặc định "Bảo hành (miễn phí)", đổi được.
-- **Tìm đơn** theo mã đơn (có hoặc không dấu `/`), bệnh nhân, nha khoa, bác sĩ, lab / mã khách, mã của khách; gõ không dấu vẫn tìm được. Lọc theo trạng thái, thời gian, khách, KTV, loại đơn (mới / R / C), còn nợ.
+| Bảng | Một dòng là | Trường chính |
+|---|---|---|
+| `customers` | một khách (lab, phòng khám, bác sĩ, nền tảng) | mã khách, tên, loại, tiền tệ, liên hệ, điều khoản thanh toán |
+| `customer_logins` | một tài khoản Google của cổng khách | email → khách |
+| `products` | một mã hàng chung | mã, tên, nhóm, tính theo (răng / hàm / ca / giờ) |
+| `prices` | giá một mã hàng cho một khách (khách 0 = giá mặc định) | khách, mã hàng, tiền tệ, giá |
+| `tech_rates` | tiền công một mã hàng cho một KTV (`*` = mọi KTV) | KTV, mã hàng, giá công |
+| `orders` | một đơn (một giai đoạn hoặc một lần làm lại) | mã đơn, đơn gốc, loại, khách, nha khoa, bác sĩ, bệnh nhân, mã của khách, yêu cầu, trạng thái, KTV, QC, ngày nhận / hạn / ngày giao, đơn vị, tạm tính, phụ phí, tổng, đã thu, công KTV, số lần QC trả |
+| `order_items` | một hạng mục trong đơn | mã hàng, răng, số lượng, đơn giá, thành tiền |
+| `payments` | một khoản khách trả | khách, đơn (nếu trả riêng), ngày, số tiền, hình thức, mã giao dịch |
+| `order_msgs`, `order_files`, `order_reads` | chat nội bộ theo mã đơn | tin nhắn, ảnh, file đính kèm, ai đã đọc đến đâu |
+
+Chỉ mục (index) cho các việc hay làm: tìm theo mã đơn, theo ngày nhận / ngày giao, theo khách, theo KTV / QC + trạng thái, họ đơn theo mã gốc, kiểm tra đơn trùng theo tên bệnh nhân và mã của khách.
+
+- **Mã đơn** `yymmddxx` theo ngày nhận (giờ Việt Nam): ca đầu tiên ngày 21/10/2026 là `26102101`, `xx` = 01, 02… tự đếm lại mỗi ngày, chung cho mọi khách. Mã gốc là **giai đoạn 1**; **làm tiếp giai đoạn 2** là `26102101C2` (rồi `C3`…); **làm lại lần 1** là `26102101R1` (lần 2 `R2`…); **làm lại xong rồi làm tiếp giai đoạn 2** là `26102101R1C2`; làm lại giai đoạn 2 là `26102101C2R1`. Số R / C tự đếm, form hiện mã mới trước khi lưu, mỗi giai đoạn chỉ tạo được một lần. Mã cũ dạng `26/10/21/01` (gõ tay, file Excel, dữ liệu trước đây) tự đổi thành `26102101`. Đơn cũ giữ được mã đã có (gõ mã khi nhập). Đơn làm lại mặc định "Bảo hành (miễn phí)", đổi được.
+- **Đơn đã có thì báo ngay**: khi nhập đơn mới (admin hoặc KTV được quyền nhập đơn), gõ tên bệnh nhân hoặc mã của khách mà sổ đã có đơn trùng (cùng khách + cùng mã của khách, hoặc cùng tên bệnh nhân trong 45 ngày) thì hiện khung đỏ "case này đã có mã đơn hàng …" kèm ai nhập, trạng thái, KTV. Muốn tạo vẫn được nhưng phải tick "Đây là đơn khác". KTV chỉ thấy mã, bệnh nhân, trạng thái, không thấy tiền.
+- **Tìm đơn** theo mã đơn (gõ `26102101` hay kiểu cũ `26/10/21/01` đều được), bệnh nhân, nha khoa, bác sĩ, lab / mã khách, mã của khách; gõ không dấu vẫn tìm được. Lọc theo trạng thái, thời gian, khách, KTV, loại đơn (mới / R / C), còn nợ.
 - **Đơn hàng**: nhiều hạng mục (mã hàng, răng, số lượng tự theo số răng, đơn giá theo bảng giá của khách), phụ phí % (vd +50% làm gấp trong ngày), cộng/trừ, tính tiền / miễn phí / bảo hành, tiền tệ USD hoặc VND theo khách. Quy trình: Mới nhận → Đang thiết kế → Chờ QC → (QC trả sửa) → Đã qua QC → Chờ bác sĩ duyệt → Đã duyệt → Đã giao; Tạm dừng, Hủy (ghi lý do).
-- **Chat nội bộ theo mã đơn** (KTV – QC – quản trị, khách không thấy): tin nhắn, ảnh chụp màn hình (dán Ctrl+V), sự kiện quy trình; chấm đỏ đơn có tin chưa đọc, số trên menu Đơn hàng. Ca từ cổng khách dùng chung chat này.
+- **Chat nội bộ theo mã đơn** (KTV – QC – quản trị, khách không thấy): tin nhắn, ảnh chụp màn hình (dán Ctrl+V), **file** (STL, PLY, HTML exocad, PDF, ZIP…, bấm File hoặc kéo thả, tối đa 300 MB mỗi file, lưu như file ca: 60 ngày nếu chưa có R2), sự kiện quy trình; chấm đỏ đơn có tin chưa đọc, số trên menu Đơn hàng. Ca từ cổng khách dùng chung chat này.
 - **Khách hàng**: mỗi khách một mã (JAKE, ANNIE…), loại, tiền tệ, liên hệ, điều khoản thanh toán; gắn tài khoản Google của cổng khách để đơn tự vào đúng khách. Trang khách: số đơn, doanh thu, đã thu, còn nợ, tiền ứng trước còn lại, đơn gần đây, bảng giá riêng, sổ thanh toán.
 - **Mã hàng & bảng giá**: một danh mục mã hàng chung (có danh mục mẫu 20 mã để sửa), giá mặc định USD/VND, giá riêng từng khách, đổi mã thì đơn và bảng giá tự đổi theo. **Tiền công KTV**: giá công theo mã hàng cho từng KTV (hoặc chung), công mỗi đơn = số lượng × giá công.
 - **Thanh toán**: ghi nhận tiền khách trả (PayPal, Payoneer, Remitly, chuyển khoản, tiền mặt, ứng trước…). Tiền trả cho một đơn vào đơn đó; tiền ứng trước / trả gộp tự trừ vào đơn cũ nhất còn nợ; phần dư là tiền ứng trước còn lại. Hủy đơn thì tiền của đơn đó thành tiền ứng trước.
