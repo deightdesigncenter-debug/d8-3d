@@ -1,7 +1,7 @@
 # D.EIGHT DESIGN CENTER site — notes for working on this repo
 
-Cloudflare Pages project `d8-3d` (advanced mode: `public/_worker.js`, KV binding `CASES`; optional `AI`, `FILES` R2,
-PayPal/Stripe secrets). Push to `main` deploys to https://d8-3d.pages.dev in 1–2 minutes. README.md (Vietnamese)
+Cloudflare Pages project `d8-3d` (advanced mode: `public/_worker.js`, KV binding `CASES`, D1 binding `DB` = `d8-db`
+for the order book; optional `AI`, `FILES` R2, PayPal/Stripe secrets). Push to `main` deploys to https://d8-3d.pages.dev in 1–2 minutes. README.md (Vietnamese)
 describes features and setup.
 
 ## Rule: test everything before every push
@@ -17,8 +17,15 @@ The owner wants the site to run without errors or jank, and every new feature ch
 ## Layout of the code
 - `public/shell.js`: shared header/footer, EN/VI dictionary, theme (light/dark), sign-in state, `D8.can(perm)`,
   uploads, chat thread, motion helpers (`D8.busy`, `D8.done`, `D8.skel`, `D8.animIn`).
-- `public/portal.*`: customer portal. `public/admin.*`: staff workspace (sidebar, dashboard, cases, customers,
-  price lists, staff & permissions, 3D links, contact messages). `public/stl.html`: HTML → STL tool.
+- `public/portal.*`: customer portal. `public/admin.*`: staff workspace (sidebar, dashboard, orders, portal cases,
+  customers, product codes & prices, reports, Excel import, staff & permissions, settings, 3D links, contact messages). `public/stl.html`: HTML → STL tool.
+- `public/orders.js` (order list/form/page, order chat), `public/books.js` (customers, product codes & prices, reports,
+  import, settings), `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser).
+- Order book (D1, schema auto-created, `SCHEMA_V1`): codes `yy/mm/dd/xx` + `R`n (redo) / `C`n (continue). Free-plan D1
+  limits: ≤50 queries per request, ≤100 bound params per query — bulk writes go through `json_each(?)`. The local D1
+  mock (`dev/server.mjs`, node:sqlite) counts queries; `NO_DB=1` runs without it. `orderOut` strips money unless
+  `billing.view`, tech cost unless `techpay.*`; KTVs never see prices.
+- Settings KV `cfg:settings`: `onlinePay` and `autoTrial` are OFF by default (owner's choice).
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.
 - Motion rules: 200–300 ms, ease-out curves, transform/opacity only, off under `prefers-reduced-motion`.

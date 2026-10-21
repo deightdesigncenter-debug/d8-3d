@@ -24,6 +24,12 @@ KTV, QC, CUST = f"ktv{stamp}@d8.example", f"qc{stamp}@d8.example", f"lab{stamp}@
 errors = []
 with sync_playwright() as p:
     b = p.chromium.launch()
+    # this suite also covers online payment, which is off by default: switch it on before any page loads /api/config
+    rq = p.request.new_context(base_url=B)
+    tok = rq.get("/__test/idtoken?email=d.eightdesigncenter%40gmail.com&name=D.EIGHT").text()
+    H = {"Content-Type": "application/json", "X-D8": "1"}
+    rq.post("/api/auth/google", data=json.dumps({"credential": tok}), headers=H)
+    rq.post("/api/settings", data=json.dumps({"onlinePay": True}), headers=H)
     def ctx(vp=None, mobile=False):
         c = b.new_context(viewport=vp or {"width": 1366, "height": 900}, is_mobile=mobile, has_touch=mobile, reduced_motion="reduce")
         c.route("**/*", block)
@@ -36,7 +42,7 @@ with sync_playwright() as p:
     # customer sends a case
     cc = ctx(); cp = cc.new_page(); watch(cp, "cust"); cp.goto(B + "/portal"); cp.evaluate(SIGNIN, [CUST, "Smile Lab"])
     st, out = cp.evaluate(API, ["/api/my/jobs", {"title": "Case 777, crowns 14-16", "service": "Crown & bridge", "teeth": "14-16", "material": "Zirconia"}])
-    JID = out["job"]["id"]
+    JID = out["job"]["id"]; order_code = out["job"]["order"]
     cp.evaluate(API, [f"/api/jobs/{JID}/messages", {"text": "Light contacts please."}])
     for t in ["Second", "Third"]:
         cp.evaluate(API, ["/api/my/jobs", {"title": t, "service": "Crown & bridge"}])
@@ -45,7 +51,7 @@ with sync_playwright() as p:
     oc = ctx(); op = oc.new_page(); watch(op, "owner")
     op.goto(B + "/admin"); op.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "Danny Do"]); op.reload(); op.wait_for_timeout(1200)
     nav = op.eval_on_selector_all("#wsNav nav a > span:not(.count)", "els=>els.map(e=>e.textContent.trim())")
-    ok(nav == ["Tổng quan", "Ca hàng", "Khách hàng", "Bảng giá", "Nhân sự & phân quyền", "Link xem 3D", "HTML sang STL", "Tin nhắn web"], "owner sidebar: " + str(nav))
+    ok(nav == ["Tổng quan", "Đơn hàng", "Ca cổng khách", "Khách hàng", "Mã hàng & bảng giá", "Báo cáo", "Nhập Excel", "Nhân sự & phân quyền", "Cài đặt", "Link xem 3D", "HTML sang STL", "Tin nhắn web"], "owner sidebar: " + str(nav))
     ok(op.is_visible("#dash .card"), "dashboard shows cards")
     op.screenshot(path=f"{OUT}/owner-home.png", full_page=True)
     op.goto(B + "/admin#staff"); op.wait_for_timeout(900)
@@ -54,15 +60,9 @@ with sync_playwright() as p:
     rows = op.eval_on_selector_all(".staff-row small", "els=>els.map(e=>e.textContent)")
     ok(KTV in rows and QC in rows, "staff added through the page")
     op.screenshot(path=f"{OUT}/owner-staff.png", full_page=True)
-    op.goto(B + "/admin#prices"); op.wait_for_timeout(800)
-    op.click("#defPrices [data-add]"); op.select_option('#defPrices [data-k="service"]', "Crown & bridge"); op.fill('#defPrices [data-k="name"]', "Zirconia crown")
-    op.fill('#defPrices [data-k="price"]', "12"); op.click("#defPrices [data-save]"); op.wait_for_timeout(800)
-    ok("Đã lưu" in op.inner_text("#defPrices [data-save]") or op.eval_on_selector("#defPrices [data-k='price']", "e=>e.value") == "12", "default price saved")
-    op.screenshot(path=f"{OUT}/owner-prices.png", full_page=True)
-    # assign on the case page + price suggestion
-    op.goto(B + "/admin#jobs/" + JID); op.wait_for_timeout(1500)
-    sug = op.inner_text("#billSuggest") if op.query_selector("#billSuggest") else ""
-    ok("US$36" in sug, "price suggestion 3 teeth x 12: " + sug.replace("\n", " ")[:80])
+    # assign on the case page; the case carries its order (code, money, team chat)
+    op.goto(B + "/admin#jobs/" + JID); op.wait_for_timeout(1800)
+    ok(op.query_selector("#jobOrder") is not None and op.query_selector("#jobChat .ochat") is not None, "case page shows its order and the team chat")
     op.select_option("#asD", KTV); op.select_option("#asQ", QC); op.click("#asForm [type=submit]"); op.wait_for_timeout(900)
     ok("đang thiết kế" in op.inner_text("#wfCard").lower(), "case assigned, stage design")
     op.screenshot(path=f"{OUT}/owner-case.png", full_page=True)
@@ -71,8 +71,8 @@ with sync_playwright() as p:
     dc = ctx(); dp = dc.new_page(); watch(dp, "designer")
     dp.goto(B + "/admin"); dp.evaluate(SIGNIN, [KTV, "Minh KTV"]); dp.reload(); dp.wait_for_timeout(1200)
     nav = dp.eval_on_selector_all("#wsNav nav a > span:not(.count)", "els=>els.map(e=>e.textContent.trim())")
-    ok(nav == ["Tổng quan", "Ca hàng", "Link xem 3D", "HTML sang STL"], "designer sidebar: " + str(nav))
-    ok(JID in dp.inner_text("#dash"), "designer dashboard lists the assigned case")
+    ok(nav == ["Tổng quan", "Đơn hàng", "Ca cổng khách", "Link xem 3D", "HTML sang STL"], "designer sidebar: " + str(nav))
+    ok(order_code in dp.inner_text("#dash"), "designer dashboard lists the assigned case by its order code")
     dp.screenshot(path=f"{OUT}/designer-home.png", full_page=True)
     dp.goto(B + "/admin#staff"); dp.wait_for_timeout(500)
     ok(dp.is_visible("#p-denied"), "designer sees no-access page for staff")
@@ -94,7 +94,7 @@ with sync_playwright() as p:
     # QC: fail then pass
     qc = ctx(); qp = qc.new_page(); watch(qp, "qc")
     qp.goto(B + "/admin"); qp.evaluate(SIGNIN, [QC, "Lan QC"]); qp.reload(); qp.wait_for_timeout(1200)
-    ok(JID in qp.inner_text("#dash"), "QC dashboard lists the case")
+    ok(order_code in qp.inner_text("#dash"), "QC dashboard lists the case")
     qp.goto(B + "/admin#jobs/" + JID); qp.wait_for_timeout(1300)
     qp.click("#wfFail"); qp.wait_for_timeout(700)
     ok(qp.is_visible("#wfFail") or "Ghi rõ" in qp.inner_text("body"), "fail without note is refused")
@@ -133,7 +133,7 @@ with sync_playwright() as p:
 
     # customer detail page + mobile workspace
     op.goto(B + "/admin#customers/" + CUST); op.wait_for_timeout(1500)
-    ok(JID in op.inner_text("#p-customer") and op.query_selector("#custPrices [data-add]") is not None, "customer page with cases and price editor")
+    ok(JID in op.inner_text("#p-customer") and op.query_selector("#custLink a") is not None, "portal account page with cases and a link to the customer record")
     op.screenshot(path=f"{OUT}/owner-customer.png", full_page=True)
     mc = ctx({"width": 390, "height": 844}, True); mp = mc.new_page(); watch(mp, "mobile")
     mp.goto(B + "/admin"); mp.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "Danny Do"]); mp.reload(); mp.wait_for_timeout(1300)
@@ -147,6 +147,7 @@ with sync_playwright() as p:
     mp.goto(B + "/admin#staff"); mp.wait_for_timeout(1200)
     over = mp.evaluate("document.documentElement.scrollWidth")
     ok(over <= 390, "mobile staff page has no horizontal overflow (" + str(over) + ")")
+    rq.post("/api/settings", data=json.dumps({"onlinePay": False}), headers=H)
     b.close()
 for e in errors: print("ERR", e)
 ok(not errors, "no page errors")

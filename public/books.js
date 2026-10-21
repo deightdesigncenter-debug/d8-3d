@@ -52,7 +52,8 @@
       rows: list.map((c) => [c.code, c.name, KINDS[c.kind] || c.kind, c.country, c.currency, c.contact, c.email, c.phone, c.address, c.terms, c.note, c.orders || 0, ...(can("billing.view") ? [c.billed || 0, c.due || 0] : [])]) }], "D8-khach-hang-" + vnToday() + ".xlsx"));
     // portal sign-ins and which customer they belong to
     try {
-      const u = (await api("/api/admin/users")).users || [];
+      const staffMails = new Set(W.team().map((t) => t.email));
+      const u = ((await api("/api/admin/users")).users || []).filter((x) => !staffMails.has(x.email));
       const byLogin = new Map(); list.forEach((c) => (c.logins || []).forEach((e) => byLogin.set(e, c)));
       $("cuLoginList").innerHTML = u.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Tài khoản</th><th>Lab / phòng khám</th><th>Thuộc khách</th><th>Lần gần nhất</th></tr></thead><tbody>
         ${u.map((x) => { const c = byLogin.get(x.email); return `<tr><td><a href="#customers/${encodeURIComponent(x.email)}"><b>${esc(x.name || "—")}</b></a><small>${esc(x.email)}</small></td><td>${esc(x.practice || "—")}</td>
@@ -147,7 +148,7 @@
         <section class="card"><h2 class="h-caps">Tài khoản cổng khách</h2><p class="sub">Đơn khách gửi qua cổng khách hàng bằng các email này tự vào khách này.</p>
           ${d.logins.length ? `<ul class="logins">${d.logins.map((l) => `<li><span>${esc(l.email)}</span>${can("customers.edit") ? `<button class="iconbtn del" type="button" data-unlink="${esc(l.email)}" aria-label="Bỏ gắn">${D8.ORDER_ICON.x}</button>` : ""}</li>`).join("")}</ul>` : '<p class="muted" style="margin:0 0 10px">Chưa gắn tài khoản nào.</p>'}
           ${can("customers.edit") ? `<form class="add-row" id="clAdd" style="margin-top:10px"><input class="input" type="email" id="clEmail" placeholder="Email Google của khách" required><button class="btn small" type="submit">Gắn</button></form>` : ""}
-          ${can("customers.edit") && !c.orders ? `<button class="btn small btn-danger" type="button" id="cuDel" style="margin-top:16px">Xóa khách này</button>` : ""}</section>
+          ${can("customers.edit") && !d.stats.some((s) => s.orders || s.paid || s.credit) ? `<button class="btn small btn-danger" type="button" id="cuDel" style="margin-top:16px">Xóa khách này</button>` : ""}</section>
       </aside></div>`;
     host.querySelectorAll("tr[data-href]").forEach((tr) => tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = tr.dataset.href; }));
     if ($("cfForm")) wireCustForm(c, () => { D8.toast("Đã lưu hồ sơ."); drawCustomer(id); });
@@ -334,13 +335,14 @@
   function niceMax(v) { if (v <= 0) return 1; const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e; }
   // Column chart (one series, or two stacked). Hover/focus a column for its values.
   function columnChart(host, { labels, longLabels, series, fmt, title }) {
-    const W = 760, H = 260, padL = 52, padR = 12, padT = 14, padB = 34;
+    // drawn at the width it is shown, so the axis text stays readable on a phone
+    const W = Math.max(300, Math.min(1100, Math.round(host.clientWidth || 760))), H = W < 520 ? 220 : 260, padL = 48, padR = 8, padT = 14, padB = 34;
     const n = labels.length, band = (W - padL - padR) / Math.max(1, n), bw = Math.min(24, Math.max(4, band * 0.62));
     const totals = labels.map((_, i) => series.reduce((t, s) => t + Math.max(0, s.values[i] || 0), 0));
     const max = niceMax(Math.max(...totals, 0));
     const y = (v) => padT + (H - padT - padB) * (1 - v / max);
     const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
-    const every = Math.max(1, Math.ceil(n / 12));
+    const every = Math.max(1, Math.ceil(n / Math.max(3, Math.floor((W - padL) / 58))));
     let marks = "";
     labels.forEach((_, i) => {
       const x = padL + band * i + (band - bw) / 2;
@@ -436,7 +438,7 @@
       ${m ? `<section class="card"><div class="card-head-row"><h2 class="h-caps">Doanh thu: đã thu và còn nợ (${esc(cur)})</h2></div><div id="rpMoney"></div></section>` : ""}
       <section class="card"><div class="card-head-row"><h2 class="h-caps">Số ca theo ${P === "week" ? "tuần" : P === "month" ? "tháng" : "năm"}</h2></div><div id="rpCases"></div></section>
       <section class="card"><h2 class="h-caps">Theo ${P === "week" ? "tuần" : P === "month" ? "tháng" : "năm"}</h2><div class="tbl-wrap"><table class="tbl rp-tbl"><thead><tr><th>Kỳ</th><th class="num">Số ca</th><th class="num">Đơn vị</th><th class="num">Làm lại</th>${m ? '<th class="num">Doanh thu</th><th class="num">Đã thu</th><th class="num">Còn nợ</th><th class="num">Thực nhận</th>' : ""}${rep.tech ? '<th class="num">Công KTV</th>' : ""}</tr></thead>
-        <tbody>${[...b].reverse().map((x) => `<tr><td>${esc(periodLong(x.k, P))}</td><td class="num">${x.n}</td><td class="num">${Math.round(x.u * 100) / 100}</td><td class="num">${x.r || ""}</td>${m ? `<td class="num">${esc(f(x.t))}</td><td class="num">${esc(f(x.p))}</td><td class="num ${x.t - x.p > 0.004 ? "due" : ""}">${esc(f(x.t - x.p))}</td><td class="num">${esc(f(x.cash))}</td>` : ""}${rep.tech ? `<td class="num">${esc(money(x.k2, "VND"))}</td>` : ""}</tr>`).join("")}</tbody></table></div></section>
+        <tbody>${[...b].reverse().map((x) => `<tr><td>${esc(periodLong(x.k, P))}</td><td class="num">${x.n}</td><td class="num">${Math.round(x.u * 100) / 100}</td><td class="num">${x.r || 0}</td>${m ? `<td class="num">${esc(f(x.t))}</td><td class="num">${esc(f(x.p))}</td><td class="num ${x.t - x.p > 0.004 ? "due" : ""}">${esc(f(x.t - x.p))}</td><td class="num">${esc(f(x.cash))}</td>` : ""}${rep.tech ? `<td class="num">${esc(money(x.k2, "VND"))}</td>` : ""}</tr>`).join("")}</tbody></table></div></section>
       <div class="rp-two">
         <section class="card"><h2 class="h-caps">Theo khách hàng</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Khách</th><th class="num">Số ca</th><th class="num">Đơn vị</th>${m ? '<th class="num">Doanh thu</th><th class="num">Còn nợ</th>' : ""}</tr></thead>
           <tbody>${custRows.map((x) => `<tr><td><a href="#cust/${x.id}"><b>${esc(x.code)}</b></a> <span class="muted">${esc(x.name)}</span></td><td class="num">${x.n}</td><td class="num">${Math.round((x.u || 0) * 100) / 100}</td>${m ? `<td class="num">${esc(money(x.t, x.cur))}</td><td class="num ${x.t - x.p > 0.004 ? "due" : ""}">${esc(money(x.t - x.p, x.cur))}</td>` : ""}</tr>`).join("") || '<tr><td colspan="5" class="muted">Không có ca trong kỳ.</td></tr>'}</tbody></table></div></section>
@@ -569,7 +571,7 @@
   function drawImport(kind) {
     const W = ws(), T = IMPORTS[kind];
     if (!T || !can(T.perm)) return W.denied();
-    W.setBand("Nhập " + T.title.toLowerCase(), T.desc, { back: true, backHref: "#import", backText: "Nhập dữ liệu" });
+    W.setBand("Nhập " + T.title.toLowerCase(), "Tải file mẫu, điền, xem trước rồi nhập", { back: true, backHref: "#import", backText: "Nhập dữ liệu" });
     W.show("p-import");
     const host = $("p-import");
     host.innerHTML = `<section class="card"><div class="card-head-row"><h2 class="h-caps">1. File mẫu</h2></div><p class="sub">${esc(T.desc)}</p>

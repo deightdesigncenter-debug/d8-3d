@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-20.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-21.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -1605,7 +1605,7 @@ function orderOut(o, who) {
 }
 const itemOut = (x, money) => ({ id: x.id, product: x.product, name: x.name, teeth: x.teeth, qty: x.qty, note: x.note, ...(money ? { price: x.price, amount: x.amount } : {}) });
 const ORDER_SELECT = `SELECT o.*, c.code AS customer_code, c.name AS customer_name,
-  (SELECT group_concat(CASE WHEN i.qty = 1 THEN i.product ELSE (i.qty || '× ' || i.product) END, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_text
+  (SELECT group_concat(CASE WHEN i.qty = 1 THEN i.product WHEN i.qty = CAST(i.qty AS INTEGER) THEN (CAST(i.qty AS INTEGER) || '× ' || i.product) ELSE (i.qty || '× ' || i.product) END, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_text
   FROM orders o JOIN customers c ON c.id = o.customer_id`;
 
 /* ---- prices, KTV rates, totals */
@@ -2546,7 +2546,7 @@ async function listOrders(DB, who, P, now) {
   const join = "FROM orders o JOIN customers c ON c.id = o.customer_id LEFT JOIN order_reads r ON r.order_id = o.id AND r.email = ?";
   const [list, sums, counts] = await DB.batch([
     DB.prepare(`SELECT o.*, c.code AS customer_code, c.name AS customer_name, (o.last_msg_at > COALESCE(r.at, 0) AND o.last_msg_by != ?) AS unread,
-      (SELECT group_concat(CASE WHEN i.qty = 1 THEN i.product ELSE (i.qty || '× ' || i.product) END, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_text
+      (SELECT group_concat(CASE WHEN i.qty = 1 THEN i.product WHEN i.qty = CAST(i.qty AS INTEGER) THEN (CAST(i.qty AS INTEGER) || '× ' || i.product) ELSE (i.qty || '× ' || i.product) END, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_text
       ${join} ${whereAll} ORDER BY ${sort} LIMIT ? OFFSET ?`).bind(who.email, who.email, ...a, ...stA, limit, offset),
     DB.prepare(`SELECT o.currency AS currency, COUNT(*) AS n, SUM(o.units) AS units, SUM(CASE WHEN o.status != 'cancelled' THEN o.total ELSE 0 END) AS total,
       SUM(CASE WHEN o.status != 'cancelled' THEN o.paid ELSE 0 END) AS paid ${join} ${whereAll} GROUP BY o.currency`).bind(who.email, ...a, ...stA),

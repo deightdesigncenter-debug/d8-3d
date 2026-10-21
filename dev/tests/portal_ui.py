@@ -1,6 +1,6 @@
 """Customer portal end to end (desktop and phone): sign in, new case with files and Rx, pre-send checks,
 messages, staff reply + 3D link (admin password), approve, download, profile, list. Fails on any page error."""
-import sys, os, json, hashlib, time
+import sys, os, json, hashlib, time, re
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fixtures import make_all
@@ -48,6 +48,11 @@ with sync_playwright() as p:
         pg.wait_for_function("location.hash.startsWith('#/case/')", timeout=60000); pg.wait_for_timeout(900)
         jid = pg.evaluate("location.hash.split('/')[2]")
         ok(jid.startswith("D8-"), name + ": case created " + jid)
+        # with the order book (D1) the case gets an order code yy/mm/dd/xx, shown to the customer instead of D8-…
+        oc = pg.evaluate("D8.api('/api/jobs/' + location.hash.split('/')[2]).then((r) => r.job.order || '')")
+        if oc:
+            ok(re.match(r"^\d{2}/\d{2}/\d{2}/\d{2,4}$", oc) is not None, name + ": order code " + oc)
+            ok(oc in pg.inner_text(".pt-band"), name + ": order code in the case header")
         ok(pg.eval_on_selector_all(".files li", "e=>e.length") >= 2, name + ": files attached")
         pg.fill("#composer", "Hi, please keep the screw access palatal on 12 and 22."); pg.click("#sendMsg"); pg.wait_for_timeout(700)
         ok("screw access palatal on 12" in pg.inner_text("#thread"), name + ": message sent")
@@ -68,7 +73,7 @@ with sync_playwright() as p:
         same = hashlib.md5(data).hexdigest() in (hashlib.md5(open(F["stl"], "rb").read()).hexdigest(), hashlib.md5(open(F["ply"], "rb").read()).hexdigest())
         ok(same, name + ": download matches the upload (" + d.suggested_filename + ")")
         pg.goto(B + "/portal#/"); pg.wait_for_timeout(800)
-        ok(jid in pg.inner_text("#view"), name + ": case in list")
+        ok((oc or jid) in pg.inner_text("#view"), name + ": case in list (" + (oc or jid) + ")")
         pg.goto(B + "/portal#/profile"); pg.wait_for_timeout(700)
         pg.fill("#pfPractice", "Lee Dental Lab"); pg.click("#pfSave"); pg.wait_for_timeout(700)
         ok("saved" in pg.inner_text("#pfSave").lower() or "đã lưu" in pg.inner_text("#pfSave").lower(), name + ": profile saved")

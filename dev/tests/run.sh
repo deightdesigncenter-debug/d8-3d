@@ -29,15 +29,18 @@ run orders    node dev/tests/orders.test.mjs
 run pay       node dev/tests/pay.test.mjs
 run workspace python3 dev/tests/workspace_ui.py "$OUT/workspace" light
 run workspace-dark python3 dev/tests/workspace_ui.py "$OUT/workspace-dark" dark
+run orders-ui python3 dev/tests/orders_ui.py "$OUT/orders" light
+run orders-ui-dark python3 dev/tests/orders_ui.py "$OUT/orders-dark" dark
 run portal    python3 dev/tests/portal_ui.py "$OUT/portal"
 run site      python3 dev/tests/site_ui.py "$OUT/site"
 run speed     python3 dev/tests/perf.py
 stop
 
-# no payment keys, no Workers AI: the site must still work
-start NO_AI=1
+# no payment keys, no Workers AI, no database: the site must still work
+start NO_AI=1 NO_DB=1
 run portal-plain python3 dev/tests/portal_ui.py "$OUT/portal-plain"
 run site-plain   python3 dev/tests/site_ui.py "$OUT/site-plain"
+run nodb-ui      python3 dev/tests/nodb_ui.py "$OUT/nodb"
 stop
 
 echo

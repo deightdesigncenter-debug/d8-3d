@@ -66,6 +66,10 @@
       url = URL.createObjectURL(blob);
       iframe.src = url;
       stage.appendChild(iframe);
+      // the frame renders at 1200 × 630 (the picture size) and is shown scaled to the box
+      const fit = () => { if (stage.clientWidth) iframe.style.transform = "scale(" + stage.clientWidth / 1200 + ")"; };
+      fit();
+      if ("ResizeObserver" in window) new ResizeObserver(fit).observe(stage);
       setTimeout(async () => { if (hello || !iframe.isConnected) return; iframe.removeAttribute("src"); iframe.srcdoc = await blob.text(); }, 8000);
     })();
     return {
@@ -81,6 +85,7 @@
   const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
   // The picture chat apps show: the design (or the D.EIGHT default) with the logo and "3D Design View".
   async function compose(shotUrl) {
+    if (!shotUrl) { const r = await fetch("/brand/og-3d.jpg"); if (r.ok) return await r.blob(); }
     const W = 1200, H = 630;
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d");

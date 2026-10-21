@@ -332,15 +332,16 @@
     };
     const drawItems = () => {
       const m = money_();
+      $("ofItems").classList.toggle("m", m);
       $("ofItems").innerHTML = `<div class="of-item of-item-h"><span>Mã hàng</span><span>Răng</span><span>SL</span>${m ? "<span>Đơn giá</span><span>Thành tiền</span>" : ""}<span>Ghi chú</span><span></span></div>` +
         st.items.map((x, i) => {
           const p = prodOf(x.product), lp = priceFor(p ? p.code : "");
           const price = x.price !== undefined && x.price !== null && x.price !== "" ? +x.price : lp;
           return `<div class="of-item" data-i="${i}">
             <div><input class="input" data-k="product" list="ofProdList" value="${esc(x.product || "")}" placeholder="VD: CR" aria-label="Mã hàng" autocomplete="off"><small class="${x.product && !p ? "bad" : ""}">${esc(p ? p.name + " · /" + (UNIT[p.unit] || p.unit) : x.product ? "Không có mã này" : "")}</small></div>
-            <div><input class="input" data-k="teeth" value="${esc(x.teeth || "")}" placeholder="11, 21 hoặc 14-16" aria-label="Răng"></div>
+            <div><input class="input" data-k="teeth" value="${esc(x.teeth || "")}" placeholder="11, 21 / 14-16" aria-label="Răng"></div>
             <div><input class="input" data-k="qty" type="number" min="0.01" step="any" value="${esc(x.qty ?? 1)}" aria-label="Số lượng"></div>
-            ${m ? `<div><input class="input" data-k="price" type="number" min="0" step="any" value="${x.price !== undefined && x.price !== null ? esc(x.price) : ""}" placeholder="${lp !== null ? esc(lp) : "theo bảng giá"}" aria-label="Đơn giá"${canPrice ? "" : " disabled"}></div>
+            ${m ? `<div><input class="input" data-k="price" type="number" min="0" step="any" value="${x.price !== undefined && x.price !== null ? esc(x.price) : ""}" placeholder="${lp !== null ? esc(lp) : "—"}" aria-label="Đơn giá"${canPrice ? "" : " disabled"}></div>
               <div class="of-amt">${price !== null && price !== undefined ? esc(money(price * (+x.qty || 0), $("ofCur") ? $("ofCur").value : "USD")) : "—"}</div>` : ""}
             <div><input class="input" data-k="note" value="${esc(x.note || "")}" maxlength="300" aria-label="Ghi chú"></div>
             <button class="iconbtn del" type="button" data-rm="${i}" aria-label="Bỏ hạng mục">${ICON.x}</button></div>`;
@@ -499,7 +500,7 @@
       .filter((r) => r[1]).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
     const items = d.items || [];
     const itemsHtml = items.length ? `<div class="tbl-wrap"><table class="grid-tbl o-items"><thead><tr><th>Mã hàng</th><th>Răng</th><th class="num">SL</th>${m ? '<th class="num">Đơn giá</th><th class="num">Thành tiền</th>' : ""}</tr></thead>
-      <tbody>${items.map((x) => `<tr><td><b>${esc(x.product)}</b><small>${esc(x.name)}${x.note ? " · " + esc(x.note) : ""}</small></td><td>${esc(x.teeth || "—")}</td><td class="num">${esc(x.qty)}</td>${m ? `<td class="num">${esc(money(x.price, o.currency))}</td><td class="num">${esc(money(x.amount, o.currency))}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : '<p class="muted" style="margin:0">Chưa có hạng mục.</p>';
+      <tbody>${items.map((x) => `<tr><td><b>${esc(x.product)}</b><small>${esc(x.name)}${x.note ? " · " + esc(x.note) : ""}</small></td><td data-l="Răng">${esc(x.teeth || "—")}</td><td class="num" data-l="SL">${esc(x.qty)}</td>${m ? `<td class="num" data-l="Đơn giá">${esc(money(x.price, o.currency))}</td><td class="num amt">${esc(money(x.amount, o.currency))}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : '<p class="muted" style="margin:0">Chưa có hạng mục.</p>';
     const moneyHtml = m ? `<dl class="o-money">
         <div><dt>Tạm tính</dt><dd>${esc(money(o.subtotal, o.currency))}</dd></div>
         ${o.adj_pct ? `<div><dt>Phụ phí ${esc(o.adj_pct)}%</dt><dd>${esc(money(o.subtotal * o.adj_pct / 100, o.currency))}</dd></div>` : ""}
@@ -533,7 +534,7 @@
         ${portal ? `<a class="btn small btn-primary" href="#jobs/${esc(o.job_id)}">Mở ca cổng khách</a>` : ""}
         ${can("orders.delete") && !portal ? `<button class="btn small btn-danger" type="button" id="oDel">Xóa đơn</button>` : ""}
       </div>
-      <ol class="pt-steps" aria-label="Tiến độ">${steps}</ol>
+      <ol class="pt-steps o-steps" aria-label="Tiến độ">${steps}</ol>
       ${o.status === "hold" ? '<div class="pt-alert warn"><div>Đơn đang tạm dừng (chờ bổ sung).</div></div>' : ""}${o.status === "cancelled" ? '<div class="pt-alert mute"><div>Đơn đã hủy, không tính tiền.</div></div>' : ""}
       <div class="pt-grid o-grid">
         <div>
@@ -668,7 +669,7 @@
   const PAY_METHOD = { paypal: "PayPal", payoneer: "Payoneer", remitly: "Remitly", bank: "Chuyển khoản ngân hàng", cash: "Tiền mặt", deposit: "Tiền ứng trước", other: "Khác" };
   D8.PAY_METHOD = PAY_METHOD;
   const orderHref = (o) => "#orders/" + o.id;
-  D8.ordersDash = async function (host, extraCards) {
+  D8.ordersDash = async function (host, extraCards, head) {
     let d;
     try { d = await api("/api/orders/dash"); }
     catch (err) { if (err.data && err.data.code === "no_db") return false; throw err; }
@@ -681,7 +682,7 @@
       const curs = [...new Set([...d.money.map((x) => x.currency), ...(d.debt || []).map((x) => x.currency)])];
       if (!curs.length) curs.push("USD");
       cards.push(`<section class="card dash-money"><div class="dash-h"><h2 class="h-caps">Tháng này</h2><a class="hint" href="#reports">Báo cáo ›</a></div>
-        ${curs.map((c) => { const mo = by(d.money, c), db = by(d.debt || [], c); return `<div class="dm-row"><div><span>Doanh thu</span><b>${esc(money(mo.total || 0, c))}</b><small>${mo.n || 0} đơn</small></div><div><span>Đã thu</span><b>${esc(money(mo.paid || 0, c))}</b></div><div class="${db.due > 0 ? "due" : ""}"><span>Tổng công nợ</span><b>${esc(money(db.due || 0, c))}</b><small>${db.n || 0} đơn còn nợ</small></div></div>`; }).join("")}</section>`);
+        ${curs.map((c) => { const mo = by(d.money, c), db = by(d.debt || [], c); return (curs.length > 1 ? `<span class="dm-cur">${esc(c)}</span>` : "") + `<div class="dm-row"><div><span>Doanh thu</span><b>${esc(money(mo.total || 0, c))}</b><small>${mo.n || 0} đơn</small></div><div><span>Đã thu</span><b>${esc(money(mo.paid || 0, c))}</b></div><div class="${db.due > 0 ? "due" : ""}"><span>Tổng công nợ</span><b>${esc(money(db.due || 0, c))}</b><small>${db.n || 0} đơn còn nợ</small></div></div>`; }).join("")}</section>`);
     }
     if (d.mine) cards.push(card("Việc thiết kế của tôi", d.mine, "Không có đơn nào đang chờ bạn thiết kế.", "#orders?designer=me&status=work"));
     if (d.qc) cards.push(card("Chờ QC", d.qc, "Không có đơn nào chờ QC.", "#orders?status=qc"));
@@ -689,7 +690,7 @@
     if (d.ready) cards.push(card("Đã qua QC / đã duyệt, chờ giao", d.ready, "Không có đơn nào chờ giao.", "#orders?status=review"));
     if (d.unassigned) cards.push(card("Chưa giao KTV", d.unassigned, "Đơn nào cũng đã có người làm.", "#orders?designer=none"));
     cards.push(card("Sắp đến hạn (24 giờ)", d.due || [], "Không có đơn nào sắp đến hạn."));
-    host.innerHTML = cards.join("") + (extraCards || "");
+    host.innerHTML = (head || "") + cards.join("") + (extraCards || "");
     return true;
   };
   // sidebar badge: unread team chats

@@ -773,9 +773,15 @@
     links: '<path d="M10 2.5 17 6.5v7L10 17.5 3 13.5v-7z"/><path d="M3 6.5 10 10.5l7-4M10 10.5v7"/>',
     stl: '<path d="M4 3h8l4 4v10H4z"/><path d="M12 3v4h4M7 11h6M7 14h4"/>',
     messages: '<path d="M3 5h14v9H8l-4 3v-3H3z"/>',
+    orders: '<path d="M6 3.5h8a1 1 0 0 1 1 1V17a.5.5 0 0 1-.8.4L12 16l-2 1.5L8 16l-2.2 1.4A.5.5 0 0 1 5 17V4.5a1 1 0 0 1 1-1z"/><path d="M8 7.5h4M8 10.5h4"/>',
+    reports: '<path d="M3.5 16.5h13"/><path d="M6 13.5v-4M10 13.5V6M14 13.5v-6"/>',
+    import: '<path d="M4 13v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/><path d="M10 3v9M6.5 8.5 10 12l3.5-3.5"/>',
+    settings: '<circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/>',
   };
-  D8.WS_NAV = [["home", "/admin#home", "Tổng quan", ""], ["jobs", "/admin#jobs", "Ca hàng", ""], ["customers", "/admin#customers", "Khách hàng", "customers.view"],
-    ["prices", "/admin#prices", "Bảng giá", "pricing.manage"], ["staff", "/admin#staff", "Nhân sự & phân quyền", "staff.manage"],
+  D8.WS_NAV = [["home", "/admin#home", "Tổng quan", ""], ["orders", "/admin#orders", "Đơn hàng", ""], ["jobs", "/admin#jobs", "Ca cổng khách", ""],
+    ["customers", "/admin#customers", "Khách hàng", "customers.view"], ["prices", "/admin#catalog", "Mã hàng & bảng giá", ["pricing.manage", "techpay.manage"]],
+    ["reports", "/admin#reports", "Báo cáo", "reports.view"], ["import", "/admin#import", "Nhập Excel", ["orders.edit", "pricing.manage", "customers.edit", "billing.edit"]],
+    ["staff", "/admin#staff", "Nhân sự & phân quyền", "staff.manage"], ["settings", "/admin#settings", "Cài đặt", "staff.manage"],
     ["links", "/admin#links", "Link xem 3D", "links.manage"], ["stl", "/stl", "HTML sang STL", "links.manage"], ["messages", "/admin#messages", "Tin nhắn web", "messages.view"]];
   // Permission check for the workspace (the admin password counts as an owner with every permission).
   D8.can = (p) => (isAdminPage && document.body.dataset.authMode === "key") || !!(who() && Array.isArray(who().perms) && who().perms.includes(p));
@@ -783,7 +789,7 @@
     if (page === "portal") {
       return [["#/", "sh.mycases"], ["#/new", "sh.newcase"], ["#/profile", "sh.profile"]];
     }
-    if (isAdminPage) return D8.WS_NAV.filter((n) => !n[3] || D8.can(n[3])).map(([k, href, label]) => [href, null, label, k]);
+    if (isAdminPage) return D8.WS_NAV.filter((n) => !n[3] || (Array.isArray(n[3]) ? n[3].some((p) => D8.can(p)) : D8.can(n[3]))).map(([k, href, label]) => [href, null, label, k]);
     return null;
   }
   // Workspace sidebar (admin page); other workspace pages use the tab row under the header.
@@ -869,7 +875,9 @@
     const host = document.getElementById("d8-header");
     if (!host) return;
     const here = location.pathname.replace(/\/$/, "") + (location.hash || "");
-    const section = (here.match(/^\/admin#([a-z]+)/) || [, "home"])[1];
+    const ALIAS = { cust: "customers", prices: "catalog" };
+    let section = (here.match(/^\/admin#([a-z]+)/) || [, "home"])[1];
+    section = ALIAS[section] || section;
     document.querySelectorAll("#d8-header .sh-sub a, #wsNav nav a").forEach((a) => {
       const href = a.getAttribute("href");
       let on;
