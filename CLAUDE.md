@@ -21,7 +21,8 @@ The owner wants the site to run without errors or jank, and every new feature ch
   customers, product codes & prices, reports, Excel import, staff & permissions, settings, 3D links, contact messages). `public/stl.html`: HTML → STL tool.
 - `public/orders.js` (order list/form/page, order chat), `public/books.js` (customers, product codes & prices, reports,
   import, settings), `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser).
-- Order book (D1, schema auto-created, `SCHEMA_V1`): codes `yy/mm/dd/xx` + `R`n (redo) / `C`n (continue). Free-plan D1
+- Order book (D1, schema auto-created and migrated: `SCHEMA_V1`, `SCHEMA_V2`): codes `yymmddxx` (26102101 = stage 1),
+  next stage `C2`, `C3`…, redo `R1`, `R2`…, redo then next stage `R1C2` (owner's rules; old `26/10/21/01` is normalised). Free-plan D1
   limits: ≤50 queries per request, ≤100 bound params per query — bulk writes go through `json_each(?)`. The local D1
   mock (`dev/server.mjs`, node:sqlite) counts queries; `NO_DB=1` runs without it. `orderOut` strips money unless
   `billing.view`, tech cost unless `techpay.*`; KTVs never see prices.
