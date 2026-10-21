@@ -77,6 +77,8 @@ with sync_playwright() as p:
     pg.screenshot(path=f"{OUT}/home-1920.png", full_page=True)
     pg.click(".sh-top .sh-lang button[data-lang=vi]"); pg.wait_for_timeout(300)
     ok("vẫn còn thắc mắc?" in pg.inner_text("#faq").lower() and "lần chỉnh sửa miễn phí mỗi ca" in pg.inner_text("#services").lower() and "gửi ca đầu tiên" in pg.inner_text("#trial").lower(), "new homepage text has its Vietnamese copy")
+    # slogans stay in English in the Vietnamese version (owner's choice)
+    ok("design to fit." in pg.inner_text("#stage h1").lower() and "precision, by design" in pg.inner_text(".editorial h2").lower() and pg.eval_on_selector("#stage h1", "e => e.lang") == "en", "slogans stay in English in Vietnamese")
     pg.click(".sh-top .sh-lang button[data-lang=en]")
     c.close()
     # legal pages switch language; a customer sees no Workspace link, staff do

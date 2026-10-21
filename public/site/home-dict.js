@@ -2,11 +2,11 @@
 window.D8_DICT = {
   "title": ["D.EIGHT DESIGN CENTER | Remote dental CAD design, production-ready STL", "D.EIGHT DESIGN CENTER | Thiết kế CAD nha khoa từ xa, STL sẵn sàng sản xuất"],
   "h.chip": ["Remote dental CAD design team", "Đội thiết kế CAD nha khoa từ xa"],
-  "s1.t": ["Design to fit.", "Thiết kế để vừa khít."],
+  "s1.t": ["Design to fit.", "Design to fit."],
   "s1.p": ["From scan to production-ready STL in 24 hours, for dental labs and clinics.", "Từ file scan đến file STL sẵn sàng sản xuất trong 24 giờ, dành cho labo và phòng khám nha khoa."],
-  "s2.t": ["All-on-X, precisely.", "All-on-X, thật chính xác."],
+  "s2.t": ["All-on-X, precisely.", "All-on-X, precisely."],
   "s2.p": ["Full-arch bridges and bars direct to multi-unit abutments, with screw channels routed through each MUA.", "Cầu và thanh bar toàn hàm bắt vít trực tiếp lên multi-unit abutment (MUA), lỗ vít đi đúng trục từng MUA."],
-  "s3.t": ["Approve in 3D.", "Duyệt ngay trên 3D."],
+  "s3.t": ["Approve in 3D.", "Approve in 3D."],
   "s3.p": ["Review every design in your browser through a private link, then sign it off in the customer portal.", "Xem mọi thiết kế ngay trên trình duyệt qua link riêng, rồi duyệt trong cổng khách hàng."],
   "b.send": ["Send a case", "Gửi ca"],
   "b.services": ["Explore services", "Xem dịch vụ"],
@@ -17,7 +17,7 @@ window.D8_DICT = {
 
   "lu.eyebrow": ["Services", "Dịch vụ"],
   "lu.h": ["The D.EIGHT range", "Các dòng dịch vụ D.EIGHT"],
-  "lu.serif": ["One team, every case type", "Một đội ngũ, mọi loại ca"],
+  "lu.serif": ["One team, every case type", "One team, every case type"],
   "lu.intro": ["Implants are our core. Around them we cover fixed, removable and appliance design, more than 70 case types in all, delivered as mill- and print-ready STL.",
                "Implant là thế mạnh cốt lõi. Bên cạnh đó chúng tôi thiết kế phục hình cố định, phục hình tháo lắp và khí cụ, hơn 70 loại ca, giao file STL sẵn sàng để phay hoặc in 3D."],
   "lu.foot": ["Request the full price list", "Nhận bảng giá đầy đủ"],
@@ -49,7 +49,7 @@ window.D8_DICT = {
   "m.ortho.t": ["Aligner &amp; ortho", "Aligner &amp; chỉnh nha"],
   "m.ortho.p": ["Ortho analysis, sequential aligner treatment plans and before and after models.", "Phân tích chỉnh nha, kế hoạch điều trị bằng aligner (khay chỉnh nha trong suốt) theo từng giai đoạn và mẫu hàm trước, sau điều trị."],
 
-  "ed.h": ["Precision, by design", "Chính xác từ khâu thiết kế"],
+  "ed.h": ["Precision, by design", "Precision, by design"],
   "ed.p": ["Margins, contacts, occlusion and emergence profiles are checked before any file leaves us. You pay for a design that fits.", "Đường hoàn tất, điểm tiếp xúc, khớp cắn và đường viền thoát (emergence profile) đều được kiểm tra trước khi file rời khỏi chúng tôi. Bạn trả tiền cho một thiết kế vừa khít."],
   "ed.b": ["Our process", "Quy trình của chúng tôi"],
 
@@ -66,7 +66,7 @@ window.D8_DICT = {
 
   "pr.eyebrow": ["How it works", "Quy trình"],
   "pr.h": ["Four steps, one day", "Bốn bước, một ngày"],
-  "pr.serif": ["Remote, but never out of reach", "Làm từ xa, nhưng luôn sát bên bạn"],
+  "pr.serif": ["Remote, but never out of reach", "Remote, but never out of reach"],
   "pr.1.t": ["Send your case", "Gửi ca"],
   "pr.1.p": ["Upload STL or PLY scans with your Rx in the portal. DICOM/CBCT for guides.", "Tải file scan STL hoặc PLY kèm phiếu chỉ định trong cổng khách hàng. Ca máng phẫu thuật gửi thêm phim CBCT (DICOM)."],
   "pr.2.t": ["We design", "Chúng tôi thiết kế"],
@@ -97,7 +97,7 @@ window.D8_DICT = {
 
   "wk.eyebrow": ["Selected work", "Sản phẩm tiêu biểu"],
   "wk.h": ["Recent designs", "Thiết kế gần đây"],
-  "wk.serif": ["Straight from our CAD screens", "Lấy thẳng từ màn hình CAD"],
+  "wk.serif": ["Straight from our CAD screens", "Straight from our CAD screens"],
   "w1.t": ["Full-mouth rehabilitation", "Phục hồi toàn miệng"],
   "w1.p": ["Digital wax-up · anterior aesthetics", "Wax-up kỹ thuật số · thẩm mỹ răng trước"],
   "w2.t": ["Final screw-retained bridge", "Cầu bắt vít phục hình sau cùng"],
@@ -117,7 +117,7 @@ window.D8_DICT = {
 
   "ab.eyebrow": ["About us", "Về chúng tôi"],
   "ab.h": ["Built at the bench", "Trưởng thành từ bàn kỹ thuật"],
-  "ab.serif": ["Dental technicians first", "Trước hết là kỹ thuật viên nha khoa"],
+  "ab.serif": ["Dental technicians first", "Dental technicians first"],
   "ab.p1": ["D.EIGHT DESIGN CENTER grew out of nearly five years of hands-on dental design work: first as a technician in a dental lab in Vietnam, then designing directly for clinics and labs in the United States and Australia.",
             "D.EIGHT DESIGN CENTER ra đời từ gần năm năm trực tiếp làm thiết kế nha khoa: khởi đầu là kỹ thuật viên tại một labo nha khoa ở Việt Nam, sau đó thiết kế trực tiếp cho phòng khám và labo tại Mỹ và Úc."],
   "ab.p2": ["Today D.EIGHT is a dedicated design team. Implant work is our core: single implant crowns, custom abutments, All-on-X bridges and bars. Around it we cover crown and bridge, removable and appliance design.",
@@ -158,7 +158,7 @@ window.D8_DICT = {
 
   "ct.eyebrow": ["Contact", "Liên hệ"],
   "ct.h": ["Send a case or ask a question", "Gửi ca hoặc đặt câu hỏi"],
-  "ct.serif": ["We'll take it from here", "Phần còn lại cứ để chúng tôi"],
+  "ct.serif": ["We'll take it from here", "We'll take it from here"],
   "ct.p": ["Tell us about your lab or practice and the work you send out. Prefer to chat? Message Danny on WhatsApp. Ready to send files? Use the customer portal.", "Hãy cho chúng tôi biết về labo hoặc phòng khám của bạn và loại ca bạn cần thiết kế. Muốn trao đổi nhanh? Nhắn Danny qua WhatsApp. Đã có file sẵn? Gửi qua cổng khách hàng."],
   "ct.email": ["Email", "Email"],
   "ct.loc": ["Location", "Địa điểm"],
