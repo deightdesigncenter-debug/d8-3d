@@ -114,6 +114,46 @@ const AI = {
     return say("[" + to + "] " + text);
   },
 };
+// ---- D1 mock (order book) on SQLite (node:sqlite). Set NO_DB=1 to run without a database.
+// Like D1 it refuses undefined values and counts queries: more than 50 in one request fails, as on the free plan
+// (each statement of a batch counted, to stay on the safe side).
+import { DatabaseSync } from "node:sqlite";
+const sdb = new DatabaseSync(":memory:");
+const D1_LIMIT = 50;
+function d1(counter) {
+  const norm = (args) => args.map((v) => {
+    if (v === undefined) throw new Error("D1_TYPE_ERROR: Type 'undefined' not supported for value 'undefined'");
+    return typeof v === "boolean" ? (v ? 1 : 0) : v;
+  });
+  const tick = (n = 1) => { counter.n += n; ops.d1 = (ops.d1 || 0) + n; if (counter.n > D1_LIMIT) throw new Error("D1: too many queries in one request (" + counter.n + ")"); };
+  const exec1 = (sql, args) => {
+    const st = sdb.prepare(sql), a = norm(args);
+    if (/^\s*(SELECT|WITH|PRAGMA|VALUES)\b/i.test(sql) || /\bRETURNING\b/i.test(sql)) {
+      const results = st.all(...a).map((r) => ({ ...r }));
+      return { results, success: true, meta: { changes: 0, rows_read: results.length } };
+    }
+    const info = st.run(...a);
+    return { results: [], success: true, meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) } };
+  };
+  class Stmt {
+    constructor(sql, args) { this.sql = sql; this.args = args || []; }
+    bind(...a) { return new Stmt(this.sql, a); }
+    async all() { tick(); return exec1(this.sql, this.args); }
+    async run() { tick(); return exec1(this.sql, this.args); }
+    async first(col) { tick(); const r = exec1(this.sql, this.args).results[0]; return r === undefined ? null : col ? r[col] : r; }
+    async raw() { tick(); return exec1(this.sql, this.args).results.map((r) => Object.values(r)); }
+  }
+  return {
+    prepare: (sql) => new Stmt(sql),
+    async batch(list) {
+      tick(list.length);
+      sdb.exec("BEGIN");
+      try { const out = list.map((st) => exec1(st.sql, st.args)); sdb.exec("COMMIT"); return out; }
+      catch (e) { sdb.exec("ROLLBACK"); throw e; }
+    },
+    async exec(sql) { tick(); sdb.exec(sql); return { count: 1 }; },
+  };
+}
 // ---- R2 mock (case files): set R2=1 to store case files in a bucket instead of KV
 const r2 = new Map();
 const FILES = {
@@ -195,6 +235,12 @@ async function payMock(req, res) {
 const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` , ...(process.env.NO_AI ? {} : { AI }), ...(process.env.R2 ? { FILES } : {}), ...payEnv };
 
 http.createServer(async (req, res) => {
+  if (req.url.startsWith("/__test/sql?")) { // test hook: read-only look into the database
+    const q = new URL(req.url, "http://x").searchParams.get("q") || "";
+    try { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(/^\s*select/i.test(q) ? sdb.prepare(q).all().map((r) => ({ ...r })) : [])); }
+    catch (e) { res.writeHead(400); res.end(String(e)); }
+    return;
+  }
   if (req.url === "/__test/ops") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(ops)); for (const k in ops) ops[k] = 0; return; }
   if (req.url.startsWith("/__mock/")) return payMock(req, res);
   if (req.url === "/__test/jwks") { res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "max-age=3600" }); res.end(JSON.stringify(jwks)); return; }
@@ -214,7 +260,7 @@ http.createServer(async (req, res) => {
     method: req.method, headers: req.headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : body, duplex: "half",
   });
   try {
-    const out = await worker.fetch(request, env, {});
+    const out = await worker.fetch(request, process.env.NO_DB ? env : { ...env, DB: d1({ n: 0 }) }, {});
     const headers = {}; out.headers.forEach((v, k) => { headers[k] = v; });
     res.writeHead(out.status, headers);
     if (out.body && req.method !== "HEAD") { for await (const c of out.body) res.write(c); }
