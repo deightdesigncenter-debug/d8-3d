@@ -26,8 +26,9 @@ The owner wants the site to run without errors or jank, and every new feature ch
   limits: ≤50 queries per request, ≤100 bound params per query — bulk writes go through `json_each(?)`. The local D1
   mock (`dev/server.mjs`, node:sqlite) counts queries; `NO_DB=1` runs without it. `orderOut` strips money unless
   `billing.view`, tech cost unless `techpay.*`; KTVs never see prices.
-- A D1 binding under another name than `DB` is picked up too (`withDb`); `/api/book/status` lists the bindings the
-  deployment has (staff.manage only) so the settings page can say what is missing. Local: `DB_AS=name` binds the mock that way.
+- A D1 binding under another name than `DB` is picked up too (`withDb`, found by the methods on its prototype chain — never
+  by reading properties, because service bindings like `ASSETS` answer any property as an RPC stub); `/api/book/status`
+  lists the bindings (staff.manage only). Local: `DB_AS=name` binds the mock that way; the mock `ASSETS` behaves like an RPC stub.
 - Settings KV `cfg:settings`: `onlinePay` and `autoTrial` are OFF by default (owner's choice).
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.

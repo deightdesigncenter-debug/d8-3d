@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-21.5"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-21.7"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -54,8 +54,44 @@ const PRIVATE_HEADERS = {
 // 3D links for doctors send no referrer at all, so the link code never leaves the page.
 const LINK_HEADERS = { ...PRIVATE_HEADERS, "Referrer-Policy": "no-referrer" };
 
+// The order book needs a D1 binding named DB. One bound under another name (an easy typo in the dashboard) is used too.
+// Bindings are recognised by the methods their prototypes really have: service bindings (ASSETS) answer ANY property
+// with an RPC stub, so reading v.prepare there would "find" a database that is not one.
+function bindingMethods(v) {
+  const names = new Set();
+  try {
+    for (let o = v; o && o !== Object.prototype && names.size < 400; o = Object.getPrototypeOf(o)) for (const n of Object.getOwnPropertyNames(o)) names.add(n);
+  } catch {}
+  return names;
+}
+function bindingKind(v) {
+  if (!v || typeof v !== "object") return "";
+  const m = bindingMethods(v), has = (...ns) => ns.every((n) => m.has(n));
+  return has("prepare", "batch", "exec") ? "D1" : has("head", "put") ? "R2" : has("getWithMetadata", "list") ? "KV" : has("run") ? "AI" : has("fetch") ? "Service" : "";
+}
+function withDb(env) {
+  if (!env || env.DB) return env;
+  try {
+    for (const [k, v] of Object.entries(env)) if (bindingKind(v) === "D1") return { ...env, DB: v, DB_NAME: k };
+  } catch {}
+  return env;
+}
+// Names and kinds of the bindings this deployment has (no values), shown on the settings page.
+function bindingList(env) {
+  const out = [];
+  try {
+    for (const [k, v] of Object.entries(env || {})) {
+      if (k === "DB" && env.DB_NAME) continue;
+      const kind = bindingKind(v);
+      if (kind) out.push({ name: k, kind });
+    }
+  } catch {}
+  return out;
+}
+
 export default {
   async fetch(request, env) {
+    env = withDb(env);
     const url = new URL(request.url);
     const path = url.pathname;
     try {
@@ -1578,7 +1614,7 @@ async function migrateV2(DB) {
   } catch (err) { console.error("order code migration", err && err.message); }
 }
 let DB_SCHEMA_OK = 0;
-const noDb = () => bookErr("Chưa kết nối cơ sở dữ liệu. Trong Cloudflare: Pages › d8-3d › Settings › Bindings, thêm D1 database tên biến DB, rồi Retry deployment.", 503);
+const noDb = () => bookErr("Chưa kết nối cơ sở dữ liệu. Trong Cloudflare: Workers & Pages › d8-3d › Settings › Production › Bindings, thêm D1 database (tên biến DB, chọn d8-db), rồi Retry deployment bản Production.", 503);
 async function bookDb(env) {
   if (!env.DB) throw Object.assign(noDb(), { code: "no_db" });
   if (DB_SCHEMA_OK !== DB_VERSION) {
@@ -1847,10 +1883,11 @@ async function handleBook(request, env, url, who) {
     }
   }
   if (path === "/api/book/status") {
-    if (!env.DB) return json({ db: false });
+    const diag = who.can("staff.manage") ? { bindings: bindingList(env), dbName: env.DB_NAME || (env.DB ? "DB" : "") } : {};
+    if (!env.DB) return json({ db: false, ...diag });
     const DB = await bookDb(env);
     const [a, b, c] = await DB.batch([DB.prepare("SELECT COUNT(*) AS n FROM orders"), DB.prepare("SELECT COUNT(*) AS n FROM customers"), DB.prepare("SELECT COUNT(*) AS n FROM products")]);
-    return json({ db: true, orders: a.results[0].n, customers: b.results[0].n, products: c.results[0].n });
+    return json({ db: true, orders: a.results[0].n, customers: b.results[0].n, products: c.results[0].n, ...diag });
   }
 
   const DB = await bookDb(env);

@@ -67,7 +67,9 @@ const KV = {
 // ---- ASSETS mock (Pages static asset behaviour incl. .html stripping)
 const TYPES = { ".html": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".js": "text/javascript",
   ".css": "text/css; charset=utf-8", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".webp": "image/webp", ".jpg": "image/jpeg" };
-const ASSETS = {
+// Like Cloudflare's Fetcher: any unknown property is an RPC method stub (so code must never probe bindings by property).
+const rpcLike = (target) => new Proxy(target, { get: (t, k) => (k in t || typeof k === "symbol" ? t[k] : () => Promise.reject(new Error("RPC stub: no method " + String(k)))) });
+const ASSETS = rpcLike({
   async fetch(req) {
     const u = new URL(req.url);
     let p = decodeURIComponent(u.pathname);
@@ -79,7 +81,7 @@ const ASSETS = {
     if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return new Response("Not found", { status: 404 });
     return new Response(fs.readFileSync(file), { headers: { "Content-Type": TYPES[path.extname(file)] || "application/octet-stream" } });
   },
-};
+});
 
 // ---- Fake Google sign-in for local tests: a local RSA key stands in for Google's signing keys.
 import crypto from "node:crypto";
