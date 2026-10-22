@@ -28,7 +28,7 @@ ok(r.data.items.every((x) => x.designer === A || x.qc === A), "nothing assigned 
 ok(r.data.items.every((x) => !("total" in x) && !("paid" in x) && !("due" in x) && !("currency" in x)), "no money in A's list");
 ok(!("sums" in r.data) || !r.data.sums || r.data.sums.length === 0, "no money totals in A's list");
 r = await ka("/api/orders?status=&q=" + encodeURIComponent("Patient Of B"));
-ok(r.status === 200 && r.data.items.length === 0, "searching B's patient finds nothing for A");
+ok(r.status === 200 && !r.data.items.some((x) => x.id === ob.id) && r.data.items.every((x) => x.designer === A || x.qc === A), "searching B's patient never finds B's order for A");
 r = await ka("/api/orders/" + ob.id);
 ok(r.status === 404, "A cannot open B's order");
 r = await ka(`/api/orders/${ob.id}/chat`);

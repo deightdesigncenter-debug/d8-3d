@@ -20,6 +20,8 @@ with sync_playwright() as p:
     ok(pg.query_selector("#dash .card") is not None, "dashboard works without the database")
     pg.goto(B + "/admin#orders"); pg.wait_for_timeout(1200)
     ok("Chưa kết nối cơ sở dữ liệu" in pg.inner_text("#p-orders"), "order list explains the missing database")
+    off = pg.evaluate("(() => { const e = document.querySelector('#p-orders .pt-empty'), i = e && e.querySelector('img'); if (!i) return 999; const a = e.getBoundingClientRect(), b = i.getBoundingClientRect(); return Math.abs((a.left + a.right) / 2 - (b.left + b.right) / 2); })()")
+    ok(off < 2, "empty-state logo is centred (" + str(off) + " px off)")
     pg.goto(B + "/admin#settings"); pg.wait_for_timeout(1200)
     t = pg.inner_text("#p-settings")
     ok("Chưa kết nối" in t and "d8-db" in t and "DB" in t, "settings show how to connect D1")

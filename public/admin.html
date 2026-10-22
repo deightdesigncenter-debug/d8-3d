@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-22.4">
-<link rel="stylesheet" href="/case.css?v=2026-10-22.4">
+<link rel="stylesheet" href="/brand.css?v=2026-10-22.5">
+<link rel="stylesheet" href="/case.css?v=2026-10-22.5">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -310,7 +310,11 @@
   .of-money .tot { font-size: 17px; color: var(--navy); padding-top: 6px; }
   .of-money .hint { margin: 4px 0 0; }
   .hint.warn { color: var(--warn-fg); }
-  .of-adj { display: grid; gap: 12px; margin-bottom: 18px; }
+  .of-adj { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 18px; }
+  /* the panel is narrow: the charge buttons share its width and may wrap, never push the panel wider */
+  .of-adj .seg { min-width: 0; }
+  .of-adj .seg label { flex: 1 1 0; min-width: 0; }
+  .of-adj .seg span { height: auto; min-height: 32px; padding: 3px 4px; letter-spacing: .06em; white-space: normal; text-align: center; line-height: 1.15; }
   .of-adj .field-label { margin-bottom: 6px; }
   .seg-sm span { height: 32px; font-size: 9.5px; padding: 0 10px; }
   .chips-row { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -548,13 +552,13 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-22.4" defer></script>
-<script src="/xlsx.js?v=2026-10-22.4" defer></script>
-<script src="/orders.js?v=2026-10-22.4" defer></script>
-<script src="/books.js?v=2026-10-22.4" defer></script>
-<script src="/tech.js?v=2026-10-22.4" defer></script>
-<script src="/snap.js?v=2026-10-22.4" defer></script>
-<script src="/admin.js?v=2026-10-22.4" defer></script>
+<script src="/shell.js?v=2026-10-22.5" defer></script>
+<script src="/xlsx.js?v=2026-10-22.5" defer></script>
+<script src="/orders.js?v=2026-10-22.5" defer></script>
+<script src="/books.js?v=2026-10-22.5" defer></script>
+<script src="/tech.js?v=2026-10-22.5" defer></script>
+<script src="/snap.js?v=2026-10-22.5" defer></script>
+<script src="/admin.js?v=2026-10-22.5" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
