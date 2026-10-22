@@ -579,10 +579,15 @@
     host.innerHTML = `<section class="card"><div class="card-head-row"><h2 class="h-caps">1. File mẫu</h2></div><p class="sub">${esc(T.desc)}</p>
         <div class="wf-actions"><button class="btn small" type="button" id="imTpl">Tải file mẫu (.xlsx)</button></div></section>
       <section class="card"><h2 class="h-caps">2. Chọn file đã điền</h2>
-        ${kind === "orders" ? `<div class="im-opt"><label class="field-label" for="imCust">Khách cho các dòng không ghi Mã khách <span class="opt">(file theo từng khách, vd bảng "GC - Case Detail")</span></label>
-          <select class="input" id="imCust"><option value="">— File có cột Mã khách —</option></select></div>` : ""}
+        ${kind === "orders" ? `<p class="sub">Nhận cả bảng tự theo dõi (VD Google Sheets "GC - Case Detail": Case_ID, Created_Date, Doctor_Name, Patient_Name, Product_Name, Unit, Instruction_Note, Progress). Tải về dạng .xlsx rồi chọn ở đây.</p>
+          <div class="im-opts"><div><label class="field-label" for="imCust">Khách cho các dòng không ghi Mã khách <span class="opt">(nếu cả file là của một khách)</span></label>
+          <select class="input" id="imCust"><option value="">— Theo cột Mã khách / bác sĩ —</option></select></div>
+          <div><label class="field-label" for="imKtv">KTV cho các dòng không ghi KTV <span class="opt">(bảng theo từng KTV)</span></label>
+          <select class="input" id="imKtv"><option value="">— Theo cột KTV —</option>${W.team().filter((t) => t.design).map((t) => `<option value="${esc(t.email)}">${esc(t.name || t.email)}</option>`).join("")}</select></div></div>` : ""}
         <label class="drop compact" id="imDrop"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg><strong>Kéo file Excel (.xlsx) hoặc .csv vào đây</strong><span>hoặc bấm để chọn file</span><input type="file" id="imFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         <p class="error" id="imErr" hidden></p></section>
+      <section class="card" id="imCmap" hidden><h2 class="h-caps">Ghép bác sĩ với khách</h2>
+        <p class="sub">Dòng không ghi Mã khách: bác sĩ trùng tên khách thì tự ghép, còn lại chọn khách cho từng bác sĩ một lần.</p><div id="imCmapBody"></div></section>
       <section class="card" id="imMap" hidden><h2 class="h-caps">Ghép tên hàng với mã hàng</h2>
         <p class="sub">File ghi tên hàng thay vì mã hàng. Chọn mã hàng cho từng tên một lần, mọi dòng cùng tên sẽ theo.</p><div id="imMapBody"></div></section>
       <section class="card" id="imPrev" hidden><div class="card-head-row"><h2 class="h-caps">3. Xem trước</h2><span class="chip" id="imCount"></span></div><div id="imBody"></div>
@@ -595,39 +600,41 @@
     drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) pick(e.dataTransfer.files[0]); });
     $("imFile").addEventListener("change", (e) => { if (e.target.files[0]) pick(e.target.files[0]); e.target.value = ""; });
     let prepared = null, last = null;
-    const opts = { customer: "", map: {} };
+    const opts = { customer: "", designer: "", map: {}, mapName: {}, cmap: {}, cmapName: {} };
     if ($("imCust")) {
-      D8.book.customers().then((cs) => { $("imCust").insertAdjacentHTML("beforeend", cs.filter((c) => c.active).map((c) => `<option value="${esc(c.code)}">${esc(D8.book.custLabel(c))}</option>`).join("")); }).catch(() => {});
+      $("imKtv").addEventListener("change", () => { opts.designer = $("imKtv").value; if (last) rebuild(); });
+      D8.book.customers(true).then((cs) => { $("imCust").insertAdjacentHTML("beforeend", cs.filter((c) => c.active).map((c) => `<option value="${esc(c.code)}">${esc(D8.book.custLabel(c))}</option>`).join("")); }).catch(() => {});
       $("imCust").addEventListener("change", () => { opts.customer = $("imCust").value; if (last) rebuild(); });
     }
     async function pick(file) {
       $("imErr").hidden = true; $("imPrev").hidden = true; $("imDone").innerHTML = "";
-      try { last = { name: file.name, sheets: await D8X.read(file) }; opts.map = {}; await rebuild(); }
+      try { last = { name: file.name, sheets: await D8X.read(file) }; Object.assign(opts, { map: {}, mapName: {}, cmap: {}, cmapName: {} }); await rebuild(); }
       catch (err) { $("imErr").textContent = err.message; $("imErr").hidden = false; }
     }
     async function rebuild() {
       try {
         prepared = kind === "prices" ? await preparePrices(last.sheets) : prepareRows(T, last.sheets);
-        if (kind === "orders") { prepared = await prepareOrders(prepared, opts); drawMap(); }
+        if (kind === "orders") { prepared = await prepareOrders(prepared, opts); await drawMaps(); }
         showPreview(last.name);
       } catch (err) { $("imErr").textContent = err.message; $("imErr").hidden = false; }
     }
-    // names in the file that are not product codes: pick a code once per name
-    async function drawMap() {
-      const names = prepared.unknown || [];
-      $("imMap").hidden = !names.length && !Object.keys(opts.map).length;
-      if ($("imMap").hidden) return;
-      const prods = (await D8.book.products()).filter((p) => p.active);
-      const all = new Map();
-      [...names, ...Object.keys(opts.map).map((k) => opts.mapName[k] || k)].forEach((n) => { if (!all.has(fold(n))) all.set(fold(n), n); });
-      $("imMapBody").innerHTML = `<div class="im-map">${[...all].map(([k, n]) => { const v = opts.map[k] || ""; return `<label class="im-map-row"><span>${esc(n)}</span>
-          <select class="input" data-map="${esc(k)}"><option value="">— Chọn mã hàng —</option>${prods.map((p) => `<option value="${esc(p.code)}"${p.code === v ? " selected" : ""}>${esc(p.code + " — " + p.name)}</option>`).join("")}</select></label>`; }).join("")}</div>`;
-      $("imMapBody").querySelectorAll("[data-map]").forEach((sel) => sel.addEventListener("change", () => {
-        if (sel.value) opts.map[sel.dataset.map] = sel.value; else delete opts.map[sel.dataset.map];
+    // names in the file that are not product codes / doctors without a customer: pick once per name
+    async function drawMaps() {
+      const [prods, custs] = await Promise.all([D8.book.products(), D8.book.customers()]);
+      pickCard("imCmap", prepared.unknownDoc, opts.cmap, opts.cmapName, custs.filter((c) => c.active).map((c) => [c.code, D8.book.custLabel(c)]), "— Chọn khách —");
+      pickCard("imMap", prepared.unknown, opts.map, opts.mapName, prods.filter((p) => p.active).map((p) => [p.code, p.code + " — " + p.name]), "— Chọn mã hàng —");
+    }
+    function pickCard(id, keys, map, names, list, none) {
+      const all = [...new Set([...(keys || []), ...Object.keys(map)])];
+      $(id).hidden = !all.length;
+      if (!all.length) return;
+      $(id + "Body").innerHTML = `<div class="im-map">${all.map((k) => { const v = map[k] || ""; return `<label class="im-map-row"><span>${esc(names[k] || k)}</span>
+          <select class="input" data-map="${esc(k)}"><option value="">${none}</option>${list.map(([code, label]) => `<option value="${esc(code)}"${code === v ? " selected" : ""}>${esc(label)}</option>`).join("")}</select></label>`; }).join("")}</div>`;
+      $(id + "Body").querySelectorAll("[data-map]").forEach((sel) => sel.addEventListener("change", () => {
+        if (sel.value) map[sel.dataset.map] = sel.value; else delete map[sel.dataset.map];
         rebuild();
       }));
     }
-    opts.mapName = {};
     function showPreview(fileName) {
       const p = prepared, good = p.rows.filter((r) => !r.err), bad = p.rows.filter((r) => r.err), dups = p.rows.filter((r) => r.dup && !r.err);
       const zero = kind === "orders" && can("billing.view") ? good.filter((r) => r.total === 0 && r.data.charge === "charge") : [];
@@ -725,9 +732,13 @@
     const p = prepareRows({ ...T, row: (g) => ({ customer: g("customer"), product: g("product"), price: g("price"), currency: String(g("currency") || "").toUpperCase() }) }, sheets);
     return { rows: p.rows, preview: [["Khách", (r) => r.data.customer || "Mặc định"], ["Mã hàng", (r) => r.data.product], ["Đơn giá", (r) => r.data.price], ["Tiền tệ", (r) => r.data.currency]] };
   }
-  async function prepareOrders(p, opts = { customer: "", map: {}, mapName: {} }) {
+  async function prepareOrders(p, opts = { customer: "", designer: "", map: {}, mapName: {}, cmap: {}, cmapName: {} }) {
     // product: a code, a name or English name from the catalogue, or a name the user matched to a code
-    const prods = await D8.book.products();
+    const [prods, custs] = await Promise.all([D8.book.products(), D8.book.customers()]);
+    // customer of a line without a Mã khách: the user's match for its doctor, the file-wide choice, or a customer named like the doctor
+    const docKey = (v) => fold(v).replace(/^(dr|doctor|bs|bac si|nha khoa|clinic)\.?\s+/, "");
+    const custByName = new Map(), unknownDoc = new Set();
+    custs.filter((c) => c.active).forEach((c) => [c.name, c.contact].forEach((n) => { const k = n && docKey(n); if (k) custByName.set(k, custByName.has(k) && custByName.get(k) !== c.code ? "" : c.code); }));
     // short forms too: "Implant crown" for "Implant crown (screw-retained / Ti-base)", "Night guard" for "Night guard / splint"
     // (a short form two products share is left for the user to match)
     const codes = new Set(prods.map((x) => x.code)), byName = new Map(), short = new Map(), unknown = new Set();
@@ -741,7 +752,7 @@
       if (opts.map[f]) return opts.map[f];
       if (byName.has(f)) return byName.get(f);
       if (short.get(f)) return short.get(f);
-      unknown.add(s); if (opts.mapName) opts.mapName[f] = s;
+      unknown.add(s); opts.mapName[f] = s;
       return null;
     };
     // dates written month-first (US sheets) are recognised from the column as a whole
@@ -760,8 +771,10 @@
       const g = grp.first.g, errs = [];
       const day = D8X.day(g("day"), mdy);
       if (!day || day.startsWith("INVALID")) errs.push("ngày nhận không hợp lệ");
-      const customer = String(g("customer") || "").trim().toUpperCase() || opts.customer;
-      if (!customer) errs.push("thiếu Mã khách (ghi trong file, hoặc chọn khách ở bước 2)");
+      const doc = String(g("doctor") || "").trim(), dk = doc ? docKey(doc) : "";
+      const customer = String(g("customer") || "").trim().toUpperCase() || (dk && opts.cmap[dk]) || opts.customer || (dk && custByName.get(dk)) || "";
+      if (!customer && dk) { unknownDoc.add(dk); opts.cmapName[dk] = doc; errs.push("chưa biết khách của bác sĩ \"" + doc + "\" (chọn ở khung Ghép bác sĩ với khách)"); }
+      else if (!customer) errs.push("thiếu Mã khách (ghi trong file, hoặc chọn khách ở bước 2)");
       const st = statusOf(g("status"));
       if (st === "INVALID") errs.push("trạng thái \"" + g("status") + "\" không hiểu");
       const dday = g("dday") !== "" ? D8X.day(g("dday"), mdy) : "";
@@ -778,7 +791,7 @@
       const code = String(g("code") || "").trim(), ncode = code.toUpperCase().replace(/[\s/._-]+/g, "");
       const data = { key: grp.key, label: code || "dòng " + grp.first.line, row: grp.first.line, code: /^\d{8,9}(?:[RC]\d{1,3})*$/.test(ncode) ? ncode : "", day, customer,
         clinic: g("clinic"), doctor: g("doctor"), patient: g("patient"), ref: String(g("ref") || ""), service: grpOf(g("service")), material: g("material"), shade: String(g("shade") || ""), notes: g("notes"),
-        status: st || "delivered", dday: dday && !dday.startsWith("INVALID") ? dday : "", designer: g("designer"), qc: g("qc"), adj_pct: g("adj_pct") || 0, charge: chargeOf(g("charge")),
+        status: st || "delivered", dday: dday && !dday.startsWith("INVALID") ? dday : "", designer: g("designer") || opts.designer || "", qc: g("qc"), adj_pct: g("adj_pct") || 0, charge: chargeOf(g("charge")),
         paid: g("paid"), pay_day: payDay && !payDay.startsWith("INVALID") ? payDay : "", pay_method: methodOf(g("pay_method")), items };
       return { data, show, err: errs.length ? "Đơn " + data.label + ": " + errs.join(", ") : "", i };
     });
@@ -791,7 +804,7 @@
       (r.preview || []).forEach((pv) => { const x = part[pv.i]; if (x) { x.code = pv.code; x.total = pv.total; x.currency = pv.currency; x.dup = pv.dup; } });
     }
     const m = can("billing.view");
-    return { rows: out, unknown: [...unknown], preview: [["Mã đơn", (r) => r.code || r.data.code || "(tự tạo)"], ["Ngày nhận", (r) => fmtDay(r.data.day)], ["Khách", (r) => r.data.customer], ["Bệnh nhân", (r) => r.data.patient],
+    return { rows: out, unknown: [...unknown].map(fold), unknownDoc: [...unknownDoc], preview: [["Mã đơn", (r) => r.code || r.data.code || "(tự tạo)"], ["Ngày nhận", (r) => fmtDay(r.data.day)], ["Khách", (r) => r.data.customer], ["Bệnh nhân", (r) => r.data.patient],
       ["Hạng mục", (r) => r.show], ["Trạng thái", (r) => D8.OST[r.data.status] || ""], ...(m ? [["Thành tiền", (r) => (r.total !== undefined ? money(r.total, r.currency) : "")]] : [])] };
   }
 
