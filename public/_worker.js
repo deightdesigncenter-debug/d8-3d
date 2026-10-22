@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-22.3"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-22.4"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -230,14 +230,15 @@ async function handleApi(request, env, url) {
     try { return await handleBook(request, env, url, who); }
     catch (err) { if (err && err.status) return json({ error: err.message, code: err.code || "", ...(err.dupes ? { dupes: err.dupes } : {}), ...(err.id ? { id: err.id } : {}) }, err.status); throw err; }
   }
+  // 3D links: each person sees and removes the links they made; links.all (admins) sees and removes every link
   const og = path.match(/^\/api\/cases\/([^/]+)\/og$/);
-  if (og && method === "PUT") return can("links.manage") || can("cases.deliver") ? putOgImage(request, env, og[1]) : deny();
+  if (og && method === "PUT") return can("links.manage") || can("cases.deliver") ? putOgImage(request, env, og[1], who) : deny();
 
-  if (path === "/api/list" && method === "GET") return can("links.manage") || can("cases.deliver") ? listCases(env) : deny();
-  if (path === "/api/upload" && method === "POST") return can("links.manage") || can("cases.deliver") ? uploadCase(request, env, url) : deny();
+  if (path === "/api/list" && method === "GET") return can("links.manage") || can("cases.deliver") ? listCases(env, who) : deny();
+  if (path === "/api/upload" && method === "POST") return can("links.manage") || can("cases.deliver") ? uploadCase(request, env, url, who) : deny();
 
   const del = path.match(/^\/api\/cases\/([^/]+)$/);
-  if (del && method === "DELETE") return can("links.manage") ? deleteCase(env, del[1]) : deny();
+  if (del && method === "DELETE") return can("links.manage") ? deleteCase(env, del[1], who) : deny();
 
   if (path === "/api/messages" && method === "GET") return can("messages.view") ? listMessages(env) : deny();
   const delMsg = path.match(/^\/api\/messages\/([^/]+)$/);
@@ -259,7 +260,13 @@ async function isAuthorized(request, env) {
   return diff === 0;
 }
 
-async function uploadCase(request, env, url) {
+const allLinks = (who) => !!(who && (who.viaKey || who.can("links.all")));
+async function linkOwnerOk(env, id, who) {
+  if (allLinks(who)) return true;
+  const meta = await env.CASES.get("meta:" + id, "json");
+  return !meta || (!!meta.u && meta.u === who.email); // a link made a moment ago may not be readable yet: its id cannot be guessed
+}
+async function uploadCase(request, env, url, who) {
   const h = (k) => request.headers.get(k) || "";
 
   const daysRaw = parseInt(h("X-Expire-Days"), 10);
@@ -298,6 +305,7 @@ async function uploadCase(request, env, url) {
     s: size,                        // stored bytes
     o: originalSize || (gzip ? 0 : size), // original HTML bytes
     z: gzip ? 1 : 0,                // stored gzip-compressed
+    ...(who && who.email ? { u: who.email } : {}), // who made it (only they and links.all see it in the list)
   };
   const expiration = Math.floor(meta.e / 1000);
 
@@ -309,27 +317,30 @@ async function uploadCase(request, env, url) {
   return json({ id, url: `${url.origin}/v/${id}`, ...publicMeta(full) }, 201);
 }
 
-async function listCases(env) {
-  const now = Date.now();
+async function listCases(env, who) {
+  const now = Date.now(), all = allLinks(who);
   const items = [];
+  let usedBytes = 0;
   let cursor;
   do {
     const page = await env.CASES.list({ prefix: "meta:", cursor });
     for (const k of page.keys) {
       const meta = k.metadata;
       if (!meta || meta.e <= now) continue;
-      items.push({ id: k.name.slice(5), ...publicMeta(meta) });
+      usedBytes += meta.s || 0; // the storage quota is shared
+      if (!all && (!meta.u || meta.u !== who.email)) continue;
+      items.push({ id: k.name.slice(5), ...publicMeta(meta), ...(all && meta.u ? { by: meta.u } : {}) });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
 
   items.sort((a, b) => b.created - a.created);
-  const usedBytes = items.reduce((t, i) => t + (i.storedSize || 0), 0);
-  return json({ items, usedBytes, quotaBytes: QUOTA_BYTES });
+  return json({ items, usedBytes, quotaBytes: QUOTA_BYTES, all });
 }
 
-async function deleteCase(env, id) {
+async function deleteCase(env, id, who) {
   if (!ID_RE.test(id)) return json({ error: "Mã link không hợp lệ." }, 400);
+  if (!(await linkOwnerOk(env, id, who))) return json({ error: "Bạn chỉ xóa được link do mình tạo." }, 403);
   await Promise.all([env.CASES.delete("case:" + id), env.CASES.delete("meta:" + id), env.CASES.delete("og:" + id)]);
   return json({ ok: true });
 }
@@ -663,6 +674,7 @@ const PERMS = [
   ["reports.view", "Báo cáo, biểu đồ thống kê", "Quản lý"],
   ["messages.view", "Tin nhắn từ form liên hệ", "Quản lý"],
   ["links.manage", "Link xem 3D và công cụ HTML sang STL", "Quản lý"],
+  ["links.all", "Xem và xóa mọi link xem 3D (không chỉ link mình tạo)", "Quản lý"],
   ["export.csv", "Xuất Excel / CSV", "Quản lý"],
   ["staff.manage", "Nhân sự và phân quyền", "Quản lý"],
 ];
@@ -721,6 +733,9 @@ async function handleStaff(request, env, url, who) {
       team.push({ email: r.email, name: r.name || "", role: r.role, label: roles[r.role].label, design: perms.includes("cases.design"), qc: perms.includes("cases.qc") });
     }
     await fillNames(env, team);
+    // a KTV who does not run the team sees themself, the owners and QC — never the other KTVs
+    const runs = who.viaKey || ["staff.manage", "cases.assign", "orders.view", "reports.view", "techpay.manage"].some((p) => who.can(p));
+    if (!runs && who.can("cases.design")) return json({ team: team.filter((t) => t.email === who.email || t.owner || (t.qc && !t.design)) });
     return json({ team });
   }
   if (!who.can("staff.manage")) return json({ error: "Bạn không có quyền quản lý nhân sự." }, 403);
@@ -1871,7 +1886,7 @@ async function handleBook(request, env, url, who) {
 
   // settings work without the database
   if (path === "/api/settings") {
-    if (method === "GET") return json({ settings: await loadSettings(env), db: !!env.DB });
+    if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB }) : deny();
     if (method === "POST") {
       if (!who.can("staff.manage")) return deny();
       const b = await body(), cur = await loadSettings(env);
@@ -3055,8 +3070,9 @@ async function ogImage(request, env, id) {
   const res = await env.ASSETS.fetch(new Request(u.toString(), { headers: request.headers }));
   return withHeaders(res, { "Cache-Control": "public, max-age=3600" });
 }
-async function putOgImage(request, env, id) {
+async function putOgImage(request, env, id, who) {
   if (!ID_RE.test(id)) return json({ error: "Mã link không hợp lệ." }, 400);
+  if (!(await linkOwnerOk(env, id, who))) return json({ error: "Bạn chỉ sửa được link do mình tạo." }, 403);
   const len = parseInt(request.headers.get("Content-Length") || "0", 10);
   if (len > 900 * 1024) return json({ error: "Ảnh xem trước quá lớn." }, 413);
   const body = await request.arrayBuffer();

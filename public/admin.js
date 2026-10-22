@@ -1230,7 +1230,8 @@
     const listed = new Set(data.items.map((i) => i.id));
     for (const [id, item] of pending) { if (listed.has(id) || item.expires <= Date.now()) pending.delete(id); else data.items.unshift(item); }
     data.items = data.items.filter((i) => !removed.has(i.id));
-    const used = data.items.reduce((t, i) => t + (i.storedSize || 0), 0), quota = data.quotaBytes || 1;
+    // the quota is shared by everyone: the server counts all links, the list shows only one's own (unless allowed all)
+    const used = Math.max(data.usedBytes || 0, data.items.reduce((t, i) => t + (i.storedSize || 0), 0)), quota = data.quotaBytes || 1;
     $("usage").innerHTML = `<div class="caps">Đã dùng ${esc(fmtMB(used))} / ${quota >= 1073741824 ? "1 GB" : esc(fmtMB(quota))}</div>
       <div class="meter"><i style="width:${Math.min(100, Math.max(0.5, (used / quota) * 100)).toFixed(1)}%"></i></div>`;
     if (!data.items.length) {
@@ -1245,7 +1246,7 @@
       const li = document.createElement("li");
       li.className = "case";
       li.innerHTML = `<div class="case-main"><div class="case-title${item.label ? "" : " untitled"}">${esc(item.label || "Chưa đặt tên ca")}</div>
-        <div class="case-meta">Tạo ${esc(fmtDateTimeVi(item.created))}, còn ${daysLeft} ngày (đến ${esc(fmtDateVi(item.expires))}), ${esc(fmtMB(item.storedSize || 0))}</div>
+        <div class="case-meta">Tạo ${esc(fmtDateTimeVi(item.created))}${item.by ? " bởi " + esc(teamName(item.by)) : ""}, còn ${daysLeft} ngày (đến ${esc(fmtDateVi(item.expires))}), ${esc(fmtMB(item.storedSize || 0))}</div>
         <div class="drain${daysLeft <= 3 ? " low" : ""}"><i style="width:${(frac * 100).toFixed(1)}%"></i></div></div>
         <div class="case-actions"><button class="btn small" data-act="copy">Sao chép link</button><a class="btn small" target="_blank" rel="noopener" href="${esc(url)}">Mở</a>
           <button class="btn small" data-act="qr">QR và tin nhắn</button><button class="btn small btn-danger" data-act="del">Xóa</button></div>`;

@@ -32,6 +32,9 @@ The owner wants the site to run without errors or jank, and every new feature ch
 - A D1 binding under another name than `DB` is picked up too (`withDb`, found by the methods on its prototype chain — never
   by reading properties, because service bindings like `ASSETS` answer any property as an RPC stub); `/api/book/status`
   lists the bindings (staff.manage only). Local: `DB_AS=name` binds the mock that way; the mock `ASSETS` behaves like an RPC stub.
+- KTV privacy (owner's rule, `dev/tests/privacy.test.mjs` with two KTVs): a KTV sees only what is assigned to them; `/api/staff/team`
+  leaves out the other KTVs for a KTV who does not run the team; 3D links carry their maker (`u`) and are listed / deleted
+  only by them unless `links.all`; `/api/settings` needs staff.manage or billing.edit.
 - Settings KV `cfg:settings`: `onlinePay` and `autoTrial` are OFF by default (owner's choice).
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.
