@@ -26,6 +26,7 @@ run() { # name, command...
 start PAY=1
 run rbac      node dev/tests/rbac.test.mjs
 run orders    node dev/tests/orders.test.mjs
+run privacy   node dev/tests/privacy.test.mjs
 run pay       node dev/tests/pay.test.mjs
 run workspace python3 dev/tests/workspace_ui.py "$OUT/workspace" light
 run workspace-dark python3 dev/tests/workspace_ui.py "$OUT/workspace-dark" dark
