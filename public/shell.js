@@ -781,11 +781,15 @@
     messages: '<path d="M3 5h14v9H8l-4 3v-3H3z"/>',
     orders: '<path d="M6 3.5h8a1 1 0 0 1 1 1V17a.5.5 0 0 1-.8.4L12 16l-2 1.5L8 16l-2.2 1.4A.5.5 0 0 1 5 17V4.5a1 1 0 0 1 1-1z"/><path d="M8 7.5h4M8 10.5h4"/>',
     reports: '<path d="M3.5 16.5h13"/><path d="M6 13.5v-4M10 13.5V6M14 13.5v-6"/>',
+    team: '<circle cx="7" cy="7" r="2.6"/><path d="M2.5 16c.5-2.6 2.2-4 4.5-4s4 1.4 4.5 4"/><path d="M12.5 9.5l2-2 1.5 1.5 2-2.5M12.5 16h5"/>',
+    me: '<circle cx="10" cy="6.5" r="3"/><path d="M4.5 17c.6-3 2.7-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><path d="M13.8 2.8l1 1 2-2"/>',
     import: '<path d="M4 13v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3"/><path d="M10 3v9M6.5 8.5 10 12l3.5-3.5"/>',
     settings: '<circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/>',
   };
   D8.WS_NAV = [["home", "/admin#home", "Tổng quan", ""], ["orders", "/admin#orders", "Đơn hàng", ""], ["jobs", "/admin#jobs", "Ca cổng khách", ""],
     ["customers", "/admin#customers", "Khách hàng", "customers.view"], ["prices", "/admin#catalog", "Mã hàng & bảng giá", ["pricing.manage", "techpay.manage"]],
+    ["me", "/admin#me", "Công của tôi", () => D8.can("cases.design") && !(D8.can("staff.manage") || D8.can("techpay.manage") || D8.can("reports.view"))],
+    ["team", "/admin#team", "Kỹ thuật viên", ["staff.manage", "techpay.manage", "reports.view"]],
     ["reports", "/admin#reports", "Báo cáo", "reports.view"], ["import", "/admin#import", "Nhập Excel", ["orders.edit", "pricing.manage", "customers.edit", "billing.edit"]],
     ["staff", "/admin#staff", "Nhân sự & phân quyền", "staff.manage"], ["settings", "/admin#settings", "Cài đặt", "staff.manage"],
     ["links", "/admin#links", "Link xem 3D", "links.manage"], ["stl", "/stl", "HTML sang STL", "links.manage"], ["messages", "/admin#messages", "Tin nhắn web", "messages.view"]];
@@ -795,7 +799,7 @@
     if (page === "portal") {
       return [["#/", "sh.mycases"], ["#/new", "sh.newcase"], ["#/profile", "sh.profile"]];
     }
-    if (isAdminPage) return D8.WS_NAV.filter((n) => !n[3] || (Array.isArray(n[3]) ? n[3].some((p) => D8.can(p)) : D8.can(n[3]))).map(([k, href, label]) => [href, null, label, k]);
+    if (isAdminPage) return D8.WS_NAV.filter((n) => !n[3] || (typeof n[3] === "function" ? n[3]() : Array.isArray(n[3]) ? n[3].some((p) => D8.can(p)) : D8.can(n[3]))).map(([k, href, label]) => [href, null, label, k]);
     return null;
   }
   // Workspace sidebar (admin page); other workspace pages use the tab row under the header.

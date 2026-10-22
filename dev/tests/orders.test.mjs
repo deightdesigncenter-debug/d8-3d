@@ -132,7 +132,7 @@ r = await owner("/api/orders/" + o1.id, { method: "POST", body: { designer: KTV,
 ok(r.status === 200 && r.data.order.designer === KTV && r.data.order.status === "design", "owner assigns KTV and QC");
 r = await ktv("/api/orders");
 const kRow = r.data.items.find((x) => x.id === o1.id);
-ok(kRow && !("total" in kRow) && !("paid" in kRow) && !("subtotal" in kRow) && !("tech_cost" in kRow), "KTV list has no money fields");
+ok(kRow && !("total" in kRow) && !("paid" in kRow) && !("subtotal" in kRow) && !("currency" in kRow), "KTV list has no money fields (only their own pay)");
 r = await ktv("/api/orders/" + o1.id);
 ok(r.status === 200 && r.data.items.length === 2 && r.data.items.every((x) => !("price" in x) && !("amount" in x)) && !r.data.customer && !r.data.payments, "KTV order page: items without prices, no customer contact, no payments");
 ok(r.data.order.customer_name === "Dr Jake – Colorado", "KTV sees which customer the order is for");
@@ -187,7 +187,9 @@ ok(r.status === 403, "customers never reach the team chat (" + r.status + ")");
 ok(unreadAfter === 0 || unreadAfter < 99, "reading the chat clears the unread mark");
 
 // a KTV allowed to enter orders: prices still come from the list, and stay hidden
-const desPerms = (await owner("/api/staff")).data.roles.designer.perms;
+const roleDes = (await owner("/api/staff")).data.roles.designer.perms;
+ok(roleDes.includes("techpay.own") && !roleDes.includes("techpay.manage") && !roleDes.includes("billing.view"), "KTV role: sees own pay by default, never prices or other KTVs' pay");
+const desPerms = roleDes.filter((p) => p !== "techpay.own");
 await owner("/api/staff", { method: "POST", body: { email: KTV, role: "designer", perms: [...desPerms, "orders.edit"] } });
 r = await ktv("/api/orders", { method: "POST", body: { customer_id: jake, received: day, items: [{ product: "CR", qty: 1, price: 1 }] } });
 ok(r.status === 201 && !("total" in r.data.order), "KTV with permission enters an order, sees no money");
@@ -285,6 +287,49 @@ r = await ktv("/api/orders/" + o1.id);
 ok(r.data.order.tech_cost === 350000 && !("total" in r.data.order), "with “own pay” the KTV sees their pay, still no price");
 r = await ktv2("/api/techrates");
 ok(r.status === 403, "KTVs never see other KTVs' rates");
+
+// ---------- KTV pages: managers see every KTV; a KTV only their own page, pay only with "own pay"
+const mo = day.slice(0, 7), vnMo = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 7), kq = encodeURIComponent(KTV);
+r = await owner(`/api/tech?month=${mo}&basis=received`);
+const tRow = (r.data.rows || []).find((x) => x.email === KTV);
+ok(r.status === 200 && r.data.pay === true && tRow && tRow.n >= 1 && tRow.u >= 3 && tRow.fo >= 1 && tRow.rd >= 1 && tRow.k >= 350000 && typeof r.data.unassigned === "number",
+  "team page: month per KTV with QC returns, redone cases and pay " + JSON.stringify(tRow));
+r = await owner(`/api/tech/${kq}?month=${mo}&basis=received`);
+const t1 = (r.data.orders || []).find((x) => x.id === o1.id);
+ok(r.status === 200 && t1 && t1.tech_cost === 350000 && t1.redone === true && t1.qc_fails === 1 && /CR/.test(t1.items_text) && !("total" in t1) && !("customer_name" in t1),
+  "KTV page: the order with pay, QC return, redo — no price, no customer");
+ok(r.data.months.some((x) => x.m === mo && x.n >= 1 && x.k >= 350000) && r.data.products.some((x) => x.code === "CR" && x.q >= 2), "KTV page: months and product counts");
+r = await owner(`/api/tech/${kq}?month=${vnMo}`);
+ok(r.status === 200 && r.data.basis === "delivered" && r.data.orders.some((x) => x.id === o1.id && x.dday), "by delivery day (default): the delivered order counts in the month it was delivered");
+ok(r.data.orders.every((x) => x.status === "delivered"), "by delivery day: only delivered orders");
+r = await owner(`/api/tech/${kq}?month=2019-01&basis=received`);
+ok(r.status === 200 && r.data.orders.length === 0 && Array.isArray(r.data.open), "an empty month");
+r = await owner(`/api/tech/${kq}?month=bad`);
+ok(r.status === 200 && r.data.month === vnMo, "a bad month falls back to this month");
+r = await ktv(`/api/tech/${kq}?month=${mo}&basis=received`);
+ok(r.status === 200 && r.data.pay === true && r.data.orders.some((x) => x.id === o1.id && x.tech_cost === 350000), "KTV sees their own page with their own pay");
+r = await ktv("/api/tech");
+ok(r.status === 403, "KTV cannot see the team page");
+r = await ktv(`/api/tech/${encodeURIComponent(KTV2)}`);
+ok(r.status === 403, "KTV cannot open another KTV's page");
+r = await qc(`/api/tech/${encodeURIComponent(QC)}`);
+ok(r.status === 403, "QC (not a designer) has no KTV page");
+await owner("/api/staff", { method: "POST", body: { email: KTV, role: "designer", perms: [...desPerms, "orders.edit"] } });
+r = await ktv(`/api/tech/${kq}?month=${mo}&basis=received`);
+ok(r.status === 200 && r.data.pay === false && r.data.orders.length > 0 && r.data.orders.every((x) => !("tech_cost" in x)) && r.data.months.every((x) => !("k" in x)),
+  "without “own pay”: work is shown, pay is not");
+await owner("/api/staff", { method: "POST", body: { email: KTV, role: "designer", perms: [...desPerms, "orders.edit", "techpay.own"] } });
+const REP = uniq("rep") + "@d8.example";
+await owner("/api/staff", { method: "POST", body: { email: REP, role: "designer", perms: ["reports.view"] } });
+const rep0 = await signin(REP, "Báo cáo");
+r = await rep0(`/api/tech?month=${mo}&basis=received`);
+ok(r.status === 200 && r.data.pay === false && r.data.rows.every((x) => !("k" in x)), "report viewer sees the team without pay");
+r = await rep0(`/api/tech/${kq}?month=${mo}&basis=received`);
+ok(r.status === 200 && r.data.pay === false && r.data.orders.every((x) => !("tech_cost" in x)), "report viewer opens a KTV page without pay");
+r = await cust0("/api/tech");
+ok([401, 403].includes(r.status), "customers cannot see KTV pages (" + r.status + ")");
+r = await cust0(`/api/tech/${kq}`);
+ok([401, 403].includes(r.status), "customers cannot see a KTV's page");
 
 // ---------- import from Excel (rows prepared by the browser)
 r = await owner("/api/import/customers", { method: "POST", body: { rows: [{ code: K, name: "Khai Nguyen Lab", currency: "VND", kind: "lab" }, { code: "bad code", name: "" }] } });

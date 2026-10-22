@@ -334,12 +334,13 @@
   const compact = (v) => { const a = Math.abs(v); return a >= 1e9 ? (v / 1e9).toFixed(a >= 1e10 ? 0 : 1) + "B" : a >= 1e6 ? (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + "M" : a >= 1e3 ? (v / 1e3).toFixed(a >= 1e4 ? 0 : 1) + "K" : String(Math.round(v * 100) / 100); };
   function niceMax(v) { if (v <= 0) return 1; const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e; }
   // Column chart (one series, or two stacked). Hover/focus a column for its values.
-  function columnChart(host, { labels, longLabels, series, fmt, title }) {
+  function columnChart(host, { labels, longLabels, series, fmt, title, int }) {
     // drawn at the width it is shown, so the axis text stays readable on a phone
     const W = Math.max(300, Math.min(1100, Math.round(host.clientWidth || 760))), H = W < 520 ? 220 : 260, padL = 48, padR = 8, padT = 14, padB = 34;
     const n = labels.length, band = (W - padL - padR) / Math.max(1, n), bw = Math.min(24, Math.max(4, band * 0.62));
     const totals = labels.map((_, i) => series.reduce((t, s) => t + Math.max(0, s.values[i] || 0), 0));
-    const max = niceMax(Math.max(...totals, 0));
+    // counts (int): whole-number ticks, at least 0–4
+    const max = int ? Math.max(4, Math.ceil(niceMax(Math.max(...totals, 0)) / 4) * 4) : niceMax(Math.max(...totals, 0));
     const y = (v) => padT + (H - padT - padB) * (1 - v / max);
     const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * max);
     const every = Math.max(1, Math.ceil(n / Math.max(3, Math.floor((W - padL) / 58))));
@@ -381,6 +382,7 @@
     svg.querySelectorAll(".hit").forEach((el) => { el.addEventListener("pointerenter", () => showTip(el)); el.addEventListener("focus", () => showTip(el)); });
     svg.addEventListener("pointerleave", () => { tip.hidden = true; svg.querySelectorAll(".hit.on").forEach((h2) => h2.classList.remove("on")); });
   }
+  D8.columnChart = columnChart;
   let rep = null, repKey = "";
   async function drawReports() {
     const W = ws();
@@ -443,7 +445,7 @@
         <section class="card"><h2 class="h-caps">Theo khách hàng</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Khách</th><th class="num">Số ca</th><th class="num">Đơn vị</th>${m ? '<th class="num">Doanh thu</th><th class="num">Còn nợ</th>' : ""}</tr></thead>
           <tbody>${custRows.map((x) => `<tr><td><a href="#cust/${x.id}"><b>${esc(x.code)}</b></a> <span class="muted">${esc(x.name)}</span></td><td class="num">${x.n}</td><td class="num">${Math.round((x.u || 0) * 100) / 100}</td>${m ? `<td class="num">${esc(money(x.t, x.cur))}</td><td class="num ${x.t - x.p > 0.004 ? "due" : ""}">${esc(money(x.t - x.p, x.cur))}</td>` : ""}</tr>`).join("") || '<tr><td colspan="5" class="muted">Không có ca trong kỳ.</td></tr>'}</tbody></table></div></section>
         <section class="card"><h2 class="h-caps">Theo KTV</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>KTV</th><th class="num">Số ca</th><th class="num">Đơn vị</th><th class="num">QC trả về</th><th class="num">Làm lại</th>${rep.tech ? '<th class="num">Công</th>' : ""}</tr></thead>
-          <tbody>${rep.designers.map((x) => `<tr><td>${esc(team(x.email))}</td><td class="num">${x.n}</td><td class="num">${Math.round((x.u || 0) * 100) / 100}</td><td class="num">${x.f || 0}</td><td class="num">${x.r || 0}</td>${rep.tech ? `<td class="num">${esc(money(x.k || 0, x.kc || "VND"))}</td>` : ""}</tr>`).join("") || '<tr><td colspan="6" class="muted">Không có ca trong kỳ.</td></tr>'}</tbody></table></div></section>
+          <tbody>${rep.designers.map((x) => `<tr><td>${x.email && D8.canTeam && D8.canTeam() ? `<a href="#team/${encodeURIComponent(x.email)}">${esc(team(x.email))}</a>` : esc(team(x.email))}</td><td class="num">${x.n}</td><td class="num">${Math.round((x.u || 0) * 100) / 100}</td><td class="num">${x.f || 0}</td><td class="num">${x.r || 0}</td>${rep.tech ? `<td class="num">${esc(money(x.k || 0, x.kc || "VND"))}</td>` : ""}</tr>`).join("") || '<tr><td colspan="6" class="muted">Không có ca trong kỳ.</td></tr>'}</tbody></table></div></section>
       </div>
       <section class="card"><h2 class="h-caps">Theo mã hàng</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mã hàng</th><th class="num">Số lượng</th><th class="num">Số ca</th>${m ? '<th class="num">Thành tiền</th>' : ""}</tr></thead>
         <tbody>${rep.products.filter((x) => !m || x.cur === cur).map((x) => `<tr><td><b>${esc(x.code)}</b> <span class="muted">${esc(x.name)}</span></td><td class="num">${Math.round(x.q * 100) / 100}</td><td class="num">${x.n}</td>${m ? `<td class="num">${esc(money(x.a, x.cur))}</td>` : ""}</tr>`).join("") || '<tr><td colspan="4" class="muted">Không có dữ liệu.</td></tr>'}</tbody></table></div></section>
@@ -454,7 +456,7 @@
     const labels = b.map((x) => periodLabel(x.k, P)), longs = b.map((x) => periodLong(x.k, P));
     if ($("rpMoney")) columnChart($("rpMoney"), { title: "Doanh thu theo kỳ", labels, longLabels: longs, fmt: f,
       series: [{ name: "Đã thu", color: "--viz-1", values: b.map((x) => x.p) }, { name: "Còn nợ", color: "--viz-2", values: b.map((x) => Math.max(0, x.t - x.p)) }] });
-    columnChart($("rpCases"), { title: "Số ca theo kỳ", labels, longLabels: longs, fmt: (v) => v + " ca", series: [{ name: "Số ca", color: "--viz-1", values: b.map((x) => x.n) }] });
+    columnChart($("rpCases"), { title: "Số ca theo kỳ", int: true, labels, longLabels: longs, fmt: (v) => v + " ca", series: [{ name: "Số ca", color: "--viz-1", values: b.map((x) => x.n) }] });
   }
 
   /* ============================================================ export to Excel */

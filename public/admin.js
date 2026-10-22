@@ -904,7 +904,7 @@
         <td>${own ? esc(roleName("admin")) : `<select class="input" data-role="${i}" style="height:40px;min-width:180px">${roleOpts(s.role)}</select>`}</td>
         <td>${own ? "Tất cả" : permList ? `Quyền riêng (${permList.length})` : "Theo vai trò"}</td>
         <td>${s.last ? esc(D8.ago(s.last)) : '<span class="muted">Chưa đăng nhập</span>'}</td>
-        <td>${own ? "" : `<div class="row-tools"><button class="btn small" type="button" data-perm="${i}">Sửa quyền</button>
+        <td>${own ? "" : `<div class="row-tools">${(permList || (roles[s.role] || { perms: [] }).perms).includes("cases.design") ? `<a class="btn small" href="#team/${encodeURIComponent(s.email)}">Trang KTV</a>` : ""}<button class="btn small" type="button" data-perm="${i}">Sửa quyền</button>
           <button class="btn small" type="button" data-active="${i}">${s.active === false ? "Mở lại" : "Khóa"}</button>
           <button class="btn small btn-danger" type="button" data-remove="${i}">Xóa</button></div>`}</td></tr>
         ${own ? "" : `<tr hidden data-permrow="${i}"><td colspan="5"><div class="perm-grid">${groups.map((g) => `<p class="grp">${esc(g)}</p>` + perms.filter((p) => p.group === g).map((p) =>
