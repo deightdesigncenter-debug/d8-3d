@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-21.7">
-<link rel="stylesheet" href="/case.css?v=2026-10-21.7">
+<link rel="stylesheet" href="/brand.css?v=2026-10-22.1">
+<link rel="stylesheet" href="/case.css?v=2026-10-22.1">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -431,6 +431,11 @@
   .imp-card:hover { border-color: var(--steel); }
   .imp-card p { margin: 0 0 6px; font-size: 14px; color: var(--muted); line-height: 1.55; flex: 1; }
   .imp-card .btn { align-self: flex-start; }
+  .im-opt { margin-bottom: 16px; max-width: 520px; }
+  .im-map { display: grid; gap: 10px; }
+  .im-map-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; align-items: center; }
+  .im-map-row span { font-weight: 600; color: var(--navy); overflow-wrap: anywhere; }
+  @media (max-width: 640px) { .im-map-row { grid-template-columns: 1fr; gap: 6px; } }
   .imp-card.off { opacity: .55; }
   #p-import .card + .card { margin-top: 22px; }
   .imp-tbl { max-height: 520px; overflow: auto; }
@@ -518,12 +523,12 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-21.7" defer></script>
-<script src="/xlsx.js?v=2026-10-21.7" defer></script>
-<script src="/orders.js?v=2026-10-21.7" defer></script>
-<script src="/books.js?v=2026-10-21.7" defer></script>
-<script src="/snap.js?v=2026-10-21.7" defer></script>
-<script src="/admin.js?v=2026-10-21.7" defer></script>
+<script src="/shell.js?v=2026-10-22.1" defer></script>
+<script src="/xlsx.js?v=2026-10-22.1" defer></script>
+<script src="/orders.js?v=2026-10-22.1" defer></script>
+<script src="/books.js?v=2026-10-22.1" defer></script>
+<script src="/snap.js?v=2026-10-22.1" defer></script>
+<script src="/admin.js?v=2026-10-22.1" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>

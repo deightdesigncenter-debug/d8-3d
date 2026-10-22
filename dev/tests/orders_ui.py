@@ -210,6 +210,39 @@ with sync_playwright() as p:
     o1 = next((x for x in olds if x["patient"] == "Old patient " + stamp), None)
     ok(o1 and o1["day"] == "2026-08-05" and o1["total"] == 110 and o1["paid"] == 110 and o1["units"] == 3, "imported order: 2×CR(35) + IMC 40, paid: " + json.dumps(o1)[:160] if o1 else "imported order missing")
 
+    # a customer's own sheet ("GC - Case Detail": no customer column, product names, US dates, Progress)
+    gc = openpyxl.Workbook(); gs = gc.active; gs.title = "GC - Case Detail"
+    gs.append(["Case_ID", "Created_Date", "Doctor_Name", "Patient_Name", "Product_Name", "Unit", "Instruction_Note", "Progress"])
+    for r in [["GC" + stamp + "1", "10/14/2026", "Dr Gene", "GC Alpha " + stamp, "Crown (full anatomy)", 2, "Light contact", "Completed"],
+              ["GC" + stamp + "1", "10/14/2026", "Dr Gene", "GC Alpha " + stamp, "Implant crown", 1, "", "Completed"],
+              ["GC" + stamp + "2", "10/15/2026", "Dr Gene", "GC Beta " + stamp, "Night guard XYZ", 1, "", "Pending"],
+              ["GC" + stamp + "3", __import__("datetime").datetime(2026, 10, 16), "Dr Gene", "GC Gamma " + stamp, "Zirconia crown special", 1, "", "Completed"]]:
+        gs.append(r)
+    gcf = os.path.join(OUT, "GC - Case Detail.xlsx"); gc.save(gcf)
+    op.goto(B + "/admin#import/orders"); op.wait_for_timeout(1000)
+    op.set_input_files("#imFile", gcf); op.wait_for_timeout(2500)
+    ok(op.is_visible("#imPrev") and "thiếu Mã khách" in text(op, "#imBody"), "customer's own sheet read; asks for the customer")
+    names = op.eval_on_selector_all("#imMapBody .im-map-row span", "els => els.map((e) => e.textContent)")
+    ok(sorted(names) == ["Night guard XYZ", "Zirconia crown special"], "only names not in the catalogue need matching: " + ", ".join(names))
+    op.select_option("#imCust", CODE); op.wait_for_timeout(2000)
+    ok("nhập 1" in op.inner_text("#imGo").lower(), "with the customer picked, the matched case is ready: " + op.inner_text("#imGo"))
+    op.select_option('#imMapBody [data-map="night guard xyz"]', "NG"); op.wait_for_timeout(1800)
+    op.select_option('#imMapBody [data-map="zirconia crown special"]', "CR"); op.wait_for_timeout(1800)
+    ok("nhập 3" in op.inner_text("#imGo").lower() and op.is_visible("#imMap"), "after matching names: 3 orders ready: " + op.inner_text("#imGo"))
+    ok(op.is_visible("#imZero") and "1 đơn có thành tiền 0" in text(op, "#imZero"), "warns about the order with no price (NG has none for this customer)")
+    op.screenshot(path=f"{OUT}/import-gc.png", full_page=True)
+    op.click("#imGo"); op.wait_for_timeout(2500)
+    ok("Đã nhập 3" in text(op, "#imDone"), "imported 3 orders from the customer's sheet")
+    st, lst = op.evaluate(API, [f"/api/orders?customer={CID}&status=&limit=50&q=gc"])
+    gcs = {x["patient"].split(" ")[1]: x for x in lst.get("items", []) if x["patient"].startswith("GC ")}
+    a, bt, g = gcs.get("Alpha"), gcs.get("Beta"), gcs.get("Gamma")
+    ok(a and a["day"] == "2026-10-14" and a["units"] == 3 and a["status"] == "delivered" and a["ref"] == "GC" + stamp + "1", "lines with the same Case_ID are one order, US date read right: " + json.dumps(a)[:200] if a else "GC order missing")
+    st, ad = op.evaluate(API, ["/api/orders/" + str(a["id"])]) if a else (0, {})
+    its = sorted((x["product"], x["qty"]) for x in ad.get("items", []))
+    ok(its == [("CR", 2), ("IMC", 1)] and "Light contact" in (ad.get("order", {}).get("notes") or ""), "items by product name: " + str(its))
+    ok(bt and bt["status"] == "design" and bt["day"] == "2026-10-15", "Pending → in design")
+    ok(g and g["day"] == "2026-10-16", "real Excel date cell read")
+
     # 3D link with a preview picture, attached to the order
     op.goto(B + "/admin#links"); op.wait_for_timeout(900)
     op.fill("#ogOrder", code_preview); op.dispatch_event("#ogOrder", "change"); op.wait_for_timeout(1200)

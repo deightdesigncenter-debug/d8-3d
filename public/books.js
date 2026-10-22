@@ -527,11 +527,13 @@
       cols: { customer: ["Mã khách", "ma khach"], product: ["Mã hàng", "ma hang"], price: ["Đơn giá", "don gia", "gia", "price"], currency: ["Tiền tệ", "tien te", "currency"] },
       need: ["product"], template: async () => [await priceSheet()], wide: true },
     orders: { title: "Đơn hàng cũ", perm: "orders.edit", desc: "Mỗi dòng một hạng mục. Nhiều hạng mục của cùng một đơn: ghi cùng một ký hiệu ở cột Mã đơn (VD A1) hoặc mã đơn thật. Để trống Mã đơn thì hệ thống tự đánh mã theo Ngày nhận.",
-      cols: { code: ["Mã đơn", "ma don"], day: ["Ngày nhận", "ngay nhan", "ngay"], customer: ["Mã khách", "ma khach"], clinic: ["Nha khoa", "phong kham", "nha khoa / phong kham"], doctor: ["Bác sĩ", "bac si", "doctor"],
-        patient: ["Bệnh nhân", "benh nhan", "patient"], ref: ["Mã của khách", "ma cua khach", "case id"], product: ["Mã hàng", "ma hang"], teeth: ["Răng", "rang", "teeth"], qty: ["Số lượng", "so luong", "sl", "unit"],
-        price: ["Đơn giá", "don gia"], adj_pct: ["Phụ phí %", "phu phi"], charge: ["Tính phí", "tinh phi"], status: ["Trạng thái", "trang thai"], dday: ["Ngày giao", "ngay giao"], designer: ["KTV"], qc: ["QC"],
-        paid: ["Đã thanh toán", "da thanh toan", "da tra"], pay_day: ["Ngày thanh toán", "ngay thanh toan"], pay_method: ["Hình thức thanh toán", "hinh thuc"], service: ["Dịch vụ", "dich vu"], material: ["Vật liệu", "vat lieu"], shade: ["Màu", "mau"], notes: ["Ghi chú", "ghi chu", "yeu cau"] },
-      need: ["day", "customer", "product"],
+      cols: { code: ["Mã đơn", "ma don", "order code", "order no"], day: ["Ngày nhận", "ngay nhan", "ngay", "created date", "date received", "received", "date"], customer: ["Mã khách", "ma khach", "customer code", "customer"],
+        clinic: ["Nha khoa", "phong kham", "nha khoa / phong kham", "clinic", "practice"], doctor: ["Bác sĩ", "bac si", "doctor"],
+        patient: ["Bệnh nhân", "benh nhan", "patient"], ref: ["Mã của khách", "ma cua khach", "case id", "case no", "case number"], product: ["Mã hàng", "ma hang", "ten hang", "san pham", "product"], teeth: ["Răng", "rang", "teeth", "tooth"], qty: ["Số lượng", "so luong", "sl", "unit", "units", "qty", "quantity"],
+        price: ["Đơn giá", "don gia", "price"], adj_pct: ["Phụ phí %", "phu phi"], charge: ["Tính phí", "tinh phi"], status: ["Trạng thái", "trang thai", "tien do", "progress", "status"], dday: ["Ngày giao", "ngay giao", "delivered", "delivery date"], designer: ["KTV", "designer"], qc: ["QC"],
+        paid: ["Đã thanh toán", "da thanh toan", "da tra", "paid"], pay_day: ["Ngày thanh toán", "ngay thanh toan", "paid date"], pay_method: ["Hình thức thanh toán", "hinh thuc"], service: ["Dịch vụ", "dich vu", "service"], material: ["Vật liệu", "vat lieu", "material"], shade: ["Màu", "mau", "shade"],
+        notes: ["Ghi chú", "ghi chu", "yeu cau", "instruction", "instructions", "notes", "note"] },
+      need: ["day", "product"],
       template: () => [{ name: "Đơn hàng", cols: [{ h: "Mã đơn", w: 12 }, { h: "Ngày nhận", t: "d", w: 12 }, { h: "Mã khách", w: 10 }, { h: "Nha khoa", w: 18 }, { h: "Bác sĩ", w: 14 }, { h: "Bệnh nhân", w: 18 }, { h: "Mã của khách", w: 13 }, { h: "Mã hàng", w: 10 },
         { h: "Răng", w: 12 }, { h: "Số lượng", t: "n", w: 9 }, { h: "Đơn giá", t: "n", w: 10 }, { h: "Phụ phí %", t: "n", w: 9 }, { h: "Tính phí", w: 11 }, { h: "Trạng thái", w: 12 }, { h: "Ngày giao", t: "d", w: 12 }, { h: "KTV", w: 14 }, { h: "QC", w: 14 },
         { h: "Đã thanh toán", w: 12 }, { h: "Ngày thanh toán", t: "d", w: 13 }, { h: "Hình thức thanh toán", w: 16 }, { h: "Dịch vụ", w: 16 }, { h: "Vật liệu", w: 12 }, { h: "Màu", w: 8 }, { h: "Ghi chú", w: 24 }],
@@ -557,7 +559,7 @@
   const unitOf = (v) => { const f = fold(v); return /ham|arch/.test(f) ? "arch" : /^ca$|case/.test(f) ? "case" : /gio|hour/.test(f) ? "hour" : "unit"; };
   const grpOf = (v) => { const f = fold(v); return D8.SERVICES.find((s) => fold(s) === f || fold(D8.svcLabel(s)) === f) || String(v || "").trim(); };
   const methodOf = (v) => { const f = fold(v); return /paypal/.test(f) ? "paypal" : /payoneer/.test(f) ? "payoneer" : /remitly/.test(f) ? "remitly" : /chuyen|bank|ngan hang|swift|techcom/.test(f) ? "bank" : /tien mat|cash/.test(f) ? "cash" : /ung|deposit/.test(f) ? "deposit" : "other"; };
-  const statusOf = (v) => { const f = fold(v); if (!f) return ""; const hit = Object.entries(D8.OST).find(([k, l]) => fold(l) === f || k === f); return hit ? hit[0] : /giao|done|deliver/.test(f) ? "delivered" : /huy|cancel/.test(f) ? "cancelled" : "INVALID"; };
+  const statusOf = (v) => { const f = fold(v); if (!f) return ""; const hit = Object.entries(D8.OST).find(([k, l]) => fold(l) === f || k === f); return hit ? hit[0] : /giao|done|deliver|complet|xong|hoan thanh/.test(f) ? "delivered" : /huy|cancel/.test(f) ? "cancelled" : /pending|progress|dang|cho|doing|design/.test(f) ? "design" : "INVALID"; };
   const chargeOf = (v) => { const f = fold(v); return !f ? "charge" : /bao hanh|warranty/.test(f) ? "warranty" : /mien phi|free|dung thu/.test(f) ? "free" : "charge"; };
 
   function drawImportHome() {
@@ -577,8 +579,12 @@
     host.innerHTML = `<section class="card"><div class="card-head-row"><h2 class="h-caps">1. File mẫu</h2></div><p class="sub">${esc(T.desc)}</p>
         <div class="wf-actions"><button class="btn small" type="button" id="imTpl">Tải file mẫu (.xlsx)</button></div></section>
       <section class="card"><h2 class="h-caps">2. Chọn file đã điền</h2>
+        ${kind === "orders" ? `<div class="im-opt"><label class="field-label" for="imCust">Khách cho các dòng không ghi Mã khách <span class="opt">(file theo từng khách, vd bảng "GC - Case Detail")</span></label>
+          <select class="input" id="imCust"><option value="">— File có cột Mã khách —</option></select></div>` : ""}
         <label class="drop compact" id="imDrop"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg><strong>Kéo file Excel (.xlsx) hoặc .csv vào đây</strong><span>hoặc bấm để chọn file</span><input type="file" id="imFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         <p class="error" id="imErr" hidden></p></section>
+      <section class="card" id="imMap" hidden><h2 class="h-caps">Ghép tên hàng với mã hàng</h2>
+        <p class="sub">File ghi tên hàng thay vì mã hàng. Chọn mã hàng cho từng tên một lần, mọi dòng cùng tên sẽ theo.</p><div id="imMapBody"></div></section>
       <section class="card" id="imPrev" hidden><div class="card-head-row"><h2 class="h-caps">3. Xem trước</h2><span class="chip" id="imCount"></span></div><div id="imBody"></div>
         <div class="wf-actions" style="align-items:center"><button class="btn btn-primary" type="button" id="imGo" disabled>Nhập</button><label class="check" id="imSkipW" hidden style="margin:0"><input type="checkbox" id="imSkip" checked> Bỏ qua đơn có thể đã có</label></div>
         <div class="progress block" id="imProg" hidden><div class="progress-bar"><i></i></div><p></p></div><div id="imDone"></div></section>`;
@@ -588,23 +594,49 @@
     ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
     drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) pick(e.dataTransfer.files[0]); });
     $("imFile").addEventListener("change", (e) => { if (e.target.files[0]) pick(e.target.files[0]); e.target.value = ""; });
-    let prepared = null;
+    let prepared = null, last = null;
+    const opts = { customer: "", map: {} };
+    if ($("imCust")) {
+      D8.book.customers().then((cs) => { $("imCust").insertAdjacentHTML("beforeend", cs.filter((c) => c.active).map((c) => `<option value="${esc(c.code)}">${esc(D8.book.custLabel(c))}</option>`).join("")); }).catch(() => {});
+      $("imCust").addEventListener("change", () => { opts.customer = $("imCust").value; if (last) rebuild(); });
+    }
     async function pick(file) {
       $("imErr").hidden = true; $("imPrev").hidden = true; $("imDone").innerHTML = "";
+      try { last = { name: file.name, sheets: await D8X.read(file) }; opts.map = {}; await rebuild(); }
+      catch (err) { $("imErr").textContent = err.message; $("imErr").hidden = false; }
+    }
+    async function rebuild() {
       try {
-        const sheets = await D8X.read(file);
-        prepared = kind === "prices" ? await preparePrices(sheets) : prepareRows(T, sheets);
-        if (kind === "orders") prepared = await prepareOrders(prepared);
-        showPreview(file.name);
+        prepared = kind === "prices" ? await preparePrices(last.sheets) : prepareRows(T, last.sheets);
+        if (kind === "orders") { prepared = await prepareOrders(prepared, opts); drawMap(); }
+        showPreview(last.name);
       } catch (err) { $("imErr").textContent = err.message; $("imErr").hidden = false; }
     }
+    // names in the file that are not product codes: pick a code once per name
+    async function drawMap() {
+      const names = prepared.unknown || [];
+      $("imMap").hidden = !names.length && !Object.keys(opts.map).length;
+      if ($("imMap").hidden) return;
+      const prods = (await D8.book.products()).filter((p) => p.active);
+      const all = new Map();
+      [...names, ...Object.keys(opts.map).map((k) => opts.mapName[k] || k)].forEach((n) => { if (!all.has(fold(n))) all.set(fold(n), n); });
+      $("imMapBody").innerHTML = `<div class="im-map">${[...all].map(([k, n]) => { const v = opts.map[k] || ""; return `<label class="im-map-row"><span>${esc(n)}</span>
+          <select class="input" data-map="${esc(k)}"><option value="">— Chọn mã hàng —</option>${prods.map((p) => `<option value="${esc(p.code)}"${p.code === v ? " selected" : ""}>${esc(p.code + " — " + p.name)}</option>`).join("")}</select></label>`; }).join("")}</div>`;
+      $("imMapBody").querySelectorAll("[data-map]").forEach((sel) => sel.addEventListener("change", () => {
+        if (sel.value) opts.map[sel.dataset.map] = sel.value; else delete opts.map[sel.dataset.map];
+        rebuild();
+      }));
+    }
+    opts.mapName = {};
     function showPreview(fileName) {
       const p = prepared, good = p.rows.filter((r) => !r.err), bad = p.rows.filter((r) => r.err), dups = p.rows.filter((r) => r.dup && !r.err);
+      const zero = kind === "orders" && can("billing.view") ? good.filter((r) => r.total === 0 && r.data.charge === "charge") : [];
       $("imPrev").hidden = false;
       $("imCount").textContent = fileName + " · " + p.rows.length + " " + (kind === "orders" ? "đơn" : "dòng");
       const cols = p.preview;
       $("imBody").innerHTML = `${bad.length ? `<div class="pt-alert warn"><div><b>${bad.length} ${kind === "orders" ? "đơn" : "dòng"} có lỗi</b> sẽ không được nhập. Sửa trong file rồi chọn lại, hoặc nhập các dòng hợp lệ.</div></div>` : ""}
         ${dups.length ? `<div class="pt-alert info"><div><b>${dups.length} đơn có thể đã có</b> (cùng khách, ngày nhận và bệnh nhân / mã của khách).</div></div>` : ""}
+        ${zero.length ? `<div class="pt-alert warn" id="imZero"><div><b>${zero.length} đơn có thành tiền 0</b> vì mã hàng chưa có giá cho khách (${esc(zero.slice(0, 5).map((r) => r.code || r.data.label).join(", "))}${zero.length > 5 ? "…" : ""}). Thêm giá ở <a href="#catalog">Mã hàng &amp; bảng giá</a> rồi chọn lại file, hoặc nhập rồi sửa giá sau.</div></div>` : ""}
         <div class="tbl-wrap imp-tbl"><table class="tbl"><thead><tr><th></th>${cols.map((c) => `<th>${esc(c[0])}</th>`).join("")}</tr></thead><tbody>
         ${p.rows.slice(0, 300).map((r) => `<tr class="${r.err ? "bad" : r.dup ? "dup" : ""}"><td>${r.err ? `<span class="imp-x" title="${esc(r.err)}">✕</span>` : r.dup ? '<span class="imp-d" title="Có thể đã có">!</span>' : '<span class="imp-ok">✓</span>'}</td>${cols.map((c) => `<td>${esc(c[1](r))}</td>`).join("")}</tr>${r.err ? `<tr class="bad-msg"><td></td><td colspan="${cols.length}">${esc(r.err)}</td></tr>` : ""}`).join("")}
         </tbody></table></div>${p.rows.length > 300 ? `<p class="hint">Hiện 300 dòng đầu.</p>` : ""}`;
@@ -693,35 +725,62 @@
     const p = prepareRows({ ...T, row: (g) => ({ customer: g("customer"), product: g("product"), price: g("price"), currency: String(g("currency") || "").toUpperCase() }) }, sheets);
     return { rows: p.rows, preview: [["Khách", (r) => r.data.customer || "Mặc định"], ["Mã hàng", (r) => r.data.product], ["Đơn giá", (r) => r.data.price], ["Tiền tệ", (r) => r.data.currency]] };
   }
-  async function prepareOrders(p) {
-    // group rows into orders: same "Mã đơn" (or temporary key) = one order
+  async function prepareOrders(p, opts = { customer: "", map: {}, mapName: {} }) {
+    // product: a code, a name or English name from the catalogue, or a name the user matched to a code
+    const prods = await D8.book.products();
+    // short forms too: "Implant crown" for "Implant crown (screw-retained / Ti-base)", "Night guard" for "Night guard / splint"
+    // (a short form two products share is left for the user to match)
+    const codes = new Set(prods.map((x) => x.code)), byName = new Map(), short = new Map(), unknown = new Set();
+    const shortOf = (n) => { const base = String(n).split("(")[0]; return [base, ...base.split("/")].map(fold).filter((k) => k.length > 2); };
+    prods.forEach((x) => [x.name, x.name_en].forEach((n) => { if (!n) return; byName.set(fold(n), x.code); shortOf(n).forEach((k) => short.set(k, short.has(k) && short.get(k) !== x.code ? "" : x.code)); }));
+    const productOf = (raw) => {
+      const s = String(raw == null ? "" : raw).trim();
+      if (!s) return "";
+      if (codes.has(s.toUpperCase())) return s.toUpperCase();
+      const f = fold(s);
+      if (opts.map[f]) return opts.map[f];
+      if (byName.has(f)) return byName.get(f);
+      if (short.get(f)) return short.get(f);
+      unknown.add(s); if (opts.mapName) opts.mapName[f] = s;
+      return null;
+    };
+    // dates written month-first (US sheets) are recognised from the column as a whole
+    const mdy = D8X.dateOrder([...p.rows.map((r) => r.g("day")), ...p.rows.map((r) => r.g("dday"))]) === "mdy";
+    // group rows into orders: same "Mã đơn" (or temporary key) = one order; without a Mã đơn column, lines with the
+    // same customer's case number on the same day are one order (sheets like "GC - Case Detail": one line per product)
     const groups = [], byKey = new Map();
     for (const r of p.rows) {
-      const key = String(r.g("code") || "").trim();
+      const ref = String(r.g("ref") || "").trim();
+      const key = String(r.g("code") || "").trim() || (ref ? "ref:" + fold(ref) + "|" + String(r.g("customer") || "").trim().toUpperCase() + "|" + String(r.g("day")) : "");
       let grp = key && byKey.get(key);
-      if (!grp) { grp = { key: key || "#" + r.line, lines: [], first: r }; groups.push(grp); if (key) byKey.set(key, grp); }
+      if (!grp) { grp = { key: key && !key.startsWith("ref:") ? key : "#" + r.line, lines: [], first: r }; groups.push(grp); if (key) byKey.set(key, grp); }
       grp.lines.push(r);
     }
     const out = groups.map((grp, i) => {
       const g = grp.first.g, errs = [];
-      const day = D8X.day(g("day"));
+      const day = D8X.day(g("day"), mdy);
       if (!day || day.startsWith("INVALID")) errs.push("ngày nhận không hợp lệ");
-      if (!g("customer")) errs.push("thiếu Mã khách");
+      const customer = String(g("customer") || "").trim().toUpperCase() || opts.customer;
+      if (!customer) errs.push("thiếu Mã khách (ghi trong file, hoặc chọn khách ở bước 2)");
       const st = statusOf(g("status"));
       if (st === "INVALID") errs.push("trạng thái \"" + g("status") + "\" không hiểu");
-      const dday = g("dday") !== "" ? D8X.day(g("dday")) : "";
+      const dday = g("dday") !== "" ? D8X.day(g("dday"), mdy) : "";
       if (dday.startsWith("INVALID")) errs.push("ngày giao không hợp lệ");
-      const payDay = g("pay_day") !== "" ? D8X.day(g("pay_day")) : "";
-      const items = grp.lines.map((r) => ({ product: String(r.g("product") || "").trim().toUpperCase(), teeth: String(r.g("teeth") || ""), qty: r.g("qty") !== "" ? r.g("qty") : D8.teethCount(r.g("teeth")) || 1,
-        ...(r.g("price") !== "" ? { price: r.g("price") } : {}), note: "" })).filter((x) => x.product);
-      if (!items.length) errs.push("thiếu Mã hàng");
+      const payDay = g("pay_day") !== "" ? D8X.day(g("pay_day"), mdy) : "";
+      const items = grp.lines.map((r) => ({ raw: String(r.g("product") || "").trim(), product: productOf(r.g("product")), teeth: String(r.g("teeth") || ""), qty: r.g("qty") !== "" ? r.g("qty") : D8.teethCount(r.g("teeth")) || 1,
+        ...(r.g("price") !== "" ? { price: r.g("price") } : {}), note: "" })).filter((x) => x.raw);
+      const unmatched = items.filter((x) => x.product === null).map((x) => x.raw);
+      if (unmatched.length) errs.push("chưa ghép mã hàng cho \"" + [...new Set(unmatched)].join("\", \"") + "\" (chọn ở khung Ghép tên hàng)");
+      else if (!items.length) errs.push("thiếu Mã hàng");
+      const show = items.map((x) => (+x.qty !== 1 ? x.qty + "× " : "") + (x.product || x.raw)).join(", ");
+      items.forEach((x) => { delete x.raw; });
       // a real order code (26102101, 26102101R1C2, old style 26/10/21/01) is kept; any other mark only groups the lines
       const code = String(g("code") || "").trim(), ncode = code.toUpperCase().replace(/[\s/._-]+/g, "");
-      const data = { key: grp.key, label: code || "dòng " + grp.first.line, row: grp.first.line, code: /^\d{8,9}(?:[RC]\d{1,3})*$/.test(ncode) ? ncode : "", day, customer: String(g("customer") || "").trim().toUpperCase(),
+      const data = { key: grp.key, label: code || "dòng " + grp.first.line, row: grp.first.line, code: /^\d{8,9}(?:[RC]\d{1,3})*$/.test(ncode) ? ncode : "", day, customer,
         clinic: g("clinic"), doctor: g("doctor"), patient: g("patient"), ref: String(g("ref") || ""), service: grpOf(g("service")), material: g("material"), shade: String(g("shade") || ""), notes: g("notes"),
         status: st || "delivered", dday: dday && !dday.startsWith("INVALID") ? dday : "", designer: g("designer"), qc: g("qc"), adj_pct: g("adj_pct") || 0, charge: chargeOf(g("charge")),
         paid: g("paid"), pay_day: payDay && !payDay.startsWith("INVALID") ? payDay : "", pay_method: methodOf(g("pay_method")), items };
-      return { data, err: errs.length ? "Đơn " + data.label + ": " + errs.join(", ") : "", i };
+      return { data, show, err: errs.length ? "Đơn " + data.label + ": " + errs.join(", ") : "", i };
     });
     // server dry run: unknown customers / products / staff, codes, possible duplicates
     const okRows = out.filter((r) => !r.err);
@@ -732,8 +791,8 @@
       (r.preview || []).forEach((pv) => { const x = part[pv.i]; if (x) { x.code = pv.code; x.total = pv.total; x.currency = pv.currency; x.dup = pv.dup; } });
     }
     const m = can("billing.view");
-    return { rows: out, preview: [["Mã đơn", (r) => r.code || r.data.code || "(tự tạo)"], ["Ngày nhận", (r) => fmtDay(r.data.day)], ["Khách", (r) => r.data.customer], ["Bệnh nhân", (r) => r.data.patient],
-      ["Hạng mục", (r) => r.data.items.map((x) => (+x.qty !== 1 ? x.qty + "× " : "") + x.product).join(", ")], ["Trạng thái", (r) => D8.OST[r.data.status] || ""], ...(m ? [["Thành tiền", (r) => (r.total !== undefined ? money(r.total, r.currency) : "")]] : [])] };
+    return { rows: out, unknown: [...unknown], preview: [["Mã đơn", (r) => r.code || r.data.code || "(tự tạo)"], ["Ngày nhận", (r) => fmtDay(r.data.day)], ["Khách", (r) => r.data.customer], ["Bệnh nhân", (r) => r.data.patient],
+      ["Hạng mục", (r) => r.show], ["Trạng thái", (r) => D8.OST[r.data.status] || ""], ...(m ? [["Thành tiền", (r) => (r.total !== undefined ? money(r.total, r.currency) : "")]] : [])] };
   }
 
   /* ============================================================ settings */
