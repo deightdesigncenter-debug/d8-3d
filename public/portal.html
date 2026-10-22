@@ -15,8 +15,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-23.1">
-<link rel="stylesheet" href="/case.css?v=2026-10-23.1">
+<link rel="stylesheet" href="/brand.css?v=2026-10-23.2">
+<link rel="stylesheet" href="/case.css?v=2026-10-23.2">
 <style>
   body { background: var(--paper); }
 </style>
@@ -43,6 +43,10 @@ window.D8_DICT = {
   "p.f.all": ["All", "Tất cả"],
   "p.f.active": ["In progress", "Đang làm"],
   "p.f.review": ["To review", "Chờ duyệt"],
+  "nt.review": ["designs waiting for your review", "thiết kế chờ bạn duyệt"],
+  "nt.due": ["cases waiting for payment", "ca chờ thanh toán"],
+  "nt.info": ["cases needing more information from you", "ca cần bạn bổ sung thông tin"],
+  "nt.reply": ["cases with a new update from D.EIGHT", "ca có cập nhật mới từ D.EIGHT"],
   "p.f.done": ["Delivered", "Đã giao"],
   "p.search": ["Search cases", "Tìm ca"],
   "p.updated": ["Updated {t}", "Cập nhật {t}"],
@@ -109,19 +113,19 @@ window.D8_DICT = {
   "p.nf.s3": ["Notes &amp; instructions", "Ghi chú &amp; yêu cầu"],
   "p.nf.ref": ["Case reference", "Mã tham chiếu ca"],
   "p.nf.refh": ["Your own case or order number. Please don't use the patient's name.", "Số ca hoặc số đơn của bạn. Vui lòng không dùng tên bệnh nhân."],
-  "p.nf.refph": ["e.g. Case 1024, upper full arch", "VD: Case 1024, toàn hàm trên"],
+  "p.nf.refph": ["What is your case name or number?", "Tên hoặc số ca của bạn là gì?"],
   "p.nf.service": ["Service", "Dịch vụ"],
   "p.nf.choose": ["Choose a service", "Chọn dịch vụ"],
   "p.nf.teeth": ["Teeth / units", "Răng / đơn vị"],
-  "p.nf.teethph": ["e.g. 11, 21 or 14–24", "VD: 11, 21 hoặc 14–24"],
+  "p.nf.teethph": ["Which teeth?", "Răng số mấy?"],
   "p.nf.num": ["Numbering", "Cách đánh số"],
   "p.nf.material": ["Material", "Vật liệu"],
-  "p.nf.materialph": ["e.g. Zirconia, e.max, PMMA", "VD: Zirconia, e.max, PMMA"],
+  "p.nf.materialph": ["Which material?", "Vật liệu gì?"],
   "p.nf.shade": ["Shade", "Màu răng"],
-  "p.nf.shadeph": ["e.g. A2", "VD: A2"],
+  "p.nf.shadeph": ["Which shade?", "Màu răng nào?"],
   "p.nf.needed": ["Needed by", "Cần trước ngày"],
   "p.nf.notes": ["Instructions", "Yêu cầu thiết kế"],
-  "p.nf.notesph": ["Cement gap, minimum thickness, implant system and library, contacts, occlusion, anything we should know…", "Khe hở xi măng, độ dày tối thiểu, hệ implant và thư viện, điểm tiếp xúc, khớp cắn, mọi điều cần lưu ý…"],
+  "p.nf.notesph": ["What should we know for this design?", "Thiết kế này cần lưu ý gì?"],
   "p.nf.links": ["File links (optional)", "Link file (không bắt buộc)"],
   "p.nf.linksh": ["Already shared the files on WeTransfer, Google Drive or Dropbox? Paste the links here.", "Đã gửi file qua WeTransfer, Google Drive hoặc Dropbox? Dán link vào đây."],
   "p.nf.addlink": ["Add link", "Thêm link"],
@@ -168,7 +172,7 @@ window.D8_DICT = {
   "pay.check.p": ["Thank you. We'll confirm your payment as soon as it reaches us; this page will then show the case as paid.", "Cảm ơn bạn. Chúng tôi sẽ xác nhận ngay khi nhận được tiền; sau đó trang này sẽ hiện ca đã thanh toán."],
   "pay.other": ["Paid by bank transfer or Payoneer?", "Đã trả bằng chuyển khoản hoặc Payoneer?"],
   "pay.other.l": ["How did you pay? (transfer reference, date)", "Bạn trả bằng cách nào? (mã giao dịch, ngày)"],
-  "pay.other.ph": ["e.g. Wise transfer 18 Oct, ref 12345", "VD: chuyển khoản ngày 18/10, mã 12345"],
+  "pay.other.ph": ["How did you pay, and what is the reference?", "Bạn đã trả bằng cách nào, mã giao dịch là gì?"],
   "pay.other.b": ["Tell D.EIGHT", "Báo cho D.EIGHT"],
   "p.ms.sent": ["Sent", "Đã gửi"],
   "p.pf.note": ["Your name and photo come from Google. Change them in your Google account.", "Họ tên và ảnh lấy từ Google. Muốn đổi, hãy đổi trong tài khoản Google."],
@@ -181,7 +185,7 @@ window.D8_DICT = {
   "p.ms.wamsg": ["Hi Danny, about case {id}: ", "Chào Danny, về ca {id}: "],
   "ai.rx.h": ["Fill the form from your Rx", "Điền phiếu tự động từ phiếu chỉ định"],
   "ai.rx.p": ["Paste the text of your prescription or take a photo of the paper Rx. The fields below are filled in for you to check. Patient details are ignored.", "Dán nội dung phiếu chỉ định hoặc chụp ảnh phiếu giấy. Các ô bên dưới sẽ được điền sẵn để bạn kiểm tra. Thông tin bệnh nhân được bỏ qua."],
-  "ai.rx.ph": ["e.g. Upper 11, 21 e.max crowns, shade A2, cement gap 0.05, needed Friday", "VD: Mão e.max 11, 21 hàm trên, màu A2, khe hở xi măng 0,05, cần thứ Sáu"],
+  "ai.rx.ph": ["What does the prescription say?", "Phiếu chỉ định ghi gì?"],
   "ai.rx.photo": ["Photo of Rx", "Chụp phiếu"],
   "ai.rx.read": ["Fill the form", "Điền phiếu"],
   "ai.rx.busy": ["Reading…", "Đang đọc…"],
@@ -202,8 +206,8 @@ window.D8_DICT = {
   "chk.patient": ["This may contain a patient name or detail: “{found}”. Please remove it.", "Có thể chứa tên hoặc thông tin bệnh nhân: “{found}”. Vui lòng xóa đi."]
 };
 </script>
-<script src="/shell.js?v=2026-10-23.1" defer></script>
-<script src="/portal.js?v=2026-10-23.1" defer></script>
+<script src="/shell.js?v=2026-10-23.2" defer></script>
+<script src="/portal.js?v=2026-10-23.2" defer></script>
 </head>
 <body data-page="portal" data-title-key="title">
 <div id="d8-header"></div>

@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-23.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-23.2"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -226,7 +226,7 @@ async function handleApi(request, env, url) {
   if (path === "/api/ping" && method === "GET") return json({ ok: true, perms: keyOk ? PERM_KEYS : [...staff.perms] }); // no KV use for the password
   if (path === "/api/staff" || path.startsWith("/api/staff/") || path === "/api/roles") return handleStaff(request, env, url, who);
   if (path.startsWith("/api/prices/")) return handlePrices(request, env, url, who);
-  if (/^\/api\/(orders|customers|products|prices|pricelist|payments|techrates|tech|reports|export|import|settings|book)(\/|$)/.test(path)) {
+  if (/^\/api\/(orders|customers|products|prices|pricelist|payments|techrates|tech|todo|reports|export|import|settings|book)(\/|$)/.test(path)) {
     try { return await handleBook(request, env, url, who); }
     catch (err) { if (err && err.status) return json({ error: err.message, code: err.code || "", ...(err.dupes ? { dupes: err.dupes } : {}), ...(err.id ? { id: err.id } : {}) }, err.status); throw err; }
   }
@@ -2156,6 +2156,25 @@ async function handleBook(request, env, url, who) {
   if (path === "/api/orders/dupes" && method === "GET") {
     if (!who.can("orders.edit")) return deny();
     return json({ dupes: await findDupes(DB, who, { customer_id: P.get("customer"), patient: P.get("patient"), ref: P.get("ref"), exclude: P.get("exclude"), now }) });
+  }
+  // what needs this person in the order book (the bell and the dashboard); portal cases are counted by the page from its list
+  if (path === "/api/todo" && method === "GET") {
+    const me = who.email || "", list = [], q = [];
+    const add = (key, text, href, sql, ...args) => { list.push({ key, text, href }); q.push(DB.prepare(sql).bind(...args)); };
+    const OPEN = "status NOT IN ('delivered', 'cancelled')";
+    if (who.can("cases.design") && me) {
+      add("design", "đơn cần thiết kế", "#orders?designer=me&status=new,design", "SELECT COUNT(*) AS n FROM orders WHERE designer = ? AND status IN ('new', 'design')", me);
+      add("fix", "đơn bị trả sửa (QC / bác sĩ)", "#orders?designer=me&status=fix,revise", "SELECT COUNT(*) AS n FROM orders WHERE designer = ? AND status IN ('fix', 'revise')", me);
+    }
+    if (who.can("cases.qc")) add("qc", "đơn chờ QC", "#orders?status=qc", "SELECT COUNT(*) AS n FROM orders WHERE status = 'qc' AND (qc = ? OR qc = '')", me);
+    if (who.can("cases.assign")) add("free", "đơn chưa giao KTV", "#orders?designer=none&status=open", `SELECT COUNT(*) AS n FROM orders WHERE designer = '' AND ${OPEN}`);
+    if (who.can("cases.deliver") || who.can("cases.status")) add("ready", "đơn đã qua QC / bác sĩ đã duyệt, chờ giao", "#orders?status=ready,approved", "SELECT COUNT(*) AS n FROM orders WHERE status IN ('ready', 'approved')");
+    const sc = orderScope(who);
+    add("late", "đơn quá hạn", "#orders?status=open&sort=due", `SELECT COUNT(*) AS n FROM orders o WHERE ${sc.sql} AND o.due_at > 0 AND o.due_at < ? AND o.${OPEN}`, ...sc.args, now);
+    if (who.can("cases.notes") && me) add("chat", "đơn có tin nhắn nội bộ mới", "#orders?status=open", `SELECT COUNT(*) AS n FROM orders o LEFT JOIN order_reads r ON r.order_id = o.id AND r.email = ?
+      WHERE ${sc.sql} AND o.last_msg_at > COALESCE(r.at, 0) AND o.last_msg_by != ? AND o.last_msg_at > ?`, me, ...sc.args, me, now - 60 * DAY_MS);
+    const res = await DB.batch(q);
+    return json({ items: list.map((x, i) => ({ ...x, n: ((res[i].results || [])[0] || {}).n || 0 })).filter((x) => x.n > 0) });
   }
   if (path === "/api/orders/unread" && method === "GET") {
     const sc = orderScope(who);

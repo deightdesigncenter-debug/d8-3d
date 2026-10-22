@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-23.1">
-<link rel="stylesheet" href="/case.css?v=2026-10-23.1">
+<link rel="stylesheet" href="/brand.css?v=2026-10-23.2">
+<link rel="stylesheet" href="/case.css?v=2026-10-23.2">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -34,6 +34,8 @@
   /* job list */
   .pt-row .owner { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pt-row .new.client::before { background: var(--error); }
+  .pt-row .new.attn { padding: 4px 10px; border-radius: 999px; background: var(--err-fill); color: var(--on-brand); }
+  .pt-row .new.attn::before { background: var(--on-brand); width: 6px; height: 6px; }
   .count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px;
            background: var(--err-fill); color: var(--on-brand); font-family: var(--f-body); font-size: 11px; font-weight: 600; letter-spacing: 0; }
   .sh-sub a[aria-current] .count { background: var(--c-cream); color: var(--c-navy); }
@@ -569,13 +571,14 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-23.1" defer></script>
-<script src="/xlsx.js?v=2026-10-23.1" defer></script>
-<script src="/orders.js?v=2026-10-23.1" defer></script>
-<script src="/books.js?v=2026-10-23.1" defer></script>
-<script src="/tech.js?v=2026-10-23.1" defer></script>
-<script src="/snap.js?v=2026-10-23.1" defer></script>
-<script src="/admin.js?v=2026-10-23.1" defer></script>
+<script src="/shell.js?v=2026-10-23.2" defer></script>
+<script src="/xlsx.js?v=2026-10-23.2" defer></script>
+<script src="/orders.js?v=2026-10-23.2" defer></script>
+<script src="/books.js?v=2026-10-23.2" defer></script>
+<script src="/tech.js?v=2026-10-23.2" defer></script>
+<script src="/viewer3d.js?v=2026-10-23.2" defer></script>
+<script src="/snap.js?v=2026-10-23.2" defer></script>
+<script src="/admin.js?v=2026-10-23.2" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
@@ -629,8 +632,8 @@
       <div class="pt-tools">
         <div class="pt-filters" id="jobFilters" role="group" aria-label="Lọc theo trạng thái"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <select class="input" id="jobWho" style="width:auto;height:42px" aria-label="Người làm"><option value="">Mọi người làm</option><option value="mine">Ca của tôi</option><option value="none">Chưa giao KTV</option><option value="qc">Chờ QC</option><option value="ready">Đã qua QC</option><option value="check">Thanh toán chờ xác nhận</option></select>
-          <input class="input pt-search" type="search" id="jobQ" placeholder="Tìm mã ca, tên ca, khách" aria-label="Tìm ca">
+          <select class="input" id="jobWho" style="width:auto;height:42px" aria-label="Người làm"><option value="">Mọi người làm</option><option value="need">Cần tôi xử lý</option><option value="mine">Ca của tôi</option><option value="none">Chưa giao KTV</option><option value="qc">Chờ QC</option><option value="ready">Đã qua QC</option><option value="check">Thanh toán chờ xác nhận</option></select>
+          <input class="input pt-search" type="search" id="jobQ" placeholder="Tìm ca nào?" aria-label="Tìm ca">
           <button class="btn small" type="button" id="jobCsv">Xuất CSV</button></div>
       </div>
       <div class="pt-list" id="jobList"></div>
@@ -671,13 +674,12 @@
         <div class="form-grid2">
           <div>
             <label class="field-label" for="ogOrder">Mã đơn <span class="opt">(không bắt buộc: tự điền tiêu đề, gắn link vào đơn)</span></label>
-            <input class="input" type="text" id="ogOrder" maxlength="30" placeholder="VD: 26102003" autocomplete="off">
+            <input class="input" type="text" id="ogOrder" maxlength="30" placeholder="Link này cho mã đơn nào?" autocomplete="off">
             <p class="hint" id="ogOrderHint" style="min-height:1.5em"></p>
             <label class="field-label" for="label" style="margin-top:14px">Tiêu đề khi gửi link</label>
-            <input class="input" type="text" id="label" maxlength="80" placeholder="VD: Patient: NGUYEN VAN A - First design">
+            <input class="input" type="text" id="label" maxlength="80" placeholder="Tiêu đề khi gửi link là gì?">
             <label class="field-label" for="ogDesc" style="margin-top:14px">Dòng mô tả</label>
-            <input class="input" type="text" id="ogDesc" maxlength="200" placeholder="VD: Code: 26102003 | Lux Smile Studio | Dr Kiệt">
-            <p class="hint">Hiện trên trang bác sĩ xem và trong ảnh xem trước khi gửi link qua Messenger, Zalo, WhatsApp. Ai có link đều thấy.</p>
+            <input class="input" type="text" id="ogDesc" maxlength="200" placeholder="Dòng mô tả là gì?">
           </div>
           <fieldset style="border:0;margin:0;padding:0;min-width:0">
             <legend class="field-label" style="padding:0">Hạn dùng link</legend>
@@ -769,7 +771,7 @@
       <section class="card">
         <div class="card-head">
           <div><h2 class="h-caps">Khách hàng</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tài khoản đã đăng nhập cổng khách hàng bằng Google. Bấm vào khách để xem hồ sơ, các ca và bảng giá riêng.</p></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input pt-search" type="search" id="custQ" placeholder="Tìm tên, email, lab" aria-label="Tìm khách hàng">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="input pt-search" type="search" id="custQ" placeholder="Tìm khách nào?" aria-label="Tìm khách hàng">
             <button class="btn small" type="button" id="custCsv">Xuất CSV</button></div>
         </div>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Khách hàng</th><th>Lab / phòng khám</th><th>Quốc gia</th><th>Điện thoại</th><th class="num">Số ca</th><th>Đăng nhập lần đầu</th><th>Lần gần nhất</th></tr></thead>

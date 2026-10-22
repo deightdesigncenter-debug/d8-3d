@@ -60,6 +60,15 @@ with sync_playwright() as p:
     rows = op.eval_on_selector_all(".staff-row small", "els=>els.map(e=>e.textContent)")
     ok(KTV in rows and QC in rows, "staff added through the page")
     op.screenshot(path=f"{OUT}/owner-staff.png", full_page=True)
+    # a new case from the portal needs the owner: red dot + label, menu badge, bell
+    op.goto(B + "/admin#jobs?who=need"); op.wait_for_timeout(1500)
+    row = op.query_selector(f'#jobList a.pt-row.need[href="#jobs/{JID}"]')
+    ok(row is not None and row.query_selector(".attn-dot") is not None and "giao ktv" in row.inner_text().lower(), "new portal case marked red: needs a KTV")
+    ok(op.is_visible(".sh-bell-n"), "owner bell shows a count")
+    op.click(".sh-bell-btn"); op.wait_for_timeout(200)
+    ok("chờ giao KTV" in op.inner_text(".sh-bell-pop"), "owner bell: new portal case waiting for a KTV")
+    op.screenshot(path=f"{OUT}/owner-bell.png")
+    op.keyboard.press("Escape")
     # assign on the case page; the case carries its order (code, money, team chat)
     op.goto(B + "/admin#jobs/" + JID); op.wait_for_timeout(1800)
     ok(op.query_selector("#jobOrder") is not None and op.query_selector("#jobChat .ochat") is not None, "case page shows its order and the team chat")
@@ -73,6 +82,10 @@ with sync_playwright() as p:
     nav = dp.eval_on_selector_all("#wsNav nav a > span:not(.count)", "els=>els.map(e=>e.textContent.trim())")
     ok(nav == ["Tổng quan", "Đơn hàng", "Ca cổng khách", "Công của tôi", "Link xem 3D", "HTML sang STL"], "designer sidebar: " + str(nav))
     ok(order_code in dp.inner_text("#dash"), "designer dashboard lists the assigned case by its order code")
+    dp.click(".sh-bell-btn"); dp.wait_for_timeout(200)
+    bell = dp.inner_text(".sh-bell-pop")
+    ok("ca cổng khách cần thiết kế" in bell, "designer bell: the case to design (" + bell.replace("\n", " | ")[:120] + ")")
+    dp.keyboard.press("Escape")
     dp.screenshot(path=f"{OUT}/designer-home.png", full_page=True)
     dp.goto(B + "/admin#staff"); dp.wait_for_timeout(500)
     ok(dp.is_visible("#p-denied"), "designer sees no-access page for staff")
@@ -84,6 +97,17 @@ with sync_playwright() as p:
     open(tmp, "w").write("<!doctype html><html><head><title>scene</title></head><body><p>exocad scene</p></body></html>")
     dp.set_input_files("#dsFiles", tmp); dp.wait_for_timeout(300); dp.click("#dsBtn"); dp.wait_for_timeout(2000)
     ok("crowns-design.html" in dp.inner_text("#p-case"), "design file uploaded")
+    # an STL design: rotate it right on the case page
+    import struct
+    stl = os.path.join(OUT, "crown 15 final.stl")
+    with open(stl, "wb") as fh:
+        tris = [((0,0,0),(8,0,0),(0,7,0)), ((0,0,0),(0,7,0),(0,0,6)), ((0,0,0),(0,0,6),(8,0,0)), ((8,0,0),(0,0,6),(0,7,0))]
+        fh.write(b"tooth".ljust(80, b" ")); fh.write(struct.pack("<I", len(tris)))
+        for a, b_, c in tris: fh.write(struct.pack("<12fH", 0, 0, 0, *a, *b_, *c, 0))
+    dp.set_input_files("#dsFiles", stl); dp.wait_for_timeout(300); dp.click("#dsBtn"); dp.wait_for_timeout(2000)
+    try: dp.wait_for_selector("#case3d .v3d[data-tris]", timeout=15000)
+    except Exception: pass
+    ok(dp.get_attribute("#case3d .v3d", "data-tris") == "4", "the STL design shows in 3D on the case page")
     with dc.expect_page() as newp:
         dp.click('#p-case a[href*="?view=1"]')
     v = newp.value; v.wait_for_load_state(); ok("exocad scene" in v.content() and "d8-storage-shim" in v.content(), "design 3D opens with storage shim"); v.close()
@@ -95,6 +119,12 @@ with sync_playwright() as p:
     qc = ctx(); qp = qc.new_page(); watch(qp, "qc")
     qp.goto(B + "/admin"); qp.evaluate(SIGNIN, [QC, "Lan QC"]); qp.reload(); qp.wait_for_timeout(1200)
     ok(order_code in qp.inner_text("#dash"), "QC dashboard lists the case")
+    qp.goto(B + "/admin#jobs"); qp.wait_for_timeout(1300)
+    row = qp.query_selector(f'#jobList a.pt-row.need[href="#jobs/{JID}"]')
+    ok(row is not None and "chờ qc" in row.inner_text().lower(), "the case waits for QC: red dot for the QC")
+    qp.click(".sh-bell-btn"); qp.wait_for_timeout(200)
+    ok("ca cổng khách chờ QC" in qp.inner_text(".sh-bell-pop"), "QC bell: the case to check")
+    qp.keyboard.press("Escape")
     qp.goto(B + "/admin#jobs/" + JID); qp.wait_for_timeout(1300)
     qp.click("#wfFail"); qp.wait_for_timeout(700)
     ok(qp.is_visible("#wfFail") or "Ghi rõ" in qp.inner_text("body"), "fail without note is refused")

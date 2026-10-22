@@ -21,7 +21,15 @@ The owner wants the site to run without errors or jank, and every new feature ch
   customers, product codes & prices, reports, Excel import, staff & permissions, settings, 3D links, contact messages). `public/stl.html`: HTML → STL tool.
 - `public/orders.js` (order list/form/page, order chat), `public/books.js` (customers, product codes & prices, reports,
   import, settings), `public/tech.js` (KTV pages `#team`, `#team/<email>`, `#me` "Công của tôi", monthly pay slips),
-  `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format).
+  `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format),
+  `public/viewer3d.js` (own WebGL viewer for STL / PLY / OBJ: order page "Xem trước 3D" from chat files, case design files, any `[data-v3d]` button).
+- Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
+  the server; the prefix follows the kind. Price levels: list price (MAX) = prices.customer_id 0, MID = -2, MIN = -3; `customers.tier`
+  ('' / mid / min, schema v3). Lookup: customer's own price → their level → list price. `/api/pricelist` imports the owner's Excel layout
+  (No. · SERVICE · DESCRIPTION · UNIT · UNIT PRICE, group heading rows) into one list (list / mid / min / customer / tech); new services get
+  codes from group prefix + number (CB07). Never commit the owner's real price files; tests build made-up ones.
+- Notifications: `D8.notify.set(source, items)` feeds the header bell (workspace and portal). Portal cases are counted from the list
+  the page already loaded (KV list calls are limited to 1,000/day on the free plan); orders come from `/api/todo` (D1).
 - `/api/tech` (team: staff.manage / techpay.manage / reports.view) and `/api/tech/<email>` (also the KTV themself with
   cases.design); pay fields only with techpay.manage, or techpay.own for one's own page (on in the default designer role).
 - Order book (D1, schema auto-created and migrated: `SCHEMA_V1`, `SCHEMA_V2`): codes `yymmddxx` (26102101 = stage 1),

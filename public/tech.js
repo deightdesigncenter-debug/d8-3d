@@ -65,7 +65,7 @@
     const W = ws();
     if (!canTeam()) return W.denied();
     readQ(q);
-    W.setBand("Kỹ thuật viên", "Việc đang làm, ca trong tháng, QC trả về" + (can("techpay.manage") ? " và tiền công" : ""));
+    W.setBand("Kỹ thuật viên", "");
     W.show("p-tech", true);
     const host = $("p-tech");
     host.innerHTML = tools("tm") + `<div id="tmBody">${D8.skel.card(5)}</div>`;
@@ -108,8 +108,7 @@
           <td class="num" data-l="QC trả về">${x.r.fo || 0}<small>${pct(x.r.fo, x.r.n)}</small></td>
           <td class="num" data-l="Bị làm lại">${x.r.rd || 0}</td>
           ${pay ? `<td class="num" data-l="Tiền công">${x.r.k ? esc(money(x.r.k, x.r.kc)) : "—"}</td>` : ""}</tr>`; }).join("")}</tbody></table></div>`
-          : `<p class="muted">Chưa có KTV. Thêm KTV ở <a href="#staff">Nhân sự & phân quyền</a> với vai trò “Kỹ thuật viên thiết kế”.</p>`}</section>
-      <p class="hint">“QC trả về”: số ca bị QC trả sửa ít nhất một lần. “Bị làm lại”: ca của KTV đó sau này phải làm lại (có mã R). Tiền công = số lượng × giá công của KTV, đặt ở <a href="#catalog">Mã hàng &amp; bảng giá</a>.</p>`;
+          : `<p class="muted">Chưa có KTV. Thêm KTV ở <a href="#staff">Nhân sự & phân quyền</a> với vai trò “Kỹ thuật viên thiết kế”.</p>`}</section>`;
     clickRows(body);
     $("tmX").innerHTML = pay && rows.some((x) => x.r.n) ? `<button class="btn small" type="button" id="tmExport">${XL}Xuất phiếu công tháng ${monthLabel(S.month)}</button>` : "";
     const ex = $("tmExport");
@@ -126,7 +125,7 @@
     if (!email || (!boss && !self) || (self && !can("cases.design"))) return W.denied();
     readQ(q);
     const name = nameOf(email);
-    if (self) W.setBand("Công của tôi", "Ca đang làm, ca trong tháng, QC trả về" + (can("techpay.own") ? " và tiền công" : ""));
+    if (self) W.setBand("Công của tôi", "");
     else W.setBand(name, email, { back: true, backHref: "#team", backText: "Kỹ thuật viên" });
     W.show("p-tech", true);
     const host = $("p-tech");
@@ -184,7 +183,7 @@
           <tfoot><tr><td colspan="5">Tổng ${t.n} ca</td><td class="num" data-l="Đơn vị">${num(t.u)}</td><td class="num" data-l="QC trả về">${t.fo} ca</td><td data-l="Bị làm lại">${t.rd || "—"}</td>${pay ? `<td class="num" data-l="Tiền công">${esc(payText(payBy))}</td>` : ""}</tr></tfoot></table></div>` : '<p class="muted">Không có ca trong tháng này.</p>'}</section>
       ${d.products.length ? `<section class="card"><h2 class="h-caps">Theo mã hàng (tháng ${monthLabel(d.month)})</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mã hàng</th><th class="num">Số lượng</th><th class="num">Số ca</th></tr></thead>
         <tbody>${d.products.map((x) => `<tr><td><b>${esc(x.code)}</b> <span class="muted">${esc(x.name || "")}</span></td><td class="num">${num(x.q)}</td><td class="num">${x.n}</td></tr>`).join("")}</tbody></table></div></section>` : ""}
-      ${self && !pay ? '<p class="hint">Tiền công chỉ hiện khi quản trị bật quyền “Xem tiền công của chính mình”.</p>' : ""}`;
+`;
     clickRows(body);
     body.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => { const sel = $("tkMon"); if (!sel.querySelector(`option[value="${b.dataset.pick}"]`)) return; sel.value = b.dataset.pick; sel.dispatchEvent(new Event("change")); }));
     if (D8.columnChart) D8.columnChart($("tkChart"), { title: "Số ca theo tháng", int: true, labels: series.map((x) => x.m.slice(5, 7) + "/" + x.m.slice(2, 4)), longLabels: series.map((x) => "Tháng " + monthLabel(x.m)),

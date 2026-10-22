@@ -99,6 +99,8 @@
     "sh.view.portal": ["Customer", "Khách hàng"],
     "sh.view.admin": ["Workspace", "Quản trị"],
     "sh.mycases": ["My cases", "Ca của tôi"],
+    "sh.todo": ["To do", "Việc cần làm"],
+    "sh.todo.none": ["Nothing needs you right now.", "Không có việc nào cần làm."],
     "sh.newcase": ["New case", "Gửi ca mới"],
     "sh.profile": ["Profile", "Hồ sơ"],
     "sh.admintools": ["Workspace", "Khu quản trị"],
@@ -729,6 +731,7 @@
     chat: D8.ICON_CHAT,
     moon: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 11.3A6.6 6.6 0 0 1 6.7 2.8a6.6 6.6 0 1 0 8.5 8.5Z"/></svg>',
     sun: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="3.2"/><path d="M9 1.5v1.8M9 14.7v1.8M1.5 9h1.8M14.7 9h1.8M3.7 3.7l1.3 1.3M13 13l1.3 1.3M3.7 14.3 5 13M13 5l1.3-1.3"/></svg>',
+    bell: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M5 8.5a5 5 0 0 1 10 0c0 4 1.5 5.5 1.5 5.5h-13S5 12.5 5 8.5Z"/><path d="M8.2 16.5a1.9 1.9 0 0 0 3.6 0"/></svg>',
     gift: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="7" width="13" height="8.5" rx="1"/><path d="M1.5 4.5h15V7h-15zM9 4.5v11M9 4.5C8 2 5.5 1.8 5.3 3.3 5.1 4.6 7.4 4.5 9 4.5Zm0 0c1-2.5 3.5-2.7 3.7-1.2.2 1.3-2.1 1.2-3.7 1.2Z"/></svg>',
   };
 
@@ -741,6 +744,28 @@
     return '<nav class="sh-switch" aria-label="View">' + items.map(([k, href, key]) =>
       `<a href="${href}"${k === cur ? ' aria-current="page"' : ""}>${esc(D8.t(key))}</a>`).join("") + "</nav>";
   }
+
+  // ---- notifications: each page reports what needs this person (D8.notify.set(source, items)); the bell shows the total.
+  // Items: { key, n, text, href }. Portal cases are counted from the list the page already has (no extra storage reads).
+  const NOTE = { sources: {}, open: false };
+  const noteItems = () => Object.values(NOTE.sources).flat().filter((x) => x && x.n > 0);
+  function bellHtml() {
+    const keyAdmin = isAdminPage && document.body.dataset.authed === "1";
+    if (!(page === "portal" || isAdminPage) || !(who() || keyAdmin)) return "";
+    const items = noteItems(), n = items.reduce((t, x) => t + x.n, 0);
+    return `<div class="sh-bell"><button class="sh-bell-btn" type="button" aria-haspopup="true" aria-expanded="${NOTE.open}" aria-label="${esc(D8.t("sh.todo"))}${n ? " (" + n + ")" : ""}">${ICON.bell}<span class="sh-bell-n"${n ? "" : " hidden"}>${n > 99 ? "99+" : n}</span></button>
+      <div class="sh-bell-pop" role="menu"${NOTE.open ? "" : " hidden"}><div class="sh-bell-h">${esc(D8.t("sh.todo"))}</div>
+      ${items.length ? items.map((x) => `<a href="${esc(x.href)}" role="menuitem"><b>${x.n}</b><span>${esc(x.text)}</span></a>`).join("") : `<p class="sh-bell-none">${esc(D8.t("sh.todo.none"))}</p>`}</div></div>`;
+  }
+  function paintBell() { const el = document.querySelector("#d8-header .sh-bell"); if (el) el.outerHTML = bellHtml(); }
+  document.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest(".sh-bell-btn")) { NOTE.open = !NOTE.open; paintBell(); return; }
+    if (NOTE.open && (!t.closest(".sh-bell-pop") || t.closest(".sh-bell-pop a"))) { NOTE.open = false; paintBell(); }
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && NOTE.open) { NOTE.open = false; paintBell(); const b = document.querySelector(".sh-bell-btn"); if (b) b.focus(); } });
+  D8.notify = { set(source, items) { NOTE.sources[source] = Array.isArray(items) ? items : []; paintBell(); }, items: noteItems };
 
   function userMenu() {
     if (!who()) {
@@ -857,6 +882,7 @@
         <div class="sh-right">
           ${viewSwitch()}
           ${signedIn || isAdminPage ? "" : `<a class="btn btn-primary small sh-cta" href="/portal#/new">${L("sh.send")}</a>`}
+          ${bellHtml()}
           ${userMenu()}
           <button class="sh-burger" type="button" aria-expanded="false" aria-controls="sh-drawer" aria-label="${L("sh.menu")}">${ICON.menu}</button>
         </div>

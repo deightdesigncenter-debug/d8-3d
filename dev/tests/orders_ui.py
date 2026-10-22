@@ -178,21 +178,49 @@ with sync_playwright() as p:
     nav = kp.eval_on_selector_all("#wsNav nav a > span:not(.count)", "els=>els.map(e=>e.textContent.trim())")
     ok("Báo cáo" not in nav and "Khách hàng" not in nav and "Mã hàng & bảng giá" not in nav, "KTV sidebar has no reports, customers or prices")
     ok(code_preview in text(kp, "#dash"), "KTV dashboard lists the order")
+    try: kp.wait_for_selector(".sh-bell-n:not([hidden])", timeout=8000)
+    except Exception: pass
+    kp.click(".sh-bell-btn"); kp.wait_for_timeout(200)
+    ok("đơn cần thiết kế" in text(kp, ".sh-bell-pop"), "KTV bell: orders to design")
+    kp.click(".sh-bell-pop a"); kp.wait_for_timeout(1500)
+    ok("#orders?designer=me" in kp.url and code_preview in text(kp, "#oList"), "bell item opens the KTV's orders to design")
     kp.goto(B + "/admin#orders/" + OID); kp.wait_for_timeout(1500)
     kb = kp.inner_text("#p-order")
     ok("US$" not in kb and "Thanh toán" not in kb and "Còn nợ" not in kb, "KTV order page shows no money")
     ok("CR" in kb and "IMC" in kb and "11-13" in kb, "KTV sees the items and teeth")
     kp.fill("#oChat textarea", "Anh ơi 12 cần dài thêm không?"); kp.click("#oChat [type=submit]"); kp.wait_for_timeout(900)
     # a design file in the chat
+    # a finished design (binary STL, a crown-like mesh): QC and the owner rotate it on the order page
+    import math, struct
+    def crown_mesh(sub=3):
+        t = (1 + 5 ** 0.5) / 2
+        v = [(-1,t,0),(1,t,0),(-1,-t,0),(1,-t,0),(0,-1,t),(0,1,t),(0,-1,-t),(0,1,-t),(t,0,-1),(t,0,1),(-t,0,-1),(-t,0,1)]
+        v = [tuple(c / math.sqrt(sum(x*x for x in p_)) for c in p_) for p_ in v]
+        f = [(0,11,5),(0,5,1),(0,1,7),(0,7,10),(0,10,11),(1,5,9),(5,11,4),(11,10,2),(10,7,6),(7,1,8),(3,9,4),(3,4,2),(3,2,6),(3,6,8),(3,8,9),(4,9,5),(2,4,11),(6,2,10),(8,6,7),(9,8,1)]
+        for _ in range(sub):
+            nf, cache = [], {}
+            def mid(a, b):
+                k = tuple(sorted((a, b)))
+                if k not in cache:
+                    q = [(v[a][i] + v[b][i]) / 2 for i in range(3)]; l = math.sqrt(sum(x*x for x in q)); v.append(tuple(x / l for x in q)); cache[k] = len(v) - 1
+                return cache[k]
+            for a, b_, c in f:
+                ab, bc, ca = mid(a, b_), mid(b_, c), mid(c, a); nf += [(a, ab, ca), (b_, bc, ab), (c, ca, bc), (ab, bc, ca)]
+            f = nf
+        return [(x * 5, y * 4.5, z * 3.6 + (0.6 if z > 0.3 else 0) * math.cos(x * 6) * math.cos(y * 6)) for x, y, z in v], f
+    cv, cf = crown_mesh()
     stl = os.path.join(OUT, "11-13 crown v1.stl")
-    with open(stl, "w") as fh: fh.write("solid crown\n" + "facet normal 0 0 1\n" * 400 + "endsolid crown\n")
+    with open(stl, "wb") as fh:
+        fh.write(b"solid crown exocad".ljust(80, b" ")); fh.write(struct.pack("<I", len(cf)))
+        for a, b_, c in cf: fh.write(struct.pack("<12fH", 0, 0, 0, *cv[a], *cv[b_], *cv[c], 0))
+    STL_BYTES = open(stl, "rb").read()
     kp.set_input_files('#oChat [data-ochat="file"]', stl); kp.wait_for_timeout(300)
     ok("11-13 crown v1.stl" in text(kp, "#oChat .ochat-files"), "file waits under the message box")
     kp.fill("#oChat textarea", "File thiết kế v1"); kp.click("#oChat [type=submit]"); kp.wait_for_timeout(2000)
     ok(kp.query_selector("#oChat a.ochat-file") is not None and "11-13 crown v1.stl" in text(kp, "#oChat .ochat-list"), "file sent in the chat")
     href = kp.eval_on_selector("#oChat a.ochat-file", "a => a.getAttribute('href')")
     fr = kp.request.get(B + href)
-    ok(fr.status == 200 and fr.body().startswith(b"solid crown"), "file downloads from the chat")
+    ok(fr.status == 200 and fr.body() == STL_BYTES, "file downloads from the chat")
     kp.click('[data-act="submit"]'); kp.wait_for_timeout(1000)
     ok("Chờ QC" in kp.inner_text(".pt-band"), "KTV sends to QC")
     kp.screenshot(path=f"{OUT}/ktv-order.png", full_page=True)
@@ -205,6 +233,30 @@ with sync_playwright() as p:
     ok(qp.query_selector("#oList .o-dot") is not None, "QC sees an unread chat mark")
     qp.goto(B + "/admin#orders/" + OID); qp.wait_for_timeout(1500)
     ok("12 cần dài thêm" in text(qp, "#oChat"), "QC reads the KTV message")
+    try: qp.wait_for_selector("#o3d .v3d[data-tris]", timeout=15000)
+    except Exception: pass
+    ok(qp.get_attribute("#o3d .v3d", "data-tris") == str(len(cf)) and "tam giác" in text(qp, "#o3d .v3d-info"), "QC sees the design in 3D on the order page (" + str(qp.get_attribute("#o3d .v3d", "data-tris")) + " triangles)")
+    PIX = """(sel) => { const c = document.querySelector(sel); if (!c) return 0; const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const x = t.getContext('2d'); x.drawImage(c, 0, 0);
+      const d = x.getImageData(0, 0, t.width, t.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; }"""
+    px0 = qp.evaluate(PIX, "#o3d canvas")
+    ok(px0 > 1000, "the model is drawn (" + str(px0) + " pixels)")
+    qp.evaluate("document.querySelector('#o3d').scrollIntoView({block: 'center'})"); qp.wait_for_timeout(300)
+    cb = qp.query_selector("#o3d canvas").bounding_box()
+    shot0 = qp.query_selector("#o3d canvas").screenshot()
+    qp.mouse.move(cb["x"] + cb["width"] / 2, cb["y"] + cb["height"] / 2); qp.mouse.down(); qp.mouse.move(cb["x"] + cb["width"] / 2 + 140, cb["y"] + cb["height"] / 2 + 60, steps=8); qp.mouse.up()
+    qp.wait_for_timeout(200)
+    ok(qp.query_selector("#o3d canvas").screenshot() != shot0, "drag rotates the model")
+    px1 = qp.evaluate(PIX, "#o3d canvas")
+    qp.mouse.wheel(0, -500); qp.wait_for_timeout(300)
+    ok(qp.evaluate(PIX, "#o3d canvas") > px1, "wheel zooms in")
+    qp.screenshot(path=f"{OUT}/order-3d.png", full_page=True)
+    qp.click("#oChat .ochat-3d")
+    try: qp.wait_for_selector(".v3d-overlay .v3d[data-tris]", timeout=15000)
+    except Exception: pass
+    ok(qp.is_visible(".v3d-overlay canvas"), "Xem 3D in the chat opens a large viewer")
+    qp.screenshot(path=f"{OUT}/order-3d-full.png")
+    qp.keyboard.press("Escape"); qp.wait_for_timeout(300)
+    ok(qp.query_selector(".v3d-overlay") is None, "Esc closes it")
     qp.click('[data-act="fail"]'); qp.wait_for_timeout(500)
     ok("Chờ QC" in qp.inner_text(".pt-band"), "QC fail needs a note")
     qp.fill("#oNote", "Tiếp xúc 21 quá chặt"); qp.click('[data-act="fail"]'); qp.wait_for_timeout(1000)

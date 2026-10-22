@@ -125,14 +125,14 @@
       if (q.has("from") || q.has("to")) { L.preset = "custom"; L.from = q.get("from") || ""; L.to = q.get("to") || ""; }
     }
     const W = ws();
-    W.setBand("Đơn hàng", "Sổ đơn hàng: tìm theo mã đơn, bệnh nhân, nha khoa, bác sĩ hoặc labo", {
+    W.setBand("Đơn hàng", "", {
       right: `<div class="band-btns">${can("orders.edit") ? `<a class="btn btn-cream small" href="#orders/new">${ICON.plus}Đơn mới</a><a class="btn btn-light small" href="#import/orders">Nhập Excel</a>` : ""}${can("export.csv") ? `<button class="btn btn-light small" type="button" id="oExport">${ICON.xl}Xuất Excel</button>` : ""}</div>` });
     W.show("p-orders", true);
     const host = $("p-orders");
     if (!host.dataset.built) {
       host.dataset.built = "1";
       host.innerHTML = `<div class="o-tools">
-          <div class="o-search"><input class="input pt-search" type="search" id="oQ" placeholder="Mã đơn, bệnh nhân, nha khoa, bác sĩ, labo, mã của khách…" aria-label="Tìm đơn hàng" autocomplete="off"></div>
+          <div class="o-search"><input class="input pt-search" type="search" id="oQ" placeholder="Tìm đơn nào?" aria-label="Tìm đơn hàng" autocomplete="off"></div>
           <div class="o-filt">
             <select class="input" id="oPreset" aria-label="Thời gian">${PRESETS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select>
             <span class="o-range" id="oRange" hidden><input class="input" type="date" id="oFrom" aria-label="Từ ngày"><span>–</span><input class="input" type="date" id="oTo" aria-label="Đến ngày"></span>
@@ -271,22 +271,22 @@
             <div><label class="field-label" for="ofDay">Ngày nhận</label><input class="input" type="date" id="ofDay" value="${esc(src.day && order ? src.day : today)}"${portal || parent ? " disabled" : ""} required></div>
             <div><label class="field-label" for="ofCode">Mã đơn</label>
               <div class="of-code"><output id="ofCodeOut">${esc(order ? order.code : "…")}</output>${!parent && !portal && (!order || order.kind === "new") ? '<button class="linkbtn" type="button" id="ofCodeEdit">Sửa mã</button>' : ""}</div>
-              <input class="input" id="ofCode" hidden placeholder="yymmddxx, VD 26102101" value="${esc(order ? order.code : "")}" autocomplete="off" style="text-transform:uppercase">
-              <p class="hint" id="ofCodeHint">${parent ? "Tạo khi lưu." : order ? "Theo ngày nhận." : "Tự đánh số theo ngày nhận."}</p></div>
+              <input class="input" id="ofCode" hidden placeholder="Mã đơn cũ là gì?" value="${esc(order ? order.code : "")}" autocomplete="off" style="text-transform:uppercase">
+              <p class="hint" id="ofCodeHint"></p></div>
             <div><label class="field-label" for="ofDue">Hạn giao</label><input class="input" type="datetime-local" id="ofDue" value="${esc(toLocalInput(src.due_at && order ? src.due_at : 0))}"></div>
           </div>
           <div class="of-grid2">
             <div><label class="field-label" for="ofCust">Khách hàng (labo / phòng khám / bác sĩ trả tiền)</label>
-              <input class="input" id="ofCust" list="ofCustList" autocomplete="off" placeholder="Gõ mã hoặc tên khách" value="${esc(D8.book.custLabel(cust0))}"${portal || parent ? " disabled" : ""} required>
+              <input class="input" id="ofCust" list="ofCustList" autocomplete="off" placeholder="Khách nào?" value="${esc(D8.book.custLabel(cust0))}"${portal || parent ? " disabled" : ""} required>
               <datalist id="ofCustList">${custs.filter((c) => c.active).map((c) => `<option value="${esc(D8.book.custLabel(c))}"></option>`).join("")}</datalist>
               <p class="hint" id="ofCustHint">${cust0 ? esc(cust0.kind === "lab" ? "Labo" : "Khách") + " · tiền " + esc(cust0.currency) : can("customers.edit") ? '<a href="#customers/new">+ Thêm khách mới</a>' : ""}</p></div>
-            <div><label class="field-label" for="ofRef">Mã của khách <span class="opt">(mã ca bên khách, nếu có)</span></label><input class="input" id="ofRef" maxlength="80" value="${esc(src.ref || "")}" placeholder="VD: KN261000966, GC021"></div>
-            <div><label class="field-label" for="ofClinic">Nha khoa / phòng khám</label><input class="input" id="ofClinic" maxlength="120" list="ofClinicList" value="${esc(src.clinic || "")}" placeholder="Khi khách là labo: phòng khám cuối"><datalist id="ofClinicList"></datalist></div>
-            <div><label class="field-label" for="ofDoctor">Bác sĩ</label><input class="input" id="ofDoctor" maxlength="120" list="ofDoctorList" value="${esc(src.doctor || "")}"><datalist id="ofDoctorList"></datalist></div>
-            <div class="span2"><label class="field-label" for="ofPatient">Bệnh nhân</label><input class="input" id="ofPatient" maxlength="120" value="${esc(src.patient || "")}" placeholder="Tên hoặc mã bệnh nhân"></div>
+            <div><label class="field-label" for="ofRef">Mã của khách</label><input class="input" id="ofRef" maxlength="80" value="${esc(src.ref || "")}" placeholder="Mã ca bên khách là gì?"></div>
+            <div><label class="field-label" for="ofClinic">Nha khoa / phòng khám</label><input class="input" id="ofClinic" maxlength="120" list="ofClinicList" value="${esc(src.clinic || "")}" placeholder="Nha khoa nào?"><datalist id="ofClinicList"></datalist></div>
+            <div><label class="field-label" for="ofDoctor">Bác sĩ</label><input class="input" id="ofDoctor" maxlength="120" list="ofDoctorList" value="${esc(src.doctor || "")}" placeholder="Bác sĩ nào?"><datalist id="ofDoctorList"></datalist></div>
+            <div class="span2"><label class="field-label" for="ofPatient">Bệnh nhân</label><input class="input" id="ofPatient" maxlength="120" value="${esc(src.patient || "")}" placeholder="Bệnh nhân là ai?"></div>
           </div>
           <div id="ofDupes" class="of-dupes" aria-live="polite" hidden></div></section>
-        <section class="card"><div class="card-head-row"><h2 class="h-caps">Hạng mục</h2><span class="hint" style="margin:0">Mã hàng chung cho mọi khách · giá theo bảng giá của khách</span></div>
+        <section class="card"><div class="card-head-row"><h2 class="h-caps">Hạng mục</h2></div>
           <div class="of-items" id="ofItems"></div>
           <datalist id="ofProdList">${prods.filter((p) => p.active).map((p) => `<option value="${esc(p.code)}">${esc(p.name)}</option>`).join("")}</datalist>
           <div class="wf-actions"><button class="btn small" type="button" id="ofAdd">${ICON.plus}Thêm hạng mục</button></div>
@@ -298,14 +298,14 @@
             <div><label class="field-label" for="ofShade">Màu răng</label><input class="input" id="ofShade" maxlength="40" value="${esc(src.shade || "")}"></div>
           </div>
           <label class="field-label" for="ofNotes" style="margin-top:14px">Yêu cầu của bác sĩ</label>
-          <textarea class="input" id="ofNotes" rows="3" maxlength="4000" placeholder="Khoảng hở, tiếp xúc, khớp cắn, hệ implant…">${esc(src.notes || "")}</textarea>
+          <textarea class="input" id="ofNotes" rows="3" maxlength="4000" placeholder="Bác sĩ yêu cầu gì?">${esc(src.notes || "")}</textarea>
           ${!order ? `<label class="field-label" for="ofChat" style="margin-top:14px">Nhắn cho KTV / QC <span class="opt">(vào chat nội bộ của đơn)</span></label><textarea class="input" id="ofChat" rows="2" maxlength="4000"></textarea>` : ""}
         </section>
         ${canAssign || canStatus ? `<section class="card"><h2 class="h-caps">Phân công &amp; trạng thái</h2><div class="of-grid3">
           ${canAssign ? `<div><label class="field-label" for="ofDes">KTV thiết kế</label><select class="input" id="ofDes">${opt(designers, src.designer && order ? src.designer : parent ? parent.designer : "", "— Chưa giao —")}</select></div>
             <div><label class="field-label" for="ofQc">QC</label><select class="input" id="ofQc">${opt(qcs, src.qc && order ? src.qc : parent ? parent.qc : "", "— Chưa giao —")}</select></div>` : ""}
           ${canStatus ? `<div><label class="field-label" for="ofSt">Trạng thái</label><select class="input" id="ofSt"><option value="">${order ? "— Giữ nguyên —" : "Tự động (mới / đang thiết kế)"}</option>${OST_ORDER.map((s) => `<option value="${s}"${order && order.status === s ? " selected" : ""}>${esc(OST[s])}</option>`).join("")}</select>
-            <p class="hint">Nhập đơn cũ: chọn <b>Đã giao</b>.</p></div>
+            </div>
             <div id="ofDelWrap" hidden><label class="field-label" for="ofDel">Ngày giao</label><input class="input" type="date" id="ofDel" value="${esc(order && order.dday ? order.dday : today)}"></div>` : ""}
         </div></section>` : ""}
       </div>
@@ -314,7 +314,7 @@
           <span class="eyebrow">${order ? "Sửa đơn" : KIND[kind]}</span>
           <b class="of-sum-code" id="ofSumCode">${esc(order ? order.code : "…")}</b>
           <p class="muted" id="ofSumCust">${esc(cust0 ? cust0.name : "Chưa chọn khách")}</p>
-          ${money_() ? `<div class="of-money" id="ofMoney"></div>` : '<p class="hint">Giá tự lấy theo bảng giá của khách.</p>'}
+          ${money_() ? `<div class="of-money" id="ofMoney"></div>` : ""}
           ${canPrice ? `<div class="of-adj">
             <span class="field-label">Tính phí</span>
             <div class="seg seg-sm" role="radiogroup" aria-label="Tính phí">${Object.entries(CHARGE).map(([k, l]) => `<label><input type="radio" name="ofCharge" value="${k}"${k === charge0 ? " checked" : ""}><span>${esc(k === "warranty" ? "Bảo hành" : l)}</span></label>`).join("")}</div>
@@ -347,8 +347,8 @@
           const p = prodOf(x.product), lp = priceFor(p ? p.code : "");
           const price = x.price !== undefined && x.price !== null && x.price !== "" ? +x.price : lp;
           return `<div class="of-item" data-i="${i}">
-            <div><input class="input" data-k="product" list="ofProdList" value="${esc(x.product || "")}" placeholder="VD: CR" aria-label="Mã hàng" autocomplete="off"><small class="${x.product && !p ? "bad" : ""}">${esc(p ? p.name + " · /" + (UNIT[p.unit] || p.unit) : x.product ? "Không có mã này" : "")}</small></div>
-            <div><input class="input" data-k="teeth" value="${esc(x.teeth || "")}" placeholder="11, 21 / 14-16" aria-label="Răng"></div>
+            <div><input class="input" data-k="product" list="ofProdList" value="${esc(x.product || "")}" placeholder="Mã hàng?" aria-label="Mã hàng" autocomplete="off"><small class="${x.product && !p ? "bad" : ""}">${esc(p ? p.name + " · /" + (UNIT[p.unit] || p.unit) : x.product ? "Không có mã này" : "")}</small></div>
+            <div><input class="input" data-k="teeth" value="${esc(x.teeth || "")}" placeholder="Răng số mấy?" aria-label="Răng"></div>
             <div><input class="input" data-k="qty" type="number" min="0.01" step="any" value="${esc(x.qty ?? 1)}" aria-label="Số lượng"></div>
             ${m ? `<div><input class="input" data-k="price" type="number" min="0" step="any" value="${x.price !== undefined && x.price !== null ? esc(x.price) : ""}" placeholder="${lp !== null ? esc(lp) : "—"}" aria-label="Đơn giá"${canPrice ? "" : " disabled"}></div>
               <div class="of-amt">${price !== null && price !== undefined ? esc(money(price * (+x.qty || 0), $("ofCur") ? $("ofCur").value : "USD")) : "—"}</div>` : ""}
@@ -446,7 +446,7 @@
     if (ce) ce.addEventListener("click", () => {
       st.codeEdit = !st.codeEdit; $("ofCode").hidden = !st.codeEdit;
       ce.textContent = st.codeEdit ? "Dùng mã tự động" : "Sửa mã";
-      $("ofCodeHint").textContent = st.codeEdit ? "Gõ mã cũ dạng yymmddxx (VD " + ($("ofCodeOut").textContent || "26102101") + ")." : "Tự đánh số theo ngày nhận.";
+      $("ofCodeHint").textContent = "";
       if (st.codeEdit) { if (!$("ofCode").value) $("ofCode").value = $("ofCodeOut").textContent; $("ofCode").focus(); }
     });
     $("ofAdd").addEventListener("click", () => { st.items.push({ product: "", teeth: "", qty: 1, note: "", auto: true }); drawItems(); $("ofItems").querySelector(`[data-i="${st.items.length - 1}"] [data-k="product"]`).focus(); });
@@ -558,7 +558,6 @@
       : o.charge && o.charge !== "charge" ? `<p class="hint">${esc(CHARGE[o.charge])}</p>` : ("tech_cost" in o ? `<p class="hint">Công của bạn: <b>${o.tech_cost ? esc(money(o.tech_cost, o.tech_currency || "VND")) : "—"}</b></p>` : "");
     const pays = d.payments || [];
     const payCard = m ? `<section class="card"><div class="card-head-row"><h2 class="h-caps">Thanh toán</h2>${can("billing.edit") && o.status !== "cancelled" ? `<button class="btn small" type="button" id="opAddBtn">${ICON.plus}Ghi nhận tiền</button>` : ""}</div>
-      <p class="sub">Tiền ứng trước và tiền trả gộp của khách tự trừ vào các đơn cũ nhất trước. Ở đây là khoản trả riêng cho đơn này.</p>
       ${pays.length ? `<ul class="o-pays">${pays.map((p) => `<li><b>${esc(money(p.amount, p.currency))}</b><span>${esc(fmtDay(p.day))} · ${esc(D8.PAY_METHOD[p.method] || p.method)}${p.ref ? " · " + esc(p.ref) : ""}${p.note ? " · " + esc(p.note) : ""}</span></li>`).join("")}</ul>` : '<p class="muted" style="margin:0">Chưa có khoản trả riêng cho đơn này.</p>'}
       <form id="opForm" hidden class="o-payform"><div class="of-grid3 tight"><div><label class="field-label" for="opDay">Ngày nhận tiền</label><input class="input" type="date" id="opDay" value="${vnToday()}"></div>
         <div><label class="field-label" for="opAmt">Số tiền (${esc(o.currency)})</label><input class="input" type="number" step="any" id="opAmt" value="${o.due > 0 ? o.due : ""}"></div>
@@ -567,11 +566,10 @@
         <div class="wf-actions"><button class="btn btn-primary small" type="submit">Lưu khoản thu</button></div></form>
       <a class="hint" href="#cust/${o.customer_id}">Sổ thanh toán của khách ›</a></section>` : "";
     const linkCard = can("links.manage") || can("cases.deliver") ? `<section class="card"><div class="card-head-row"><h2 class="h-caps">Link xem 3D</h2></div>
-      <p class="sub">Tạo link gửi bác sĩ từ file HTML exocad. Ảnh xem trước khi gửi qua Messenger, Zalo, WhatsApp hiện tên bệnh nhân và mã đơn.</p>
       <div id="oLinks">${(o.previews || []).length ? o.previews.map((pid) => `<div class="pv"><span class="ic">${D8.ORDER_ICON.next}</span><div class="tx"><b>${esc(location.origin + "/v/" + pid)}</b></div><a class="btn small" href="/v/${esc(pid)}" target="_blank" rel="noopener">Mở</a><button class="btn small" type="button" data-copy="${esc(pid)}">Sao chép</button></div>`).join("") : ""}</div>
-      ${portal ? `<p class="hint">Đơn từ cổng khách: gửi bản 3D cho khách ở <a href="#jobs/${esc(o.job_id)}">trang ca</a> để khách duyệt.</p>` : `<div id="oLinkNew"></div>`}</section>` : "";
+      ${portal ? `<p class="hint"><a href="#jobs/${esc(o.job_id)}">Mở trang ca ›</a></p>` : `<div id="oLinkNew"></div>`}</section>` : "";
     const chatCard = can("cases.notes") ? `<section class="card o-chat-card"><div class="card-head-row"><h2 class="h-caps">Chat nội bộ · ${esc(o.code)}</h2></div>
-      <p class="sub">KTV, QC và quản trị trao đổi về đơn này. Khách không thấy.</p><div id="oChat"></div></section>` : "";
+      <div id="oChat"></div></section>` : "";
     W.show("p-order");
     $("p-order").innerHTML = `
       ${fam}
@@ -585,7 +583,7 @@
       <div class="pt-grid o-grid">
         <div>
           <section class="card" id="oWf"><div class="card-head-row"><h2 class="h-caps">Quy trình</h2>${D8.ostChip(o.status)}</div>
-            ${portal ? `<p class="sub">Đơn từ cổng khách hàng: phân công, QC và giao file làm ở <a href="#jobs/${esc(o.job_id)}">trang ca</a>; trạng thái tự cập nhật về đây.</p>` : ""}
+            ${portal ? `<p class="hint"><a href="#jobs/${esc(o.job_id)}">Mở trang ca ›</a></p>` : ""}
             <p class="o-who">KTV: <b>${esc(name(o.designer) || "chưa giao")}</b> · QC: <b>${esc(name(o.qc) || "chưa giao")}</b>${o.qc_fails ? ` · <span class="muted">QC trả về ${o.qc_fails} lần</span>` : ""}</p>
             ${can("cases.assign") && !portal ? `<form class="o-assign" id="oAssign"><select class="input" id="oaD" aria-label="KTV">${['<option value="">— KTV —</option>', ...W.team().filter((t) => t.design).map((t) => `<option value="${esc(t.email)}"${t.email === o.designer ? " selected" : ""}>${esc(t.name || t.email)}</option>`)].join("")}</select>
               <select class="input" id="oaQ" aria-label="QC">${['<option value="">— QC —</option>', ...W.team().filter((t) => t.qc).map((t) => `<option value="${esc(t.email)}"${t.email === o.qc ? " selected" : ""}>${esc(t.name || t.email)}</option>`)].join("")}</select>
@@ -593,6 +591,7 @@
             ${acts.length ? `<div class="o-acts">${needNote ? '<label class="field-label" for="oNote">Ghi chú (bắt buộc khi QC không đạt hoặc hủy)</label><textarea class="input" id="oNote" rows="2" maxlength="2000"></textarea>' : '<label class="field-label" for="oNote">Ghi chú kèm theo (không bắt buộc)</label><textarea class="input" id="oNote" rows="2" maxlength="2000"></textarea>'}
               <div class="wf-actions">${acts.map(([a, l, c]) => `<button class="btn small ${c}" type="button" data-act="${a}">${esc(l)}</button>`).join("")}</div></div>` : ""}
           </section>
+          <section class="card o3d" id="o3d" hidden></section>
           <section class="card"><div class="card-head-row"><h2 class="h-caps">Hạng mục</h2><span class="chip">${esc(o.units)} đơn vị</span></div>${itemsHtml}${moneyHtml}</section>
           <section class="card"><h2 class="h-caps" style="margin-bottom:14px">Thông tin</h2><dl class="dl">${det}</dl>
             ${o.notes ? `<p class="grp" style="margin-top:18px">Yêu cầu của bác sĩ</p><p class="notes">${esc(o.notes)}</p>` : ""}</section>
@@ -634,7 +633,10 @@
       row.innerHTML = `<span class="ic">${ICON.next}</span><div class="tx"><b>${esc(link.url)}</b></div><a class="btn small" href="${esc(link.url)}" target="_blank" rel="noopener">Mở</a>`;
       $("oLinks").appendChild(row);
     } });
-    if ($("oChat")) D8.orderChat($("oChat"), o.id);
+    if ($("oChat")) {
+      $("oChat").addEventListener("d8:models", (e) => { if ($("o3d") && D8.view3d) D8.view3d.gallery($("o3d"), e.detail); });
+      D8.orderChat($("oChat"), o.id);
+    }
   }
 
   /* ------------------------------------------------------------ team chat by order code */
@@ -657,12 +659,12 @@
   D8.orderChat = function (host, orderId) {
     host.innerHTML = `<div class="ochat"><div class="ochat-list" id="ocList-${orderId}" role="log" aria-live="polite">${D8.skel.rows(2)}</div>
       <form class="ochat-form"><label class="sr-only" for="ocText-${orderId}">Tin nhắn nội bộ</label>
-        <textarea class="input" id="ocText-${orderId}" rows="2" maxlength="4000" placeholder="Nhắn cho KTV / QC về đơn này… (dán ảnh chụp màn hình bằng Ctrl+V, kéo thả file vào đây)"></textarea>
+        <textarea class="input" id="ocText-${orderId}" rows="2" maxlength="4000" placeholder="Nhắn gì cho KTV / QC?"></textarea>
         <div class="ochat-img" hidden><img alt=""><button class="iconbtn" type="button" aria-label="Bỏ ảnh">${ICON.x}</button></div>
         <ul class="ochat-files" hidden></ul>
         <div class="ochat-foot"><label class="btn small ochat-pick" title="Gửi ảnh">${ICON.img}<span>Ảnh</span><input type="file" accept="image/*" hidden data-ochat="img"></label>
           <label class="btn small ochat-pick" title="Gửi file (STL, PLY, HTML exocad, PDF, ZIP…)">${ICON.clip}<span>File</span><input type="file" multiple hidden data-ochat="file"></label>
-          <span class="hint">Ctrl + Enter để gửi</span><button class="btn btn-primary small" type="submit">Gửi</button></div>
+          <button class="btn btn-primary small" type="submit">Gửi</button></div>
         <p class="hint ochat-prog" hidden></p>
         <p class="error" hidden></p></form></div>`;
     const list = host.querySelector(".ochat-list"), form = host.querySelector("form"), box = form.querySelector("textarea"), err = form.querySelector(".error");
@@ -683,14 +685,17 @@
     };
     const me = (D8.user && D8.user.email) || "";
     const draw = () => {
-      if (!msgs.length) { list.innerHTML = '<p class="muted ochat-empty">Chưa có tin nhắn. Hỏi đáp về thiết kế, QC, chỉnh sửa… đều ghi lại ở đây theo mã đơn.</p>'; return; }
+      if (!msgs.length) { list.innerHTML = '<p class="muted ochat-empty">Chưa có tin nhắn.</p>'; return; }
       const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
       list.innerHTML = msgs.map((x) => x.kind === "sys" ? `<div class="sys">${esc(D8.fmtDate(x.at, true))} · ${esc(x.name || name(x.by) || "")}: ${esc(x.text)}</div>`
-        : `<div class="bub ${x.by === me ? "me" : "them"}">${x.by === me ? "" : `<b>${esc(x.name || name(x.by))}</b>`}${x.text ? `<div class="bub-text">${esc(x.text)}</div>` : ""}${x.img ? `<a class="ochat-photo" data-mid="${x.id}" href="#" aria-label="Mở ảnh"><img alt="Ảnh" data-mid="${x.id}"></a>` : ""}${(x.files || []).map((f) => `<a class="ochat-file" href="/api/orders/${orderId}/files/${esc(f.fid)}" download="${esc(f.name)}">${ICON.clip}<span class="fn">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span></a>`).join("")}<small>${esc(D8.fmtDate(x.at, true))}</small></div>`).join("");
+        : `<div class="bub ${x.by === me ? "me" : "them"}">${x.by === me ? "" : `<b>${esc(x.name || name(x.by))}</b>`}${x.text ? `<div class="bub-text">${esc(x.text)}</div>` : ""}${x.img ? `<a class="ochat-photo" data-mid="${x.id}" href="#" aria-label="Mở ảnh"><img alt="Ảnh" data-mid="${x.id}"></a>` : ""}${(x.files || []).map((f) => `<a class="ochat-file" href="/api/orders/${orderId}/files/${esc(f.fid)}" download="${esc(f.name)}">${ICON.clip}<span class="fn">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span></a>${D8.view3d && D8.view3d.is(f.name) ? `<button class="ochat-3d" type="button" data-v3d="/api/orders/${orderId}/files/${esc(f.fid)}" data-name="${esc(f.name)}" data-size="${f.size}">Xem 3D</button>` : ""}`).join("")}<small>${esc(D8.fmtDate(x.at, true))}</small></div>`).join("");
       list.querySelectorAll("img[data-mid]").forEach(async (im) => { const u = await imgUrl(orderId, im.dataset.mid); if (u) im.src = u; else im.alt = "Ảnh đã hết hạn"; });
       list.querySelectorAll("a.ochat-photo").forEach((a) => a.addEventListener("click", async (e) => { e.preventDefault(); const u = await imgUrl(orderId, a.dataset.mid); if (u) window.open(u, "_blank", "noopener"); }));
       if (atBottom || !draw.done) list.scrollTop = list.scrollHeight;
       draw.done = true;
+      // 3D files sent in the chat (newest first) for the preview on the order page
+      const models = msgs.flatMap((x) => (x.files || []).map((f) => ({ url: `/api/orders/${orderId}/files/${f.fid}`, name: f.name, size: f.size, at: x.at }))).filter((f) => D8.view3d && D8.view3d.is(f.name)).reverse();
+      host.dispatchEvent(new CustomEvent("d8:models", { detail: models }));
     };
     const load = async () => {
       if (loading || !host.isConnected) return;

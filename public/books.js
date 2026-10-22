@@ -23,7 +23,7 @@
   /* ============================================================ customers */
   async function drawCustomers() {
     const W = ws();
-    W.setBand("Khách hàng", "Bác sĩ, phòng khám và labo", {
+    W.setBand("Khách hàng", "", {
       right: `<div class="band-btns">${can("customers.edit") ? '<a class="btn btn-cream small" href="#customers/new">+ Khách mới</a><a class="btn btn-light small" href="#import/customers">Nhập Excel</a>' : ""}${can("export.csv") ? '<button class="btn btn-light small" type="button" id="cuExport">Xuất Excel</button>' : ""}</div>` });
     W.show("p-customers", true);
     const host = $("p-customers");
@@ -225,7 +225,7 @@
   /* ============================================================ product codes, price levels, KTV pay */
   async function drawCatalog() {
     const W = ws(), price = can("pricing.manage");
-    W.setBand("Mã hàng & bảng giá", "Giá niêm yết, mức 2, mức 3 và giá công KTV");
+    W.setBand("Mã hàng & bảng giá", "");
     W.show("p-catalog", true);
     const host = $("p-catalog");
     host.innerHTML = D8.skel.card(6);
@@ -498,7 +498,7 @@
   let rep = null, repKey = "";
   async function drawReports() {
     const W = ws();
-    W.setBand("Báo cáo", "Số ca, doanh thu, đã thu, còn nợ theo tuần / tháng / năm", { right: can("export.csv") ? '<div class="band-btns"><button class="btn btn-cream small" type="button" id="rpExport">Xuất Excel</button></div>' : "" });
+    W.setBand("Báo cáo", "", { right: can("export.csv") ? '<div class="band-btns"><button class="btn btn-cream small" type="button" id="rpExport">Xuất Excel</button></div>' : "" });
     W.show("p-reports", true);
     const host = $("p-reports");
     if (!host.dataset.built) {
@@ -561,9 +561,9 @@
       </div>
       <section class="card"><h2 class="h-caps">Theo mã hàng</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mã hàng</th><th class="num">Số lượng</th><th class="num">Số ca</th>${m ? '<th class="num">Thành tiền</th>' : ""}</tr></thead>
         <tbody>${rep.products.filter((x) => !m || x.cur === cur).map((x) => `<tr><td><b>${esc(x.code)}</b> <span class="muted">${esc(x.name)}</span></td><td class="num">${Math.round(x.q * 100) / 100}</td><td class="num">${x.n}</td>${m ? `<td class="num">${esc(money(x.a, x.cur))}</td>` : ""}</tr>`).join("") || '<tr><td colspan="4" class="muted">Không có dữ liệu.</td></tr>'}</tbody></table></div></section>
-      ${m ? `<div class="rp-two"><section class="card"><h2 class="h-caps">Công nợ hiện tại</h2><p class="sub">Tất cả đơn còn nợ, không theo kỳ.</p><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Khách</th><th class="num">Số đơn</th><th>Từ ngày</th><th class="num">Còn nợ</th></tr></thead>
+      ${m ? `<div class="rp-two"><section class="card"><h2 class="h-caps">Công nợ hiện tại</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Khách</th><th class="num">Số đơn</th><th>Từ ngày</th><th class="num">Còn nợ</th></tr></thead>
           <tbody>${rep.debt.map((x) => `<tr><td><a href="#cust/${x.id}"><b>${esc(x.code)}</b></a> <span class="muted">${esc(x.name)}</span></td><td class="num"><a href="#orders?customer=${x.id}&pay=due&status=">${x.n}</a></td><td>${esc(fmtDay(x.oldest))}</td><td class="num due">${esc(money(x.due, x.cur))}</td></tr>`).join("") || '<tr><td colspan="4" class="muted">Không khách nào còn nợ.</td></tr>'}</tbody></table></div></section>
-        <section class="card"><h2 class="h-caps">Tiền ứng trước còn lại</h2><p class="sub">Khách đã trả trước, chưa trừ hết vào đơn.</p><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Khách</th><th class="num">Còn lại</th></tr></thead>
+        <section class="card"><h2 class="h-caps">Tiền ứng trước còn lại</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Khách</th><th class="num">Còn lại</th></tr></thead>
           <tbody>${rep.credit.map((x) => `<tr><td><a href="#cust/${x.id}"><b>${esc(x.code)}</b></a> <span class="muted">${esc(x.name)}</span></td><td class="num">${esc(money(x.credit, x.cur))}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">Không có.</td></tr>'}</tbody></table></div></section></div>` : ""}`;
     const labels = b.map((x) => periodLabel(x.k, P)), longs = b.map((x) => periodLong(x.k, P));
     if ($("rpMoney")) columnChart($("rpMoney"), { title: "Doanh thu theo kỳ", labels, longLabels: longs, fmt: f,
@@ -678,32 +678,30 @@
 
   function drawImportHome() {
     const W = ws();
-    W.setBand("Nhập dữ liệu từ Excel", "Khách hàng, mã hàng, bảng giá, đơn hàng cũ, thanh toán");
+    W.setBand("Nhập dữ liệu từ Excel", "");
     W.show("p-import");
     const order = ["customers", "products", "prices", "orders", "payments"];
-    $("p-import").innerHTML = `<div class="pt-alert info"><div>Nên nhập theo thứ tự: <b>1. Khách hàng</b> → <b>2. Mã hàng</b> → <b>3. Bảng giá</b> → <b>4. Đơn hàng cũ</b> → <b>5. Thanh toán</b>. Mỗi mục có file mẫu .xlsx: tải về, điền, rồi chọn file để xem trước trước khi nhập.</div></div>
-      <div class="imp-grid">${order.map((k, i) => { const t = IMPORTS[k]; const ok = can(t.perm); return `<a class="card imp-card${ok ? "" : " off"}" href="${ok ? "#import/" + k : "#import"}"><span class="eyebrow">Bước ${i + 1}</span><h2 class="h-caps">${esc(t.title)}</h2><p>${esc(t.desc)}</p>${ok ? '<span class="btn small">Mở</span>' : '<span class="muted">Bạn chưa có quyền</span>'}</a>`; }).join("")}</div>`;
+    $("p-import").innerHTML = `<div class="imp-grid">${order.map((k, i) => { const t = IMPORTS[k]; const ok = can(t.perm); return `<a class="card imp-card${ok ? "" : " off"}" href="${ok ? "#import/" + k : "#import"}"><span class="eyebrow">Bước ${i + 1}</span><h2 class="h-caps">${esc(t.title)}</h2>${ok ? '<span class="btn small">Mở</span>' : '<span class="muted">Bạn chưa có quyền</span>'}</a>`; }).join("")}</div>`;
   }
   function drawImport(kind) {
     const W = ws(), T = IMPORTS[kind];
     if (!T || !can(T.perm)) return W.denied();
-    W.setBand("Nhập " + T.title.toLowerCase(), "Tải file mẫu, điền, xem trước rồi nhập", { back: true, backHref: "#import", backText: "Nhập dữ liệu" });
+    W.setBand("Nhập " + T.title.toLowerCase(), "", { back: true, backHref: "#import", backText: "Nhập dữ liệu" });
     W.show("p-import");
     const host = $("p-import");
-    host.innerHTML = `<section class="card"><div class="card-head-row"><h2 class="h-caps">1. File mẫu</h2></div><p class="sub">${esc(T.desc)}</p>
+    host.innerHTML = `<section class="card"><div class="card-head-row"><h2 class="h-caps">1. File mẫu</h2></div>
         <div class="wf-actions"><button class="btn small" type="button" id="imTpl">Tải file mẫu (.xlsx)</button></div></section>
       <section class="card"><h2 class="h-caps">2. Chọn file đã điền</h2>
-        ${kind === "orders" ? `<p class="sub">Nhận cả bảng tự theo dõi (VD Google Sheets "GC - Case Detail": Case_ID, Created_Date, Doctor_Name, Patient_Name, Product_Name, Unit, Instruction_Note, Progress). Tải về dạng .xlsx rồi chọn ở đây.</p>
-          <div class="im-opts"><div><label class="field-label" for="imCust">Khách cho các dòng không ghi Mã khách <span class="opt">(nếu cả file là của một khách)</span></label>
+        ${kind === "orders" ? `<div class="im-opts"><div><label class="field-label" for="imCust">Khách cho các dòng không ghi Mã khách</label>
           <select class="input" id="imCust"><option value="">— Theo cột Mã khách / bác sĩ —</option></select></div>
-          <div><label class="field-label" for="imKtv">KTV cho các dòng không ghi KTV <span class="opt">(bảng theo từng KTV)</span></label>
+          <div><label class="field-label" for="imKtv">KTV cho các dòng không ghi KTV</label>
           <select class="input" id="imKtv"><option value="">— Theo cột KTV —</option>${W.team().filter((t) => t.design).map((t) => `<option value="${esc(t.email)}">${esc(t.name || t.email)}</option>`).join("")}</select></div></div>` : ""}
         <label class="drop compact" id="imDrop"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg><strong>Kéo file Excel (.xlsx) hoặc .csv vào đây</strong><span>hoặc bấm để chọn file</span><input type="file" id="imFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
         <p class="error" id="imErr" hidden></p></section>
       <section class="card" id="imCmap" hidden><h2 class="h-caps">Ghép bác sĩ với khách</h2>
-        <p class="sub">Dòng không ghi Mã khách: bác sĩ trùng tên khách thì tự ghép, còn lại chọn khách cho từng bác sĩ một lần.</p><div id="imCmapBody"></div></section>
+        <div id="imCmapBody"></div></section>
       <section class="card" id="imMap" hidden><h2 class="h-caps">Ghép tên hàng với mã hàng</h2>
-        <p class="sub">File ghi tên hàng thay vì mã hàng. Chọn mã hàng cho từng tên một lần, mọi dòng cùng tên sẽ theo.</p><div id="imMapBody"></div></section>
+        <div id="imMapBody"></div></section>
       <section class="card" id="imPrev" hidden><div class="card-head-row"><h2 class="h-caps">3. Xem trước</h2><span class="chip" id="imCount"></span></div><div id="imBody"></div>
         <div class="wf-actions" style="align-items:center"><button class="btn btn-primary" type="button" id="imGo" disabled>Nhập</button><label class="check" id="imSkipW" hidden style="margin:0"><input type="checkbox" id="imSkip" checked> Bỏ qua đơn có thể đã có</label></div>
         <div class="progress block" id="imProg" hidden><div class="progress-bar"><i></i></div><p></p></div><div id="imDone"></div></section>`;
@@ -927,7 +925,7 @@
   /* ============================================================ settings */
   async function drawSettings() {
     const W = ws();
-    W.setBand("Cài đặt", "Thanh toán online, dùng thử, cơ sở dữ liệu");
+    W.setBand("Cài đặt", "");
     W.show("p-settings", true);
     const host = $("p-settings");
     host.innerHTML = D8.skel.card(4);
@@ -945,9 +943,7 @@
             <p style="margin:6px 0 0">Chưa tạo thì: Storage &amp; Databases › D1 SQL Database › <b>Create</b>, tên <code>d8-db</code>, rồi làm bước 1 và 2 ở trên. Bảng dữ liệu tự tạo ở lần mở đầu tiên.</p></div></div>`}</section>
       <section class="card"><h2 class="h-caps">Thanh toán của khách</h2>
         <label class="switch"><input type="checkbox" id="setPay"${s.settings.onlinePay ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Thanh toán online trên cổng khách hàng (PayPal / Stripe)</b></label>
-        <p class="hint">Đang ${s.settings.onlinePay ? "bật" : "tắt"}. Khi tắt, khách không thấy nút trả tiền; công nợ và tiền khách trả ghi ở sổ thanh toán của từng khách.</p>
-        <label class="switch" style="margin-top:18px"><input type="checkbox" id="setTrial"${s.settings.autoTrial ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Tự đánh dấu 2 ca đầu của khách mới là dùng thử</b></label>
-        <p class="hint">Tắt: bạn tự thương lượng dùng thử với từng khách (đặt “Miễn phí” trong đơn).</p></section>`;
+        <label class="switch" style="margin-top:18px"><input type="checkbox" id="setTrial"${s.settings.autoTrial ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Tự đánh dấu 2 ca đầu của khách mới là dùng thử</b></label></section>`;
     for (const [id, k] of [["setPay", "onlinePay"], ["setTrial", "autoTrial"]]) {
       const el = $(id);
       el.addEventListener("change", async () => {

@@ -69,11 +69,11 @@
 
   /* ------------------------------------------------------------ band + panels */
   const BANDS = {
-    jobs: ["Ca cổng khách", "Ca khách gửi qua cổng khách hàng (cũng có trong Đơn hàng)"],
+    jobs: ["Ca cổng khách", ""],
     denied: ["Không có quyền", "Nhờ quản trị cấp thêm quyền"],
-    links: ["Link xem 3D", "Gửi bác sĩ xem thiết kế ngay trên trình duyệt"],
-    messages: ["Tin nhắn", "Từ mục Liên hệ trên trang web"],
-    customers: ["Khách hàng", "Tài khoản đăng nhập bằng Google"],
+    links: ["Link xem 3D", ""],
+    messages: ["Tin nhắn", ""],
+    customers: ["Khách hàng", ""],
     gate: ["Workspace", "Khu làm việc của đội D.EIGHT"],
   };
   function setBand(title, sub, opts = {}) {
@@ -157,6 +157,9 @@
     if (h !== "messages" && can("messages.view")) refreshMessages(true);
     setInterval(() => { if (!document.hidden && !busy && (!$("p-jobs").hidden || !$("p-home").hidden)) loadJobs(true); }, 300000);
     setInterval(() => { if (!document.hidden && dbOn && D8.refreshOrderBadge) D8.refreshOrderBadge(); }, 60000);
+    D8.config().then(() => refreshTodo(true));
+    setInterval(() => { if (!document.hidden) refreshTodo(); }, 60000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshTodo(); });
   }
 
   /* ------------------------------------------------------------ router */
@@ -175,7 +178,9 @@
     if (h === "messages") { if (!can("messages.view")) return denied(); setBand(...BANDS.messages); show("p-messages"); return refreshMessages(); }
     if (h === "customers") { if (!can("customers.view")) return denied(); setBand(...BANDS.customers); show("p-customers"); return loadCustomers(); }
     if (h === "staff") { if (!can("staff.manage")) return denied(); show("p-staff"); return drawStaff(); }
-    if (h === "jobs") {
+    if (h === "jobs" || h.startsWith("jobs?")) {
+      const w = new URLSearchParams(h.slice(5)).get("who");
+      if (w !== null && $("jobWho").querySelector(`option[value="${CSS.escape(w)}"]`)) { jobWho = w; $("jobWho").value = w; }
       setBand(...BANDS.jobs);
       show("p-jobs");
       drawJobs();
@@ -212,11 +217,35 @@
   }
   const adminSeen = () => store.get("d8-admin-seen", {});
   const needsReply = (x, seen) => x.lastBy === "client" && OPEN.includes(x.status) && (seen[x.id] || 0) < x.updated;
-  function updateJobCount() {
-    const seen = adminSeen(), me = myEmail();
-    // the badge counts what needs this person: customer replies (if they read chat), their design work, QC queue
-    setNavCount("/admin#jobs", jobs.filter((x) => (can("cases.chat_read") && needsReply(x, seen)) || (me && x.designer === me && x.stage === "fix") || (can("cases.qc") && x.stage === "qc" && (!x.qcBy || x.qcBy === me))).length);
+  // what a portal case needs from the person looking at it: a red dot and label on the row, the menu badge and the bell
+  function attn(x, seen) {
+    const me = myEmail(), open = OPEN.includes(x.status);
+    if (can("billing.edit") && x.pay === "check") return "Chờ xác nhận thanh toán";
+    if (!open) return "";
+    if (me && x.designer === me && x.stage === "fix") return "QC trả sửa";
+    if (me && x.designer === me && (!x.stage || x.stage === "design") && ["received", "in_design"].includes(x.status)) return "Cần thiết kế";
+    if (can("cases.qc") && x.stage === "qc" && (!x.qcBy || x.qcBy === me)) return "Chờ QC";
+    if (can("cases.assign") && !x.designer && x.status === "received") return "Cần giao KTV";
+    if (can("cases.deliver") && ((x.stage === "ready" && x.status !== "review") || x.status === "approved")) return "Chờ giao khách";
+    if (can("cases.chat_read") && needsReply(x, seen)) return "Khách vừa nhắn";
+    return "";
   }
+  const ATTN_TEXT = { "Cần giao KTV": "ca mới từ cổng khách chờ giao KTV", "Cần thiết kế": "ca cổng khách cần thiết kế", "QC trả sửa": "ca cổng khách bị QC trả sửa",
+    "Chờ QC": "ca cổng khách chờ QC", "Chờ giao khách": "ca cổng khách chờ giao file", "Khách vừa nhắn": "ca có tin nhắn mới của khách", "Chờ xác nhận thanh toán": "thanh toán chờ xác nhận" };
+  function updateJobCount() {
+    const seen = adminSeen(), need = jobs.map((x) => attn(x, seen)).filter(Boolean);
+    setNavCount("/admin#jobs", need.length);
+    const by = {}; need.forEach((l) => { by[l] = (by[l] || 0) + 1; });
+    D8.notify.set("jobs", Object.entries(by).map(([l, n]) => ({ key: "job-" + l, n, text: ATTN_TEXT[l] || l, href: "#jobs?who=need" })));
+  }
+  // the order book's to-dos (one small database query, no storage listing)
+  let todoAt = 0;
+  async function refreshTodo(force) {
+    if (!dbOn || (!force && Date.now() - todoAt < 50000)) return;
+    todoAt = Date.now();
+    try { D8.notify.set("orders", (await api("/api/todo")).items || []); } catch { /* no database yet */ }
+  }
+  D8.refreshTodo = refreshTodo;
 
   function drawJobs() {
     const seen = adminSeen();
@@ -226,15 +255,15 @@
     $("jobFilters").querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { jobFilter = b.dataset.f; drawJobs(); }));
     if (!jobsAt && !jobs.length) { $("jobList").innerHTML = D8.skel.rows(4); return; }
     const q = jobQuery.toLowerCase(), me = myEmail();
-    const whoOk = (x) => !jobWho || (jobWho === "mine" ? x.designer === me || x.qcBy === me : jobWho === "none" ? !x.designer : jobWho === "qc" ? x.stage === "qc" : jobWho === "ready" ? x.stage === "ready" : jobWho === "check" ? x.pay === "check" : true);
-    const shown = jobs.filter((x) => (jobFilter === "all" || (jobFilter === "open" ? OPEN.includes(x.status) : x.status === jobFilter)) && whoOk(x) &&
+    const whoOk = (x) => !jobWho || (jobWho === "need" ? !!attn(x, seen) : jobWho === "mine" ? x.designer === me || x.qcBy === me : jobWho === "none" ? !x.designer : jobWho === "qc" ? x.stage === "qc" : jobWho === "ready" ? x.stage === "ready" : jobWho === "check" ? x.pay === "check" : true);
+    const shown = jobs.filter((x) => (jobWho === "need" || jobFilter === "all" || (jobFilter === "open" ? OPEN.includes(x.status) : x.status === jobFilter)) && whoOk(x) &&
       (!q || (x.id + " " + x.title + " " + x.owner + " " + (x.ownerName || "")).toLowerCase().includes(q)));
     $("jobList").innerHTML = shown.length ? shown.map((x) => {
-      const nr = needsReply(x, seen);
-      return `<a class="pt-row" href="#jobs/${esc(x.id)}">
-        <div><span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span><span class="owner">${esc([x.ownerName, x.owner].filter(Boolean).join(" · "))}</span></div>
+      const need = attn(x, seen);
+      return `<a class="pt-row${need ? " need" : ""}" href="#jobs/${esc(x.id)}">
+        <div>${need ? '<span class="attn-dot" aria-hidden="true"></span>' : ""}<span class="id">${esc(x.id)}</span><span class="ttl">${esc(x.title)}</span><span class="owner">${esc([x.ownerName, x.owner].filter(Boolean).join(" · "))}</span></div>
         <span class="meta">Gửi ${esc(D8.fmtDate(x.created, true))} · cập nhật ${esc(D8.ago(x.updated))}${x.storedMB ? " · " + x.storedMB + " MB" : ""}</span>
-        <span class="right">${stChip(x.status)}${x.stage || OPEN.includes(x.status) ? stageChip(x.stage) : ""}${x.designer ? `<span class="who-chip" title="KTV">✎ ${esc(teamName(x.designer))}</span>` : ""}${x.qcBy ? `<span class="who-chip" title="QC">QC ${esc(teamName(x.qcBy))}</span>` : ""}${x.trial ? '<span class="badge-trial">Dùng thử</span>' : ""}${payChip(x)}${nr && can("cases.chat_read") ? '<span class="new client">Khách vừa nhắn</span>' : ""}</span></a>`;
+        <span class="right">${stChip(x.status)}${(x.stage || OPEN.includes(x.status)) && need !== "Cần giao KTV" ? stageChip(x.stage) : ""}${x.designer ? `<span class="who-chip" title="KTV">✎ ${esc(teamName(x.designer))}</span>` : ""}${x.qcBy ? `<span class="who-chip" title="QC">QC ${esc(teamName(x.qcBy))}</span>` : ""}${x.trial ? '<span class="badge-trial">Dùng thử</span>' : ""}${payChip(x)}${need ? `<span class="new attn">${esc(need)}</span>` : ""}</span></a>`;
     }).join("") : `<div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">${jobs.length ? "Không có ca nào khớp" : "Chưa có ca nào"}</h2>
       <p>${jobs.length ? "Thử bộ lọc khác hoặc xóa ô tìm kiếm." : "Khi khách đăng nhập cổng khách hàng và gửi ca, ca sẽ hiện ở đây."}</p></div>`;
   }
@@ -297,6 +326,7 @@
       return `<li class="${f.kind === "output" ? "out" : ""}">${opt.select ? `<input type="checkbox" class="sel" data-pick="${esc(f.fid)}" aria-label="Chọn ${esc(f.name)}">` : ""}<span class="ext">${esc(ext)}</span><div class="nm"><b title="${esc(f.name)}">${esc(f.name)}</b>
         <small>${esc(D8.size(f.size))}${f.gz ? " (lưu nén " + esc(D8.size(f.stored)) + ")" : ""} · ${esc(D8.fmtDate(f.at, true))}${f.by ? " · " + esc(teamName(f.by)) : ""} · lưu đến ${esc(D8.fmtDate(f.exp))}</small></div>
         ${html && f.kind === "design" ? `<a class="btn small" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}?view=1" target="_blank" rel="noopener">Xem 3D</a>` : ""}
+        ${dl && D8.view3d && D8.view3d.is(f.name) ? `<button class="btn small" type="button" data-v3d="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}" data-name="${esc(f.name)}" data-size="${f.size}">Xem 3D</button>` : ""}
         ${opt.publish && html ? `<button class="btn small" type="button" data-publish="${esc(f.fid)}">Gửi khách xem 3D</button>` : ""}
         ${dl ? `<a class="iconbtn" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}" download="${esc(f.name)}" title="Tải về" aria-label="Tải ${esc(f.name)}">${ICON.dl}</a>` : ""}
         ${del ? `<button class="iconbtn del" type="button" data-del="${esc(f.fid)}" title="Xóa file" aria-label="Xóa ${esc(f.name)}">${ICON.trash}</button>` : ""}</li>`;
@@ -319,7 +349,6 @@
     const qcLine = j.qc && j.qc.state ? `<p class="hint" style="margin:10px 0 0">QC ${j.qc.state === "passed" ? "đạt" : j.qc.state === "failed" ? "không đạt" : "đang chờ"}${j.qc.by ? " · " + esc(teamName(j.qc.by)) : ""} · ${esc(D8.fmtDate(j.qc.at, true))}</p>` : "";
     const team_ = (j.team || []).slice().reverse();
     const wfCard = `<section class="card" id="wfCard"><div class="card-head-row"><h2 class="h-caps">Quy trình nội bộ</h2>${stageChip(stage)}</div>
-      <p class="sub">Chỉ đội D.EIGHT thấy mục này. KTV tải file thiết kế lên rồi gửi QC; QC đạt thì mới gửi khách.</p>
       ${can("cases.assign") ? `<form id="asForm"><div class="wf-grid">
           <div><label class="field-label" for="asD">KTV thiết kế</label><select class="input" id="asD">${teamOptions(team.filter((t) => t.design), j.designer || "")}</select></div>
           <div><label class="field-label" for="asQ">QC</label><select class="input" id="asQ">${teamOptions(team.filter((t) => t.qc), j.qcBy || "")}</select></div></div>
@@ -333,13 +362,13 @@
           ${canQc ? `<button class="btn btn-ok small" type="button" id="wfPass">${ICON.check}Đạt</button><button class="btn small btn-danger" type="button" id="wfFail">Không đạt, trả KTV sửa</button>` : ""}
           ${canReopen ? `<button class="btn small" type="button" id="wfReopen">Mở lại để sửa</button>` : ""}</div></div>` : ""}
       ${can("cases.notes") && j.orderId && dbOn ? `<div style="margin-top:18px"><span class="field-label">Chat nội bộ · ${esc(j.order || "")}</span><div id="jobChat"></div></div>` : can("cases.notes") ? `<form class="compose" id="teamForm" style="margin-top:18px"><label class="field-label" for="teamBox">Ghi chú nội bộ</label>
-          <textarea class="input" id="teamBox" maxlength="2000" rows="2" style="min-height:70px" placeholder="Trao đổi trong đội (khách không thấy)…"></textarea>
+          <textarea class="input" id="teamBox" maxlength="2000" rows="2" style="min-height:70px" placeholder="Nhắn gì cho đội?"></textarea>
           <div class="wf-actions"><button class="btn small" type="submit" id="teamSend">Thêm ghi chú</button></div></form>
         <div class="team">${team_.length ? team_.map((n) => `<div class="n k-${esc(n.kind || "note")}"><small>${esc(teamName(n.by) || n.name || "")} · ${esc(D8.fmtDate(n.at, true))}</small><p>${esc(noteText(n))}</p></div>`).join("") : '<p class="muted" style="margin:0">Chưa có ghi chú.</p>'}</div>` : ""}
     </section>`;
 
     const designCard = canDesign || designs.length ? `<section class="card"><h2 class="h-caps">File thiết kế (nội bộ)</h2>
-      <p class="sub">Khách không thấy các file này cho tới khi được giao. File HTML exocad bấm <b>Xem 3D</b> để xem nhanh.</p>
+      <div class="o3d case-3d" id="case3d" hidden></div>
       ${designs.length ? `<ul class="files">${designs.map((f) => fileRow(f, { select: canDeliver, publish: canDeliver })).join("")}</ul>` : '<p class="muted" style="margin:0">Chưa có file thiết kế.</p>'}
       ${canDeliver && designs.length ? `<div class="wf-actions" style="align-items:center"><label class="check" style="margin:0"><input type="checkbox" id="prDeliver" checked> Chuyển ca sang Đã giao</label>
           <button class="btn btn-primary small" type="button" id="prBtn">Giao file đã chọn cho khách</button></div>
@@ -353,12 +382,12 @@
 
     const custCard = `<section class="card"><div class="card-head-row"><h2 class="h-caps">File của khách</h2>
         ${canDl && ins.length > 1 ? `<button class="btn small" type="button" id="zipAll">${ICON.dl}Tải tất cả (.zip)</button>` : ""}</div>
-      <p class="sub">${canDl ? "Bấm để tải về máy. File tự xóa sau 60 ngày." : "Bạn chưa có quyền tải file của khách."}</p>
+      ${canDl ? "" : '<p class="sub">Bạn chưa có quyền tải file của khách.</p>'}
       ${ins.length ? `<ul class="files">${ins.map((f) => fileRow(f)).join("")}</ul>` : '<p class="muted" style="margin:0">Khách chưa tải file nào lên.</p>'}
       ${(j.links || []).length ? `<p class="grp" style="margin-top:18px">Link file khách gửi</p><div class="links">${j.links.map((l) => `<a href="${esc(l)}" target="_blank" rel="noopener noreferrer">${esc(l)}</a>`).join("")}</div>` : ""}
     </section>`;
 
-    const linkCard = canDeliver ? `<section class="card"><h2 class="h-caps">Link xem 3D cho khách</h2><p class="sub">Gắn link vào ca sẽ tự chuyển ca sang Chờ duyệt và khách thấy nút Duyệt thiết kế.</p>
+    const linkCard = canDeliver ? `<section class="card"><h2 class="h-caps">Link xem 3D cho khách</h2>
       ${previews || '<p class="muted" style="margin:0">Chưa gắn link 3D nào.</p>'}
       <div class="attach">
         <span class="field-label" style="margin:0">Tạo link mới từ file HTML exocad</span>
@@ -371,7 +400,7 @@
         <p class="error" id="pvErr" hidden></p>
       </div></section>` : (previews ? `<section class="card"><h2 class="h-caps">Link xem 3D</h2>${previews}</section>` : "");
 
-    const outCard = canDeliver ? `<section class="card"><h2 class="h-caps">Giao file hoàn chỉnh</h2><p class="sub">File ở đây là file khách nhận (STL đã thiết kế).</p>
+    const outCard = canDeliver ? `<section class="card"><h2 class="h-caps">Giao file hoàn chỉnh</h2>
       ${outs.length ? `<ul class="files">${outs.map((f) => fileRow(f)).join("")}</ul>` : ""}
       <div style="margin-top:14px"><label class="drop compact" id="outZone">${ICON.up}<strong>Kéo file STL hoàn chỉnh vào đây</strong><span>hoặc bấm để chọn · nhiều file cùng lúc</span><input type="file" id="outFiles" multiple></label>
         <ul class="picked" id="outList"></ul>
@@ -381,13 +410,13 @@
         <div style="margin-top:12px"><button class="btn btn-primary small" type="button" id="outBtn" disabled>Tải lên &amp; giao</button></div></div>
     </section>` : (outs.length ? `<section class="card"><h2 class="h-caps">File đã giao khách</h2><ul class="files">${outs.map((f) => fileRow(f)).join("")}</ul></section>` : "");
 
-    const chatCard = can("cases.chat_read") ? `<section class="card"><h2 class="h-caps">Tin nhắn với khách</h2><p class="sub">${can("cases.chat") ? "Khách thấy tin nhắn trong cổng khách hàng. Bấm <b>Dịch</b> dưới tin của khách để xem tiếng Việt; viết tiếng Việt rồi bấm <b>Dịch sang tiếng Anh</b> trước khi gửi." : "Bạn chỉ được đọc tin nhắn. Muốn trả lời khách, nhờ quản trị hoặc ghi chú nội bộ."}</p>
+    const chatCard = can("cases.chat_read") ? `<section class="card"><h2 class="h-caps">Tin nhắn với khách</h2>${can("cases.chat") ? "" : '<p class="sub">Bạn chỉ được đọc tin nhắn.</p>'}
       <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> Luôn dịch tin của khách</label><button type="button" data-tr-all hidden>Dịch tất cả</button></div>
       <div class="thread" id="thread">${D8.threadHtml(j, "admin", "vi") || '<p class="muted" style="margin:0">Chưa có tin nhắn.</p>'}</div>
       ${can("cases.chat") ? `<form class="compose" id="composeForm">
         <div class="tpl">${TEMPLATES.map((t, i) => `<button type="button" data-tpl="${i}">${esc(t[0])}</button>`).join("")}</div>
         <label class="sr-only" for="composer">Tin nhắn</label>
-        <textarea class="input" id="composer" maxlength="4000" placeholder="Viết tin nhắn cho khách (tiếng Việt hoặc tiếng Anh)…"></textarea>
+        <textarea class="input" id="composer" maxlength="4000" placeholder="Nhắn gì cho khách?"></textarea>
         <p class="compose-orig" id="composeOrig" hidden></p>
         <div class="compose-foot"><p class="hint">Ctrl + Enter để gửi.</p>
           <div class="compose-tr"><button class="btn small" type="button" id="aiSuggest" hidden title="Gõ vài ý tiếng Việt (không bắt buộc) rồi bấm để AI soạn câu trả lời tiếng Anh">${ICON.spark}Gợi ý trả lời</button><button class="btn small" type="button" id="toEn">Dịch sang tiếng Anh</button><button class="btn btn-primary small" type="submit" id="sendMsg">Gửi</button></div></div>
@@ -411,15 +440,14 @@
           ${p.note ? `<br>Khách ghi: “${esc(p.note)}”` : ""}<br>Kiểm tra tài khoản ${p.via === "paypal" ? "PayPal" : p.via === "stripe" ? "Stripe" : "ngân hàng / Payoneer"} rồi xác nhận.
           ${edit ? `<div class="btns"><button class="btn btn-ok small" type="button" id="payOk">${ICON.check}Đã nhận tiền</button><button class="btn small btn-danger" type="button" id="payNo">Chưa nhận được</button></div>` : ""}</div>` : "";
       billing = `<section class="card"><h2 class="h-caps" style="margin-bottom:6px">Báo giá &amp; thanh toán</h2>
-        <p class="sub">Giá ca chỉ đội D.EIGHT thấy. Khách chỉ thấy số tiền cần trả khi chọn <b>Chờ thanh toán</b>, trả qua ${online.length ? esc(online.join(" hoặc ")) : "PayPal/Stripe (chưa gắn khóa API)"} hoặc báo đã chuyển khoản. Mọi khoản đều chờ bạn xác nhận.</p>
         ${pend}
         ${j.pay === "paid" && p.amount != null ? `<div class="ai-ok" style="margin:0 0 14px">Đã nhận ${esc(money(p.amount))} qua ${esc(VIA[p.via] || p.via)}${p.ref ? ` · mã ${esc(p.ref)}` : ""}${p.confirmedAt ? ` · xác nhận ${esc(D8.fmtDate(p.confirmedAt, true))}${p.confirmedBy ? " bởi " + esc(teamName(p.confirmedBy) || p.confirmedBy) : ""}` : ""}</div>` : ""}
         ${tries.length ? `<ul class="pay-tries">${tries.map((t) => `<li>${esc(VIA[t.via] || t.via)} · ${esc(money(t.amount))} · ${esc(D8.fmtDate(t.at, true))} · <b>${esc(TRY_STATE[t.state] || t.state)}</b></li>`).join("")}</ul>
           ${openTry ? `<button class="btn small" type="button" id="payCheck" style="margin:0 0 14px">Kiểm tra thanh toán</button>` : ""}` : ""}
         ${edit ? `<form id="billForm" style="display:grid;gap:12px">
-          <div><label class="field-label" for="billPrice">Giá ca (USD)</label><input class="input" id="billPrice" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.price === "number" ? j.price : ""}" placeholder="VD: 35"></div>
-          <div><label class="field-label" for="billDue">Số tiền khách cần trả (USD)</label><input class="input" id="billDue" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.due === "number" ? j.due : ""}" placeholder="Để trống = bằng giá ca">
-            <p class="hint" style="margin:6px 0 0">Dùng khi chỉ thu một phần (ví dụ phần vượt mức dùng thử bạn đã thương lượng).</p></div>
+          <div><label class="field-label" for="billPrice">Giá ca (USD)</label><input class="input" id="billPrice" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.price === "number" ? j.price : ""}" placeholder="Giá ca bao nhiêu?"></div>
+          <div><label class="field-label" for="billDue">Số tiền khách cần trả (USD)</label><input class="input" id="billDue" type="number" min="0" step="0.01" inputmode="decimal" value="${typeof j.due === "number" ? j.due : ""}" placeholder="Khách cần trả bao nhiêu?">
+</div>
           <div><label class="field-label" for="billPay">Thanh toán</label><select class="input" id="billPay">${Object.entries(PAY_LABEL).filter(([k]) => k !== "check" || j.pay === "check").map(([k, l]) => `<option value="${k}"${(j.pay || "") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
           <label class="check" style="margin:0"><input type="checkbox" id="billTrial"${j.trial ? " checked" : ""}> Ca dùng thử miễn phí</label>
           ${tu.cases ? `<p class="hint" style="margin:0">Khách này có ${tu.cases} ca dùng thử, tổng giá ${esc(money(tu.used))} / mức ${money(TRIAL_CREDIT)}${left < 0 ? ` (vượt ${esc(money(-left))})` : ` (còn ${esc(money(left))})`}.</p>` : ""}
@@ -615,6 +643,8 @@
       catch (err) { D8.busy(b, false); D8.toast(err.message); }
     });
     document.querySelectorAll("#p-case [data-del]").forEach((b) => armed(b, async () => redraw((await api(`/api/jobs/${j.id}/files/${b.dataset.del}`, { method: "DELETE" })).job)));
+    // finished design files: rotate / zoom them right here (newest first)
+    if ($("case3d") && D8.view3d) D8.view3d.gallery($("case3d"), (j.files || []).filter((f) => f.kind === "design").sort((a, b) => b.at - a.at).map((f) => ({ url: `/api/jobs/${j.id}/files/${f.fid}`, name: f.name, size: f.size })));
     document.querySelectorAll("#p-case [data-unlink]").forEach((b) => armed(b, async () => redraw((await post("/previews", { linkId: b.dataset.unlink, remove: true })).job)));
 
     // 3D links for the customer
@@ -858,7 +888,7 @@
     box.innerHTML = head + `<p class="muted" style="margin:0 0 12px;line-height:1.6">Tài khoản khách hàng: chỉ thấy trang web và cổng khách hàng, bị khóa khu làm việc.</p>
       <label class="field-label" for="caRole">Vai trò khi cấp quyền</label>
       <select class="input" id="caRole">${Object.entries(d.roles).map(([k, r]) => `<option value="${esc(k)}"${k === "designer" ? " selected" : ""}>${esc(r.label)}</option>`).join("")}</select>
-      <button class="btn btn-primary small" type="button" id="caGrant" style="margin-top:12px">Cấp quyền khu làm việc</button><p class="hint" style="margin:8px 0 0">Bấm 2 lần để xác nhận.</p>`;
+      <button class="btn btn-primary small" type="button" id="caGrant" style="margin-top:12px">Cấp quyền khu làm việc</button>`;
     armed($("caGrant"), async () => {
       await api("/api/staff", { method: "POST", body: { email, role: $("caRole").value, perms: null, active: true, name: (u && u.name) || "" } });
       staffData = null; loadTeam();
@@ -870,7 +900,7 @@
   /* ------------------------------------------------------------ staff and permissions */
   let staffData = null, roleDraft = null;
   async function drawStaff() {
-    setBand("Nhân sự & phân quyền", "Ai vào được khu làm việc và được làm gì");
+    setBand("Nhân sự & phân quyền", "");
     const host = $("p-staff");
     if (!staffData) host.innerHTML = D8.skel.card(5) + D8.skel.card(6);
     try {
@@ -920,13 +950,13 @@
       </tbody></table></div>`;
     host.innerHTML = `<section class="card"><div class="card-head"><div><h2 class="h-caps">Nhân sự</h2><p class="muted" style="margin:6px 0 0;font-size:13px;line-height:1.6">Người đăng nhập Google bằng email trong danh sách này vào được khu làm việc với quyền của vai trò. Người khác chỉ là khách hàng. Quyền đổi có hiệu lực trong vòng vài giây.</p></div></div>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nhân sự</th><th>Vai trò</th><th>Quyền</th><th>Đăng nhập gần nhất</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-        <form class="add-row" id="stAdd"><input class="input" type="email" id="stEmail" placeholder="Email Google của nhân sự mới" required autocomplete="off"><select class="input" id="stRole">${roleOpts("designer")}</select><button class="btn btn-primary" type="submit">Thêm nhân sự</button></form>
+        <form class="add-row" id="stAdd"><input class="input" type="email" id="stEmail" placeholder="Email Google của nhân sự là gì?" required autocomplete="off"><select class="input" id="stRole">${roleOpts("designer")}</select><button class="btn btn-primary" type="submit">Thêm nhân sự</button></form>
         <p class="error" id="stErr" hidden></p></section>
       ${staffData.accounts ? `<section class="card" id="stAccounts"><div class="card-head"><div><h2 class="h-caps">Cấp quyền cho tài khoản khách</h2><p class="muted" style="margin:6px 0 0;font-size:13px;line-height:1.6">Tài khoản đã đăng nhập Google ở cổng khách hàng nhưng chưa được cấp quyền: chỉ thấy trang web và cổng khách hàng, bị khóa khu làm việc. Chọn vai trò rồi bấm <b>Cấp quyền</b> (bấm 2 lần để xác nhận) để đưa vào nhân sự.</p></div></div>
-        <input class="input" id="acQ" type="search" placeholder="Tìm theo tên, email, labo / phòng khám" autocomplete="off" style="margin-bottom:6px"><div id="acList"></div></section>` : ""}
-      <section class="card"><div class="card-head"><div><h2 class="h-caps">Vai trò &amp; quyền</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Tick quyền cho từng vai trò. Thêm vai trò mới (ví dụ Trưởng nhóm) nếu cần.</p></div></div>
+        <input class="input" id="acQ" type="search" placeholder="Tìm tài khoản nào?" autocomplete="off" style="margin-bottom:6px"><div id="acList"></div></section>` : ""}
+      <section class="card"><div class="card-head"><div><h2 class="h-caps">Vai trò &amp; quyền</h2></div></div>
         ${matrix}
-        <div class="add-row"><input class="input" id="rNew" placeholder="Tên vai trò mới, ví dụ Trưởng nhóm" maxlength="60"><button class="btn small" type="button" id="rAdd">+ Thêm vai trò</button><button class="btn btn-primary" type="button" id="rSave">Lưu vai trò &amp; quyền</button></div>
+        <div class="add-row"><input class="input" id="rNew" placeholder="Tên vai trò mới là gì?" maxlength="60"><button class="btn small" type="button" id="rAdd">+ Thêm vai trò</button><button class="btn btn-primary" type="button" id="rSave">Lưu vai trò &amp; quyền</button></div>
         <p class="error" id="rErr" hidden></p></section>`;
 
     const err = (m) => { $("stErr").textContent = m; $("stErr").hidden = !m; };
@@ -1286,12 +1316,14 @@
       const data = await api("/api/messages");
       messages = data.items.filter((m) => !removedMsgs.has(m.id)); msgsLoaded = true;
       renderMessages();
+      noteMessages();
       $("msgError").hidden = true;
     } catch (err) { if (!quiet) { $("msgError").textContent = err.message; $("msgError").hidden = false; } }
   }
   $("msgReload").addEventListener("click", () => refreshMessages());
-  $("msgReadAll").addEventListener("click", () => { messages.forEach((m) => seenMsgs.add(m.id)); saveSeen(); renderMessages(); });
-  function markSeen(id) { if (!seenMsgs.has(id)) { seenMsgs.add(id); saveSeen(); renderMessages(); } }
+  $("msgReadAll").addEventListener("click", () => { messages.forEach((m) => seenMsgs.add(m.id)); saveSeen(); renderMessages(); noteMessages(); });
+  function markSeen(id) { if (!seenMsgs.has(id)) { seenMsgs.add(id); saveSeen(); renderMessages(); noteMessages(); } }
+  function noteMessages() { const n = messages.filter((m) => !seenMsgs.has(m.id)).length; D8.notify.set("messages", n ? [{ key: "msg", n, text: "tin nhắn mới từ trang web", href: "#messages" }] : []); }
   function renderMessages() {
     const ul = $("msgList");
     ul.innerHTML = "";

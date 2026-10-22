@@ -80,6 +80,8 @@
     window.scrollTo(0, 0);
     if (h === "#/new") return renderNew();
     if (h === "#/profile") return renderProfile();
+    const fm = h.match(/^#\/\?f=(all|active|review|done)$/);
+    if (fm) filter = fm[1];
     if ((m = h.match(/^#\/case\/([^/]+)$/)) && ID_RE.test(m[1])) return renderCase(m[1]);
     return renderList();
   }
@@ -148,10 +150,19 @@
       (filter === "review" && x.status === "review") || (filter === "done" && x.status === "delivered")) &&
       (!query || (x.id + " " + x.title).toLowerCase().includes(query.toLowerCase()));
     const shown = items.filter(match);
+    // what needs the customer (the bell, and a red dot on the case)
+    const needs = (x) => x.status === "review" || x.status === "needs_info" || x.pay === "due" || (x.lastBy === "admin" && (seen[x.id] || 0) < x.updated);
+    const nCount = (f) => items.filter(f).length;
+    D8.notify.set("cases", [
+      { key: "review", n: nCount((x) => x.status === "review"), text: T("nt.review"), href: "#/?f=review" },
+      { key: "info", n: nCount((x) => x.status === "needs_info"), text: T("nt.info"), href: "#/?f=active" },
+      { key: "due", n: nCount((x) => x.pay === "due"), text: T("nt.due"), href: "#/?f=all" },
+      { key: "reply", n: nCount((x) => x.lastBy === "admin" && (seen[x.id] || 0) < x.updated), text: T("nt.reply"), href: "#/?f=all" },
+    ]);
     const rows = shown.map((x) => {
       const fresh = x.lastBy === "admin" && (seen[x.id] || 0) < x.updated;
-      return `<a class="pt-row" href="#/case/${esc(x.id)}">
-        <div><span class="id">${esc(x.order || x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
+      return `<a class="pt-row${needs(x) ? " need" : ""}" href="#/case/${esc(x.id)}">
+        <div>${needs(x) ? '<span class="attn-dot" aria-hidden="true"></span>' : ""}<span class="id">${esc(x.order || x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
         <span class="meta">${esc(T("p.sent").replace("{d}", D8.fmtDate(x.created)))} · ${esc(T("p.updated").replace("{t}", D8.ago(x.updated)))}</span>
         <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${x.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>` : x.pay === "check" ? `<span class="pay pay-check">${esc(T("bill.check"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
     }).join("");
@@ -294,7 +305,7 @@
         <div>
           <section class="card" aria-labelledby="pvH">
             <h2 class="h-caps" id="pvH">${esc(T("p.pv.h"))}</h2>
-            <p class="sub">${esc(previews ? T("p.pv.sub") : T("p.pv.none"))}</p>
+            ${previews ? "" : `<p class="sub">${esc(T("p.pv.none"))}</p>`}
             ${previews}${approveBox}
           </section>
           <section class="card" aria-labelledby="flH">
@@ -311,7 +322,7 @@
           </section>
           <section class="card" aria-labelledby="msH" id="messages">
             <h2 class="h-caps" id="msH">${esc(T("p.ms.h"))}</h2>
-            <p class="sub">${esc(T("p.ms.sub"))} <a href="${esc(D8.waLink(T("p.ms.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">${esc(T("p.ms.wa"))}</a></p>
+            <p class="sub"><a href="${esc(D8.waLink(T("p.ms.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">${esc(T("p.ms.wa"))}</a></p>
             <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> ${esc(T("tr.auto"))}</label><button type="button" data-tr-all hidden>${esc(T("tr.all"))}</button></div>
             <div class="thread" id="thread">${thread || `<p class="muted" style="margin:0">${esc(T("p.ms.none"))}</p>`}</div>
             <form class="compose" id="composeForm">
