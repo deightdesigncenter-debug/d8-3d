@@ -265,16 +265,35 @@ ${list.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" Cont
 
   /* ---------------------------------------------------------------- helpers for imports */
   const fold = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9%]+/g, " ").trim();
-  // A typed date in any common form → "YYYY-MM-DD" (day first, as in Vietnam: 05/08/2026 = 5 Aug 2026)
-  function day(v) {
+  // A typed date in any common form → "YYYY-MM-DD". Day first, as in Vietnam (05/08/2026 = 5 Aug 2026), unless
+  // mdy is set (US sheets: 10/21/2026); a value that only makes sense the other way round (21/10 vs 10/21) is read that way.
+  function day(v, mdy) {
     if (v == null || v === "") return "";
     if (typeof v === "number") return v > 20000 && v < 80000 ? dayOfSerial(v) : "";
     const s = String(v).trim();
     let m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(s);
     if (m) return m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
     m = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/.exec(s);
-    if (m) { const y = m[3].length === 2 ? "20" + m[3] : m[3]; return y + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0"); }
+    if (m) {
+      const y = m[3].length === 2 ? "20" + m[3] : m[3];
+      let d = +m[1], mo = +m[2];
+      if (mdy) [d, mo] = [mo, d];
+      if (mo > 12 && d <= 12) [d, mo] = [mo, d];
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) return "INVALID:" + s;
+      return y + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+    }
     return "INVALID:" + s;
+  }
+  // Which way a column of a/b/yyyy dates is written: "mdy" when some value only fits month-first, else "dmy".
+  function dateOrder(values) {
+    let dmy = false, mdy = false;
+    for (const v of values) {
+      const m = /^(\d{1,2})[-/.](\d{1,2})[-/.]\d{2,4}/.exec(String(v == null ? "" : v).trim());
+      if (!m) continue;
+      if (+m[1] > 12) dmy = true;
+      if (+m[2] > 12) mdy = true;
+    }
+    return mdy && !dmy ? "mdy" : "dmy";
   }
   // Header row → index of each wanted column; wanted = { key: ["header name", "other name"...] }
   function mapHeader(row, wanted) {
@@ -287,5 +306,5 @@ ${list.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" Cont
     }
     return idx;
   }
-  window.D8X = { write, build, read, fold, day, mapHeader };
+  window.D8X = { write, build, read, fold, day, dateOrder, mapHeader };
 })();
