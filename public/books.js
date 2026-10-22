@@ -11,23 +11,27 @@
   const fmtDay = (d) => (d ? d.slice(8, 10) + "/" + d.slice(5, 7) + "/" + d.slice(0, 4) : "");
   const vnToday = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
   const addDays = (d, n) => new Date(Date.parse(d + "T00:00:00Z") + n * 86400000).toISOString().slice(0, 10);
-  const KINDS = { clinic: "Phòng khám", lab: "Labo", doctor: "Bác sĩ", platform: "Nền tảng", other: "Khác" };
-  const UNIT = { unit: "răng / đơn vị", arch: "hàm", case: "ca", hour: "giờ" };
+  // customer kinds: DR (doctor / clinic) or LAB codes; older kinds are shown in the DR group
+  const KINDS = { doctor: "Bác sĩ / Phòng khám", lab: "Labo", clinic: "Bác sĩ / Phòng khám", platform: "Nền tảng", other: "Khác" };
+  const KIND_PICK = ["doctor", "lab"];
+  const AUTO_CODE = /^(DR|LAB)\d{6,8}$/;
+  const UNIT = { unit: "răng / đơn vị", arch: "hàm", bridge: "cầu", set: "bộ", case: "ca", hour: "giờ" };
+  const TIER = { "": "Giá niêm yết (MAX)", mid: "Mức 2 (MID)", min: "Mức 3 (MIN)" };
   const noDb = (host, err) => { host.innerHTML = D8.noDbPanel(err); };
   const isNoDb = (err) => err && err.data && err.data.code === "no_db";
 
   /* ============================================================ customers */
   async function drawCustomers() {
     const W = ws();
-    W.setBand("Khách hàng", "Phòng khám, labo, bác sĩ: mã khách, tiền tệ, công nợ", {
+    W.setBand("Khách hàng", "Bác sĩ, phòng khám và labo", {
       right: `<div class="band-btns">${can("customers.edit") ? '<a class="btn btn-cream small" href="#customers/new">+ Khách mới</a><a class="btn btn-light small" href="#import/customers">Nhập Excel</a>' : ""}${can("export.csv") ? '<button class="btn btn-light small" type="button" id="cuExport">Xuất Excel</button>' : ""}</div>` });
     W.show("p-customers", true);
     const host = $("p-customers");
-    host.innerHTML = `<section class="card"><div class="card-head"><div><h2 class="h-caps">Danh sách khách hàng</h2><p class="muted" style="margin:6px 0 0;font-size:13px">Mỗi khách một mã (VD: JAKE, ANNIE, VCAD). Mã khách dùng khi nhập Excel và trong bảng giá riêng.</p></div>
-        <input class="input pt-search" type="search" id="cuQ" placeholder="Tìm mã, tên, quốc gia" aria-label="Tìm khách hàng"></div>
+    host.innerHTML = `<div id="cuRecode"></div><section class="card"><div class="card-head"><h2 class="h-caps">Danh sách khách hàng</h2>
+        <input class="input pt-search" type="search" id="cuQ" placeholder="Tìm khách nào?" aria-label="Tìm khách hàng"></div>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mã</th><th>Khách hàng</th><th>Loại</th><th>Tiền tệ</th><th class="num">Số đơn</th>${can("billing.view") ? '<th class="num">Doanh thu</th><th class="num">Còn nợ</th>' : ""}<th>Đơn gần nhất</th></tr></thead>
         <tbody id="cuBody">${D8.skel.tableRows(can("billing.view") ? 8 : 6, 4)}</tbody></table></div></section>
-      <section class="card" id="cuLogins"><h2 class="h-caps">Tài khoản cổng khách hàng (Google)</h2><p class="sub">Khách đăng nhập cổng khách hàng được tự tạo hồ sơ. Gắn tài khoản vào khách có sẵn để gom đơn về đúng khách.</p><div id="cuLoginList">${D8.skel.rows(2)}</div></section>`;
+      <section class="card" id="cuLogins"><h2 class="h-caps">Tài khoản cổng khách hàng</h2><div id="cuLoginList">${D8.skel.rows(2)}</div></section>`;
     W.show("p-customers");
     let list;
     try { list = await D8.book.customers(true); }
@@ -40,11 +44,21 @@
         <td>${esc(KINDS[c.kind] || c.kind)}</td><td>${esc(c.currency)}</td><td class="num">${c.orders ? `<a href="#orders?customer=${c.id}&status=">${c.orders}</a>` : "0"}</td>
         ${m ? `<td class="num">${esc(money(c.billed || 0, c.currency))}</td><td class="num ${c.due > 0 ? "due" : ""}">${esc(money(c.due || 0, c.currency))}</td>` : ""}
         <td>${c.last_order ? esc(D8.fmtDate(c.last_order)) : "—"}</td></tr>`).join("")
-        : `<tr><td colspan="8" class="muted">${list.length ? "Không có khách nào khớp." : "Chưa có khách hàng. Bấm + Khách mới hoặc nhập từ Excel."}</td></tr>`;
+        : `<tr><td colspan="8" class="muted">${list.length ? "Không có khách nào khớp." : "Chưa có khách hàng."}</td></tr>`;
       $("cuBody").querySelectorAll("tr[data-href]").forEach((tr) => tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = tr.dataset.href; }));
     };
     $("cuQ").addEventListener("input", draw);
     draw();
+    // customers still on an old code (JAKE, VCAD…): one click gives them DR / LAB codes
+    const old = list.filter((c) => !AUTO_CODE.test(c.code));
+    if (old.length && can("customers.edit")) {
+      $("cuRecode").innerHTML = `<div class="pt-alert info"><div><b>${old.length} khách đang dùng mã cũ</b> (${esc(old.slice(0, 4).map((c) => c.code).join(", "))}${old.length > 4 ? "…" : ""}).
+        <div class="wf-actions"><button class="btn small" type="button" id="cuRecodeGo">Đổi sang mã DR / LAB</button></div></div></div>`;
+      W.armed($("cuRecodeGo"), async () => {
+        const r = await api("/api/customers/recode", { method: "POST" });
+        D8.book.drop(); D8.toast("Đã đổi mã " + r.changed.length + " khách."); drawCustomers();
+      });
+    }
     const ex = $("cuExport");
     if (ex) ex.addEventListener("click", () => D8X.write([{ name: "Khách hàng", cols: [{ h: "Mã khách", w: 12 }, { h: "Tên khách", w: 32 }, { h: "Loại", w: 12 }, { h: "Quốc gia", w: 12 }, { h: "Tiền tệ", w: 8 },
       { h: "Người liên hệ", w: 20 }, { h: "Email", w: 26 }, { h: "Điện thoại / WhatsApp", w: 18 }, { h: "Địa chỉ", w: 26 }, { h: "Điều khoản thanh toán", w: 22 }, { h: "Ghi chú", w: 30 },
@@ -58,7 +72,7 @@
       $("cuLoginList").innerHTML = u.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Tài khoản</th><th>Lab / phòng khám</th><th>Thuộc khách</th><th>Lần gần nhất</th></tr></thead><tbody>
         ${u.map((x) => { const c = byLogin.get(x.email); return `<tr><td><a href="#customers/${encodeURIComponent(x.email)}"><b>${esc(x.name || "—")}</b></a><small>${esc(x.email)}</small></td><td>${esc(x.practice || "—")}</td>
           <td>${can("customers.edit") ? `<select class="input" data-login="${esc(x.email)}" style="height:38px;min-width:180px"><option value="">— Chưa gắn —</option>${list.map((k) => `<option value="${k.id}"${c && c.id === k.id ? " selected" : ""}>${esc(k.code + " — " + k.name)}</option>`).join("")}</select>` : c ? esc(c.code) : "—"}</td>
-          <td>${esc(D8.ago(x.last))}</td></tr>`; }).join("")}</tbody></table></div>` : '<p class="muted" style="margin:0">Chưa có ai đăng nhập cổng khách hàng.</p>';
+          <td>${esc(D8.ago(x.last))}</td></tr>`; }).join("")}</tbody></table></div>` : '<p class="muted" style="margin:0">Chưa có tài khoản nào.</p>';
       $("cuLoginList").querySelectorAll("[data-login]").forEach((s) => s.addEventListener("change", async () => {
         if (!s.value) return;
         try { await api(`/api/customers/${s.value}/logins`, { method: "POST", body: { email: s.dataset.login } }); D8.toast("Đã gắn tài khoản. Các đơn của tài khoản này chuyển về khách đã chọn."); D8.book.drop(); drawCustomers(); }
@@ -67,29 +81,43 @@
     } catch { $("cuLogins").hidden = true; }
   }
 
+  // the customer code is given by the system: DR / LAB + year + number (DR202601), its prefix follows the kind
   function custForm(c) {
     const v = (k) => esc((c && c[k]) || "");
+    const kind = c && KIND_PICK.includes(c.kind) ? c.kind : c && c.kind === "lab" ? "lab" : "doctor";
     return `<form id="cfForm" class="cf"><div class="of-grid2">
-      <div><label class="field-label" for="cfCode">Mã khách</label><input class="input" id="cfCode" maxlength="16" value="${v("code")}" required placeholder="VD: JAKE" autocomplete="off" style="text-transform:uppercase"><p class="hint">Chữ in hoa, số, dấu - . _ (tối đa 16 ký tự).</p></div>
-      <div><label class="field-label" for="cfName">Tên khách</label><input class="input" id="cfName" maxlength="120" value="${v("name")}" required placeholder="VD: Dr Jake – Colorado"></div>
-      <div><label class="field-label" for="cfKind">Loại</label><select class="input" id="cfKind">${Object.entries(KINDS).map(([k, l]) => `<option value="${k}"${(c ? c.kind : "clinic") === k ? " selected" : ""}>${l}</option>`).join("")}</select></div>
-      <div><label class="field-label" for="cfCur">Tiền tệ</label><select class="input" id="cfCur">${["USD", "VND"].map((x) => `<option${(c ? c.currency : "USD") === x ? " selected" : ""}>${x}</option>`).join("")}</select><p class="hint">Giá và công nợ của khách tính theo tiền tệ này.</p></div>
-      <div><label class="field-label" for="cfCountry">Quốc gia</label><input class="input" id="cfCountry" maxlength="60" value="${v("country")}"></div>
-      <div><label class="field-label" for="cfContact">Người liên hệ</label><input class="input" id="cfContact" maxlength="100" value="${v("contact")}"></div>
-      <div><label class="field-label" for="cfEmail">Email</label><input class="input" id="cfEmail" maxlength="160" value="${v("email")}"></div>
-      <div><label class="field-label" for="cfPhone">Điện thoại / WhatsApp</label><input class="input" id="cfPhone" maxlength="60" value="${v("phone")}"></div>
-      <div class="span2"><label class="field-label" for="cfAddr">Địa chỉ</label><input class="input" id="cfAddr" maxlength="300" value="${v("address")}"></div>
-      <div class="span2"><label class="field-label" for="cfTerms">Điều khoản thanh toán</label><input class="input" id="cfTerms" maxlength="300" value="${v("terms")}" placeholder="VD: trả từng ca qua Payoneer; gộp cuối tháng; ứng trước 200 USD"></div>
-      <div class="span2"><label class="field-label" for="cfNote">Ghi chú (nội bộ)</label><textarea class="input" id="cfNote" rows="2" maxlength="1000">${v("note")}</textarea></div>
-      <label class="check span2" style="margin:0"><input type="checkbox" id="cfActive"${!c || c.active ? " checked" : ""}> Đang hợp tác (bỏ chọn để ẩn khỏi danh sách chọn khi nhập đơn)</label>
+      <div><label class="field-label" for="cfKind">Loại khách</label><select class="input" id="cfKind">${KIND_PICK.map((k) => `<option value="${k}"${k === kind ? " selected" : ""}>${KINDS[k]}</option>`).join("")}</select></div>
+      <div><span class="field-label">Mã khách</span><div class="of-code cf-code"><output id="cfCode">${v("code") || "…"}</output></div></div>
+      <div class="span2"><label class="field-label" for="cfName">Tên khách</label><input class="input" id="cfName" maxlength="120" value="${v("name")}" required placeholder="Tên bác sĩ, phòng khám hoặc labo là gì?"></div>
+      <div><label class="field-label" for="cfCur">Tiền tệ</label><select class="input" id="cfCur">${["USD", "VND"].map((x) => `<option${(c ? c.currency : "USD") === x ? " selected" : ""}>${x}</option>`).join("")}</select></div>
+      <div><label class="field-label" for="cfCountry">Quốc gia</label><input class="input" id="cfCountry" maxlength="60" value="${v("country")}" placeholder="Khách ở nước nào?"></div>
+      <div><label class="field-label" for="cfContact">Người liên hệ</label><input class="input" id="cfContact" maxlength="100" value="${v("contact")}" placeholder="Liên hệ với ai?"></div>
+      <div><label class="field-label" for="cfEmail">Email</label><input class="input" id="cfEmail" maxlength="160" value="${v("email")}" placeholder="Email của khách là gì?"></div>
+      <div><label class="field-label" for="cfPhone">Điện thoại / WhatsApp</label><input class="input" id="cfPhone" maxlength="60" value="${v("phone")}" placeholder="Số điện thoại / WhatsApp?"></div>
+      <div><label class="field-label" for="cfAddr">Địa chỉ</label><input class="input" id="cfAddr" maxlength="300" value="${v("address")}" placeholder="Địa chỉ ở đâu?"></div>
+      <div class="span2"><label class="field-label" for="cfTerms">Điều khoản thanh toán</label><input class="input" id="cfTerms" maxlength="300" value="${v("terms")}" placeholder="Khách thanh toán theo cách nào?"></div>
+      <div class="span2"><label class="field-label" for="cfNote">Ghi chú nội bộ</label><textarea class="input" id="cfNote" rows="3" maxlength="1000" placeholder="Khách này có đặc điểm gì cần lưu ý?">${v("note")}</textarea></div>
+      <label class="check span2" style="margin:0"><input type="checkbox" id="cfActive"${!c || c.active ? " checked" : ""}> Đang hợp tác</label>
       </div><div class="wf-actions"><button class="btn btn-primary" type="submit">${c ? "Lưu hồ sơ" : "Tạo khách"}</button></div><p class="error" id="cfErr" hidden></p></form>`;
   }
+  function wireCustCode(c) {
+    const out = $("cfCode"), kindSel = $("cfKind");
+    if (!out || !kindSel) return;
+    const show = async () => {
+      const pre = kindSel.value === "lab" ? "LAB" : "DR";
+      if (c) { if (AUTO_CODE.test(c.code)) out.textContent = c.code.replace(/^(DR|LAB)/, pre); return; }
+      try { out.textContent = (await api("/api/customers/next?kind=" + kindSel.value)).code; } catch { out.textContent = pre + "…"; }
+    };
+    kindSel.addEventListener("change", show);
+    show();
+  }
   function wireCustForm(c, onSaved) {
+    wireCustCode(c);
     $("cfForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const b = e.submitter || $("cfForm").querySelector("[type=submit]"); D8.busy(b, true); $("cfErr").hidden = true;
       try {
-        const r = await api("/api/customers", { method: "POST", body: { ...(c ? { id: c.id } : {}), code: $("cfCode").value.trim(), name: $("cfName").value.trim(), kind: $("cfKind").value, currency: $("cfCur").value,
+        const r = await api("/api/customers", { method: "POST", body: { ...(c ? { id: c.id, code: c.code } : {}), name: $("cfName").value.trim(), kind: $("cfKind").value, currency: $("cfCur").value,
           country: $("cfCountry").value.trim(), contact: $("cfContact").value.trim(), email: $("cfEmail").value.trim(), phone: $("cfPhone").value.trim(), address: $("cfAddr").value.trim(),
           terms: $("cfTerms").value.trim(), note: $("cfNote").value.trim(), active: $("cfActive").checked } });
         D8.book.drop(); onSaved(r.customer);
@@ -102,7 +130,7 @@
     W.show("p-cust");
     $("p-cust").innerHTML = `<section class="card" style="max-width:880px">${custForm(null)}</section>`;
     wireCustForm(null, (c) => { D8.toast("Đã tạo khách " + c.code + "."); location.hash = "#cust/" + c.id; });
-    $("cfCode").focus();
+    $("cfName").focus();
   }
 
   async function drawCustomer(id) {
@@ -132,27 +160,32 @@
         <section class="card">${tiles}</section>
         <section class="card"><div class="card-head-row"><h2 class="h-caps">Đơn hàng gần đây</h2><a class="btn small" href="#orders?customer=${c.id}&status=">Xem tất cả ${orders.count} đơn</a></div>
           ${orders.items.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mã đơn</th><th>Ngày nhận</th><th>Bệnh nhân</th><th>Hạng mục</th><th>Trạng thái</th>${m ? '<th class="num">Thành tiền</th><th class="num">Còn nợ</th>' : ""}</tr></thead><tbody>${orderRows}</tbody></table></div>` : '<p class="muted" style="margin:0">Chưa có đơn nào.</p>'}</section>
-        ${prods ? `<section class="card"><div class="card-head-row"><h2 class="h-caps">Bảng giá riêng (${esc(c.currency)})</h2><div class="band-btns"><a class="btn small" href="#import/prices">Nhập Excel</a></div></div>
-          <p class="sub">Chỉ quản trị thấy. Để trống thì dùng giá mặc định (hiện mờ). KTV không bao giờ thấy bảng giá.</p><div id="cuPrices"></div></section>` : ""}
+        ${prods ? `<section class="card" id="cuPriceCard"><div class="card-head-row"><h2 class="h-caps">Bảng giá của khách (${esc(c.currency)})</h2><div class="band-btns"><button class="btn small" type="button" id="cuPlImp">Nhập bảng giá riêng (Excel)</button></div></div>
+          <div class="of-grid2 tight cu-tier"><div><label class="field-label" for="cuTier">Mức giá</label><select class="input" id="cuTier">${Object.entries(TIER).map(([k, l]) => `<option value="${k}"${(c.tier || "") === k ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div></div>
+          <div id="cuPlBox"></div><div id="cuPrices"></div></section>` : ""}
         ${m ? `<section class="card"><div class="card-head-row"><h2 class="h-caps">Sổ thanh toán</h2>${can("billing.edit") ? '<button class="btn small" type="button" id="cpAdd">+ Ghi nhận tiền</button>' : ""}</div>
-          <p class="sub">Tiền khách trả (từng đơn, gộp nhiều đơn hoặc ứng trước). Tiền không gắn đơn tự trừ vào các đơn cũ nhất còn nợ; phần dư là tiền ứng trước còn lại.</p>
           <form id="cpForm" hidden class="o-payform"><div class="of-grid3 tight"><div><label class="field-label" for="cpDay">Ngày nhận tiền</label><input class="input" type="date" id="cpDay" value="${vnToday()}"></div>
             <div><label class="field-label" for="cpAmt">Số tiền (${esc(c.currency)})</label><input class="input" type="number" step="any" id="cpAmt" required></div>
             <div><label class="field-label" for="cpMethod">Hình thức</label><select class="input" id="cpMethod">${Object.entries(D8.PAY_METHOD).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select></div></div>
-            <div class="of-grid2 tight"><div><label class="field-label" for="cpOrder">Cho đơn (không bắt buộc)</label><input class="input" id="cpOrder" placeholder="Mã đơn, để trống = trả chung / ứng trước"></div>
-            <div><label class="field-label" for="cpRef">Mã giao dịch / ghi chú</label><input class="input" id="cpRef" maxlength="120"></div></div>
+            <div class="of-grid2 tight"><div><label class="field-label" for="cpOrder">Cho đơn</label><input class="input" id="cpOrder" placeholder="Tiền này trả cho mã đơn nào?"></div>
+            <div><label class="field-label" for="cpRef">Mã giao dịch / ghi chú</label><input class="input" id="cpRef" maxlength="120" placeholder="Mã giao dịch là gì?"></div></div>
             <div class="wf-actions"><button class="btn btn-primary small" type="submit">Lưu khoản thu</button></div><p class="error" id="cpErr" hidden></p></form>
           ${payRows ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Ngày</th><th class="num">Số tiền</th><th>Hình thức</th><th>Đơn</th><th>Ghi chú</th><th></th></tr></thead><tbody>${payRows}</tbody></table></div>` : '<p class="muted" style="margin:0">Chưa có khoản thu nào.</p>'}</section>` : ""}
       </div><aside>
         <section class="card"><h2 class="h-caps" style="margin-bottom:14px">Hồ sơ khách</h2>${can("customers.edit") ? custForm(c) : `<dl class="dl">${[["Mã", c.code], ["Tên", c.name], ["Loại", KINDS[c.kind]], ["Tiền tệ", c.currency], ["Quốc gia", c.country], ["Liên hệ", c.contact], ["Email", c.email], ["Điện thoại", c.phone], ["Thanh toán", c.terms], ["Ghi chú", c.note]].filter((x) => x[1]).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>`}</section>
-        <section class="card"><h2 class="h-caps">Tài khoản cổng khách</h2><p class="sub">Đơn khách gửi qua cổng khách hàng bằng các email này tự vào khách này.</p>
+        <section class="card"><h2 class="h-caps">Tài khoản cổng khách</h2>
           ${d.logins.length ? `<ul class="logins">${d.logins.map((l) => `<li><span>${esc(l.email)}</span>${can("customers.edit") ? `<button class="iconbtn del" type="button" data-unlink="${esc(l.email)}" aria-label="Bỏ gắn">${D8.ORDER_ICON.x}</button>` : ""}</li>`).join("")}</ul>` : '<p class="muted" style="margin:0 0 10px">Chưa gắn tài khoản nào.</p>'}
-          ${can("customers.edit") ? `<form class="add-row" id="clAdd" style="margin-top:10px"><input class="input" type="email" id="clEmail" placeholder="Email Google của khách" required><button class="btn small" type="submit">Gắn</button></form>` : ""}
+          ${can("customers.edit") ? `<form class="add-row" id="clAdd" style="margin-top:10px"><input class="input" type="email" id="clEmail" placeholder="Email Google của khách là gì?" required><button class="btn small" type="submit">Gắn</button></form>` : ""}
           ${can("customers.edit") && !d.stats.some((s) => s.orders || s.paid || s.credit) ? `<button class="btn small btn-danger" type="button" id="cuDel" style="margin-top:16px">Xóa khách này</button>` : ""}</section>
       </aside></div>`;
     host.querySelectorAll("tr[data-href]").forEach((tr) => tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = tr.dataset.href; }));
     if ($("cfForm")) wireCustForm(c, () => { D8.toast("Đã lưu hồ sơ."); drawCustomer(id); });
     if ($("cuPrices")) priceTable($("cuPrices"), { customer: c, prods, prices });
+    if ($("cuTier")) $("cuTier").addEventListener("change", async () => {
+      try { await api(`/api/customers/${c.id}/tier`, { method: "POST", body: { tier: $("cuTier").value } }); D8.toast("Khách " + c.code + " dùng " + TIER[$("cuTier").value] + "."); drawCustomer(id); }
+      catch (err) { D8.toast(err.message); }
+    });
+    if ($("cuPlImp")) $("cuPlImp").addEventListener("click", () => priceListImport($("cuPlBox"), { target: "customer", customer: c, label: "bảng giá riêng của " + c.code, currency: c.currency, onDone: () => drawCustomer(id) }));
     const add = $("cpAdd");
     if (add) add.addEventListener("click", () => { $("cpForm").hidden = !$("cpForm").hidden; if (!$("cpForm").hidden) $("cpAmt").focus(); });
     const pf = $("cpForm");
@@ -178,8 +211,8 @@
     const def = new Map((prices.defaults || []).filter((p) => p.currency === cur).map((p) => [p.product, p.price]));
     const rowsHtml = prods.filter((p) => p.active || own.has(p.code)).map((p) => `<tr><td><b>${esc(p.code)}</b><small>${esc(p.name)}</small></td><td>${esc(UNIT[p.unit] || p.unit)}</td>
       <td class="num"><input class="input" type="number" min="0" step="any" data-p="${esc(p.code)}" value="${own.has(p.code) ? esc(own.get(p.code)) : ""}" placeholder="${def.has(p.code) ? esc(def.get(p.code)) : "—"}" aria-label="Giá ${esc(p.code)}"></td></tr>`).join("");
-    host.innerHTML = prods.length ? `<div class="tbl-wrap"><table class="grid-tbl"><thead><tr><th>Mã hàng</th><th>Tính theo</th><th class="num">Giá riêng (${esc(cur)})</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
-      <div class="wf-actions"><button class="btn btn-primary small" type="button" data-save>Lưu bảng giá</button></div><p class="error" data-err hidden></p>` : '<p class="muted">Chưa có mã hàng. Tạo ở mục <a href="#catalog">Mã hàng &amp; bảng giá</a>.</p>';
+    host.innerHTML = prods.length ? `<div class="tbl-wrap scroll-y"><table class="grid-tbl"><thead><tr><th>Mã hàng</th><th>Tính theo</th><th class="num">Giá riêng (${esc(cur)})</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+      <div class="wf-actions"><button class="btn btn-primary small" type="button" data-save>Lưu bảng giá</button></div><p class="error" data-err hidden></p>` : '<p class="muted">Chưa có mã hàng.</p>';
     const save = host.querySelector("[data-save]");
     if (save) save.addEventListener("click", async () => {
       const items = [...host.querySelectorAll("[data-p]")].map((i) => ({ product: i.dataset.p, price: i.value.trim() === "" ? null : +i.value })).filter((x) => x.price !== null || own.has(x.product));
@@ -189,38 +222,43 @@
     });
   }
 
-  /* ============================================================ product codes, default prices, KTV pay */
+  /* ============================================================ product codes, price levels, KTV pay */
   async function drawCatalog() {
-    const W = ws();
-    W.setBand("Mã hàng & bảng giá", "Một danh mục mã hàng chung cho mọi khách; giá riêng từng khách; tiền công KTV", {
-      right: `<div class="band-btns"><a class="btn btn-light small" href="#import/products">Nhập mã hàng</a><a class="btn btn-light small" href="#import/prices">Nhập bảng giá</a></div>` });
+    const W = ws(), price = can("pricing.manage");
+    W.setBand("Mã hàng & bảng giá", "Giá niêm yết, mức 2, mức 3 và giá công KTV");
     W.show("p-catalog", true);
     const host = $("p-catalog");
     host.innerHTML = D8.skel.card(6);
-    let prods;
-    try { prods = await D8.book.products(true); } catch (err) { if (isNoDb(err)) return noDb(host, err); host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-    let draft = prods.map((p) => ({ ...p, price_usd: p.prices && p.prices.USD != null ? p.prices.USD : "", price_vnd: p.prices && p.prices.VND != null ? p.prices.VND : "" }));
+    let prods, tiers = {};
+    try {
+      prods = await D8.book.products(true);
+      if (price) { const all = await Promise.all(Object.keys(TIER).map((t) => api("/api/prices?tier=" + (t || "max")))); Object.keys(TIER).forEach((t, i) => { tiers[t] = all[i].prices; }); }
+    } catch (err) { if (isNoDb(err)) return noDb(host, err); host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+    let draft = prods.map((p) => ({ ...p }));
     const GROUPS = D8.SERVICES;
+    const tierTile = (t) => {
+      const list = tiers[t] || [], curs = [...new Set(list.map((x) => x.currency))], at = Math.max(0, ...list.map((x) => x.updated_at || 0));
+      return `<div class="pl-tile"><span class="eyebrow">${t ? "Mức " + (t === "mid" ? "2" : "3") : "Niêm yết"}</span><b>${esc(TIER[t])}</b>
+        <small>${list.length ? `${list.length} mã có giá · ${esc(curs.join(", "))}${at ? " · " + esc(D8.fmtDate(at)) : ""}` : "Chưa có giá"}</small>
+        <div class="band-btns"><button class="btn small" type="button" data-plimp="${t}">Nhập Excel</button>${list.length ? `<button class="btn small" type="button" data-plx="${t}">Xuất Excel</button>` : ""}</div></div>`;
+    };
     const draw = () => {
-      host.innerHTML = `<section class="card"><div class="card-head"><div><h2 class="h-caps">Danh mục mã hàng</h2><p class="muted" style="margin:6px 0 0;font-size:13px;line-height:1.6">Mã hàng dùng chung cho mọi khách, mọi đơn và mọi bảng giá. Giá mặc định áp dụng cho khách chưa có giá riêng. Mã đã dùng trong đơn thì không xóa được, chỉ ngưng dùng.</p></div>
-          <div class="band-btns"><button class="btn small" type="button" id="pcExport">Xuất Excel</button></div></div>
-        ${draft.length ? "" : `<div class="pt-alert info"><div>Chưa có mã hàng. Tạo nhanh danh mục mẫu 20 mã (mão, sườn, nhịp cầu, implant, All-on-X, máng…) rồi sửa lại theo cách bạn đặt mã, hoặc nhập từ Excel.<div class="wf-actions"><button class="btn btn-primary small" type="button" id="pcSample">Tạo danh mục mẫu</button><a class="btn small" href="#import/products">Nhập từ Excel</a></div></div></div>`}
-        <div class="tbl-wrap"><table class="grid-tbl pc-tbl"><thead><tr><th>Mã hàng</th><th>Tên tiếng Việt</th><th>Tên tiếng Anh</th><th>Nhóm dịch vụ</th><th>Tính theo</th><th class="num">Giá mặc định USD</th><th class="num">Giá mặc định VND</th><th>Dùng</th><th></th></tr></thead><tbody>
+      host.innerHTML = `${price ? `<section class="card"><div class="card-head-row"><h2 class="h-caps">Bảng giá</h2><div class="band-btns"><button class="btn small" type="button" id="pmExport">Xuất giá tất cả khách</button></div></div>
+          <div class="pl-tiles">${Object.keys(TIER).map(tierTile).join("")}</div><div id="plBox"></div></section>` : ""}
+        <section class="card"><div class="card-head-row"><h2 class="h-caps">Danh mục mã hàng</h2>${draft.length ? '<div class="band-btns"><button class="btn small" type="button" id="pcExport">Xuất Excel</button></div>' : ""}</div>
+        ${draft.length ? "" : `<div class="pt-alert info"><div>Chưa có mã hàng.${price ? `<div class="wf-actions"><button class="btn btn-primary small" type="button" id="pcFirst">Nhập bảng giá niêm yết</button></div>` : ""}</div></div>`}
+        ${draft.length ? `<div class="tbl-wrap scroll-y"><table class="grid-tbl pc-tbl"><thead><tr><th>Mã hàng</th><th>Tên tiếng Việt</th><th>Tên tiếng Anh</th><th>Nhóm dịch vụ</th><th>Tính theo</th><th>Dùng</th><th></th></tr></thead><tbody>
         ${draft.map((p, i) => `<tr class="${p.active ? "" : "off"}">
-          <td>${p.isNew ? `<input class="input" data-i="${i}" data-k="code" value="${esc(p.code)}" maxlength="24" style="text-transform:uppercase;width:110px" placeholder="VD: CR-ZR">` : `<b>${esc(p.code)}</b><button class="linkbtn" type="button" data-rename="${i}">đổi mã</button>`}</td>
-          <td><input class="input" data-i="${i}" data-k="name" value="${esc(p.name)}" maxlength="120"></td>
-          <td><input class="input" data-i="${i}" data-k="name_en" value="${esc(p.name_en || "")}" maxlength="120"></td>
+          <td>${p.isNew ? `<input class="input" data-i="${i}" data-k="code" value="${esc(p.code)}" maxlength="24" style="text-transform:uppercase;width:110px" placeholder="Mã nào?">` : `<b>${esc(p.code)}</b><button class="linkbtn" type="button" data-rename="${i}">đổi mã</button>`}</td>
+          <td><input class="input" data-i="${i}" data-k="name" value="${esc(p.name)}" maxlength="120" placeholder="Tên tiếng Việt?"></td>
+          <td><input class="input" data-i="${i}" data-k="name_en" value="${esc(p.name_en || "")}" maxlength="120" placeholder="Tên tiếng Anh?"></td>
           <td><select class="input" data-i="${i}" data-k="grp">${["", ...GROUPS].map((g) => `<option value="${esc(g)}"${g === (p.grp || "") ? " selected" : ""}>${esc(g ? D8.svcLabel(g) : "—")}</option>`).join("")}</select></td>
           <td><select class="input" data-i="${i}" data-k="unit">${Object.entries(UNIT).map(([k, l]) => `<option value="${k}"${k === p.unit ? " selected" : ""}>${l}</option>`).join("")}</select></td>
-          <td class="num"><input class="input" type="number" min="0" step="any" data-i="${i}" data-k="price_usd" value="${esc(p.price_usd)}"></td>
-          <td class="num"><input class="input" type="number" min="0" step="any" data-i="${i}" data-k="price_vnd" value="${esc(p.price_vnd)}"></td>
           <td><input type="checkbox" data-i="${i}" data-k="active"${p.active ? " checked" : ""} aria-label="Đang dùng"></td>
           <td>${p.isNew ? `<button class="iconbtn del" type="button" data-drop="${i}" aria-label="Bỏ dòng">${D8.ORDER_ICON.x}</button>` : `<button class="iconbtn del" type="button" data-del="${i}" aria-label="Xóa mã">${D8.ORDER_ICON.x}</button>`}</td></tr>`).join("")}
-        </tbody></table></div>
-        <div class="wf-actions"><button class="btn small" type="button" id="pcAdd">+ Thêm mã hàng</button><button class="btn btn-primary small" type="button" id="pcSave">Lưu danh mục</button></div><p class="error" id="pcErr" hidden></p></section>
-        <section class="card"><h2 class="h-caps">Bảng giá theo khách</h2><p class="sub">Mỗi khách một giá khác nhau. Sửa giá riêng trong trang từng khách, hoặc xuất bảng giá tất cả khách ra Excel (mỗi khách một cột), sửa, rồi nhập lại.</p>
-          <div class="wf-actions"><button class="btn small" type="button" id="pmExport">Xuất bảng giá tất cả khách (Excel)</button><a class="btn small" href="#import/prices">Nhập bảng giá từ Excel</a><a class="btn small" href="#customers">Mở danh sách khách</a></div></section>
-        ${can("techpay.manage") ? `<section class="card" id="trCard"><h2 class="h-caps">Tiền công KTV</h2><p class="sub">Chỉ quản trị thấy. Mỗi KTV một giá công theo mã hàng; “Mọi KTV” là giá chung khi KTV chưa có giá riêng. Công của mỗi đơn = số lượng × giá công của KTV làm đơn.</p><div id="trBody">${D8.skel.rows(2)}</div></section>` : ""}`;
+        </tbody></table></div>` : ""}
+        ${price ? `<div class="wf-actions"><button class="btn small" type="button" id="pcAdd">+ Thêm mã hàng</button>${draft.length ? '<button class="btn btn-primary small" type="button" id="pcSave">Lưu danh mục</button>' : ""}</div><p class="error" id="pcErr" hidden></p>` : ""}</section>
+        ${can("techpay.manage") ? `<section class="card" id="trCard"><h2 class="h-caps">Giá công KTV</h2><div id="trBody">${D8.skel.rows(2)}</div></section>` : ""}`;
       host.querySelectorAll("[data-i]").forEach((el) => el.addEventListener(el.type === "checkbox" || el.tagName === "SELECT" ? "change" : "input", () => {
         const p = draft[+el.dataset.i]; p[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value;
       }));
@@ -233,37 +271,109 @@
       }));
       host.querySelectorAll("[data-rename]").forEach((b) => b.addEventListener("click", async () => {
         const p = draft[+b.dataset.rename];
-        const to = (prompt("Mã mới cho " + p.code + " (các đơn, bảng giá cũ tự đổi theo):", p.code) || "").trim().toUpperCase();
+        const to = (prompt("Mã mới cho " + p.code + "?", p.code) || "").trim().toUpperCase();
         if (!to || to === p.code) return;
         try { await api("/api/products/rename", { method: "POST", body: { from: p.code, to } }); D8.toast("Đã đổi " + p.code + " → " + to + "."); D8.book.drop(); drawCatalog(); } catch (err) { D8.toast(err.message); }
       }));
-      $("pcAdd").addEventListener("click", () => { draft.push({ code: "", name: "", name_en: "", grp: "", unit: "unit", active: true, price_usd: "", price_vnd: "", isNew: true }); draw(); const ins = host.querySelectorAll('[data-k="code"]'); if (ins.length) ins[ins.length - 1].focus(); });
-      const sm = $("pcSample");
-      if (sm) sm.addEventListener("click", async () => { D8.busy(sm, true); try { await api("/api/products/sample", { method: "POST" }); D8.book.drop(); drawCatalog(); } catch (err) { D8.busy(sm, false); D8.toast(err.message); } });
-      $("pcSave").addEventListener("click", async (e) => {
+      const add = $("pcAdd");
+      if (add) add.addEventListener("click", () => { draft.push({ code: "", name: "", name_en: "", grp: "", unit: "unit", active: true, isNew: true }); draw(); const ins = host.querySelectorAll('[data-k="code"]'); if (ins.length) ins[ins.length - 1].focus(); });
+      const save = $("pcSave");
+      if (save) save.addEventListener("click", async (e) => {
         const b = e.currentTarget; $("pcErr").hidden = true; D8.busy(b, true);
         try {
-          await api("/api/products", { method: "POST", body: { items: draft.map((p, i) => ({ code: p.code, name: p.name, name_en: p.name_en, grp: p.grp, unit: p.unit, active: !!p.active, sort: (i + 1) * 10,
-            price_usd: p.price_usd === "" ? null : +p.price_usd, price_vnd: p.price_vnd === "" ? null : +p.price_vnd })) } });
+          await api("/api/products", { method: "POST", body: { items: draft.map((p, i) => ({ code: p.code, name: p.name, name_en: p.name_en, grp: p.grp, unit: p.unit, active: !!p.active, sort: p.sort || (i + 1) * 10 })) } });
           D8.book.drop(); D8.toast("Đã lưu danh mục."); drawCatalog();
         } catch (err) { D8.busy(b, false); $("pcErr").textContent = err.message; $("pcErr").hidden = false; }
       });
-      $("pcExport").addEventListener("click", () => D8X.write([productSheet(draft.filter((p) => !p.isNew))], "D8-ma-hang-" + vnToday() + ".xlsx"));
-      $("pmExport").addEventListener("click", async (e) => { const b = e.currentTarget; D8.busy(b, true); try { await D8X.write([await priceSheet()], "D8-bang-gia-" + vnToday() + ".xlsx"); } catch (err) { D8.toast(err.message); } D8.busy(b, false); });
+      const pe = $("pcExport");
+      if (pe) pe.addEventListener("click", () => D8X.write([productSheet(draft.filter((p) => !p.isNew))], "D8-ma-hang-" + vnToday() + ".xlsx"));
+      const pm = $("pmExport");
+      if (pm) pm.addEventListener("click", async (e) => { const b = e.currentTarget; D8.busy(b, true); try { await D8X.write([await priceSheet()], "D8-bang-gia-" + vnToday() + ".xlsx"); } catch (err) { D8.toast(err.message); } D8.busy(b, false); });
+      const imp = (t) => priceListImport($("plBox"), { target: t ? t : "list", label: TIER[t].toLowerCase(), onDone: () => { D8.book.drop(); drawCatalog(); } });
+      host.querySelectorAll("[data-plimp]").forEach((b) => b.addEventListener("click", () => imp(b.dataset.plimp)));
+      if ($("pcFirst")) $("pcFirst").addEventListener("click", () => imp(""));
+      host.querySelectorAll("[data-plx]").forEach((b) => b.addEventListener("click", () => D8X.write([tierSheet(b.dataset.plx, prods, tiers[b.dataset.plx])], "D8-" + (b.dataset.plx || "niem-yet") + "-" + vnToday() + ".xlsx")));
       if ($("trBody")) techRates($("trBody"), draft.filter((p) => !p.isNew));
     };
     draw();
   }
   const productSheet = (list) => ({ name: "Mã hàng", cols: [{ h: "Mã hàng", w: 12 }, { h: "Tên tiếng Việt", w: 34 }, { h: "Tên tiếng Anh", w: 34 }, { h: "Nhóm dịch vụ", w: 22 },
-    { h: "Tính theo", w: 14 }, { h: "Giá mặc định USD", t: "usd", w: 14 }, { h: "Giá mặc định VND", t: "vnd", w: 16 }, { h: "Đang dùng", w: 10 }, { h: "Ghi chú", w: 24 }],
-    rows: list.map((p) => [p.code, p.name, p.name_en, p.grp, UNIT[p.unit] || p.unit, p.price_usd === "" ? "" : +p.price_usd, p.price_vnd === "" ? "" : +p.price_vnd, p.active ? "Có" : "Không", p.note || ""]) });
+    { h: "Tính theo", w: 14 }, { h: "Đang dùng", w: 10 }, { h: "Ghi chú", w: 24 }],
+    rows: list.map((p) => [p.code, p.name, p.name_en, p.grp, UNIT[p.unit] || p.unit, p.active ? "Có" : "Không", p.note || ""]) });
+  // one price level in the owner's layout (No. · SERVICE · DESCRIPTION · UNIT · UNIT PRICE), with the code added so it imports back exactly
+  function tierSheet(t, prods, list) {
+    const cur = (list[0] || {}).currency || "USD", P = new Map(list.filter((x) => x.currency === cur).map((x) => [x.product, x.price]));
+    return { name: "PRICE LIST", cols: [{ h: "No.", t: "i", w: 6 }, { h: "Code", w: 10 }, { h: "SERVICE", w: 40 }, { h: "DESCRIPTION", w: 44 }, { h: "UNIT", w: 10 }, { h: "UNIT PRICE (" + cur + ")", t: cur === "VND" ? "vnd" : "usd", w: 16 }],
+      rows: prods.filter((p) => p.active).map((p, i) => [i + 1, p.code, p.name_en || p.name, p.name, { unit: "Tooth", arch: "Jaw", bridge: "Bridge", set: "Set", case: "Case", hour: "Hour" }[p.unit] || p.unit, P.has(p.code) ? P.get(p.code) : ""]) };
+  }
   async function priceSheet() {
     const [prods, custs, all] = await Promise.all([D8.book.products(true), D8.book.customers(true), api("/api/prices?all=1")]);
     const P = new Map(all.prices.map((p) => [p.customer_id + "|" + p.product + "|" + p.currency, p.price]));
     const cs = custs.filter((c) => c.active);
-    return { name: "Bảng giá", cols: [{ h: "Mã hàng", w: 12 }, { h: "Tên hàng", w: 30 }, { h: "Mặc định (USD)", t: "usd", w: 13 }, { h: "Mặc định (VND)", t: "vnd", w: 14 },
+    return { name: "Bảng giá", cols: [{ h: "Mã hàng", w: 12 }, { h: "Tên hàng", w: 30 }, { h: "Niêm yết (USD)", t: "usd", w: 13 }, { h: "Mức 2 (USD)", t: "usd", w: 12 }, { h: "Mức 3 (USD)", t: "usd", w: 12 },
       ...cs.map((c) => ({ h: c.code + " (" + c.currency + ")", t: c.currency === "VND" ? "vnd" : "usd", w: 13 }))],
-      rows: prods.map((p) => [p.code, p.name, P.get("0|" + p.code + "|USD") ?? "", P.get("0|" + p.code + "|VND") ?? "", ...cs.map((c) => P.get(c.id + "|" + p.code + "|" + c.currency) ?? "")]) };
+      rows: prods.map((p) => [p.code, p.name, P.get("0|" + p.code + "|USD") ?? "", P.get("-2|" + p.code + "|USD") ?? "", P.get("-3|" + p.code + "|USD") ?? "", ...cs.map((c) => P.get(c.id + "|" + p.code + "|" + c.currency) ?? "")]) };
+  }
+
+  /* ---- a price list file in the owner's layout → one list (list price, level 2, level 3, a customer's own, a KTV's pay) */
+  function parsePriceList(sheets) {
+    const pick = (head, re, not) => head.findIndex((x) => { const f = fold(x); return f && re.test(f) && !(not && not.test(f)); });
+    for (const sh of sheets) {
+      for (let h = 0; h < Math.min(25, sh.rows.length); h++) {
+        const head = sh.rows[h] || [];
+        const iSvc = pick(head, /^(service|services|dich vu|ten dich vu|ten tieng anh)$/), iPrice = pick(head, /price|gia|rate|cong/, /^(no|stt)$/);
+        if (iSvc < 0 || iPrice < 0) continue;
+        const iNo = pick(head, /^(no\.?|stt|so)$/), iDesc = pick(head, /^(description|mo ta|ten tieng viet)$/), iUnit = pick(head, /^(unit|don vi|tinh theo)$/, /price|gia/), iCode = pick(head, /^(code|ma|ma hang)$/);
+        const ph = String(head[iPrice] || ""), currency = /vnd|đ\b|dong/i.test(ph) ? "VND" : /usd|\$/i.test(ph) ? "USD" : "";
+        const items = [];
+        let group = "";
+        sh.rows.slice(h + 1).forEach((r, k) => {
+          const cell = (i) => (i < 0 || r[i] === undefined || r[i] === null ? "" : r[i]);
+          const svc = String(cell(iSvc)).trim(), desc = String(cell(iDesc)).trim(), first = String(cell(iNo >= 0 ? iNo : 0)).trim();
+          const filled = r.filter((x) => x !== null && x !== undefined && String(x).trim() !== "").length;
+          if (!svc && !desc) { if (filled === 1 && first && isNaN(+first)) group = first; return; }
+          const pv = cell(iPrice), price = typeof pv === "number" ? pv : /^[\d.,\s]+$/.test(String(pv).trim()) && String(pv).trim() ? +String(pv).replace(/[,\s]/g, "") : null;
+          items.push({ row: h + k + 2, no: iNo >= 0 && !isNaN(+first) ? +first : 0, code: iCode >= 0 ? String(cell(iCode)).trim() : "", group, service: svc, desc, unit: String(cell(iUnit)).trim(), price, raw: pv });
+        });
+        if (items.length) return { items, currency, sheet: sh.name };
+      }
+    }
+    throw new Error("Không thấy cột SERVICE và UNIT PRICE trong file.");
+  }
+  function priceListImport(box, { target, label, customer, email, currency, onDone }) {
+    const first = vnToday().slice(0, 8) + "01";
+    box.innerHTML = `<div class="pl-imp"><div class="card-head-row"><h3 class="h-caps">Nhập ${esc(label)}</h3><button class="iconbtn" type="button" data-close aria-label="Đóng">${D8.ORDER_ICON.x}</button></div>
+      <label class="drop compact"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg><strong>Chọn file bảng giá (.xlsx)</strong><input type="file" data-file accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+      <div class="of-grid2 tight">${target === "tech" ? `<div><label class="field-label">Tính lại công cho đơn nhận từ ngày</label><input class="input" type="date" data-from value="${first}"></div>` : ""}
+        ${target === "list" ? `<label class="check" style="align-self:end"><input type="checkbox" data-retire> Ngưng dùng mã không có trong file</label>` : ""}</div>
+      <p class="error" data-err hidden></p><div data-prev></div></div>`;
+    box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const q = (sel) => box.querySelector(sel), err = (m) => { q("[data-err]").textContent = m; q("[data-err]").hidden = !m; };
+    q("[data-close]").addEventListener("click", () => { box.innerHTML = ""; });
+    let parsed = null;
+    const body = (dry) => ({ target, dry, items: parsed.items, currency: parsed.currency || currency || (target === "tech" ? "VND" : "USD"),
+      ...(customer ? { customer_id: customer.id } : {}), ...(target === "tech" ? { email, from: q("[data-from]").value } : {}), ...(target === "list" ? { retire: q("[data-retire]").checked } : {}) });
+    q("[data-file]").addEventListener("change", async (e) => {
+      const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+      err(""); q("[data-prev]").innerHTML = D8.skel.rows(3);
+      try {
+        parsed = parsePriceList(await D8X.read(f));
+        if (customer && parsed.currency && parsed.currency !== customer.currency) throw new Error("File tính bằng " + parsed.currency + ", khách " + customer.code + " dùng " + customer.currency + ".");
+        const d = await api("/api/pricelist", { method: "POST", body: body(true) });
+        const cur = d.currency;
+        q("[data-prev]").innerHTML = `<div class="chips-row pl-sum"><span class="chip">${esc(f.name)}</span><span class="chip">${d.rows} dịch vụ</span><span class="chip">${d.priced} có giá (${esc(cur)})</span>${d.created ? `<span class="chip warn">${d.created} mã mới</span>` : ""}${d.noPrice ? `<span class="chip">${d.noPrice} báo giá theo ca</span>` : ""}</div>
+          <div class="tbl-wrap pl-prev"><table class="tbl"><thead><tr><th>No.</th><th>Mã hàng</th><th>Dịch vụ</th><th>Tính theo</th><th class="num">${target === "tech" ? "Giá công" : "Giá"} (${esc(cur)})</th></tr></thead><tbody>
+          ${d.items.map((x) => `<tr><td>${x.no || ""}</td><td><b>${esc(x.code)}</b>${x.isNew ? ' <span class="okind okind-portal">mới</span>' : ""}</td><td>${esc(x.name_en || x.name)}<small>${esc(x.name_en ? x.name : "")}</small></td><td>${esc(UNIT[x.unit] || x.unit)}</td><td class="num">${x.price === null ? '<span class="muted">—</span>' : esc(money(x.price, cur))}</td></tr>`).join("")}</tbody></table></div>
+          ${d.errors.length ? `<div class="pt-alert warn"><div>${d.errors.map(esc).join("<br>")}</div></div>` : ""}
+          <div class="wf-actions"><button class="btn btn-primary small" type="button" data-go>Nhập ${d.rows} dòng</button></div>`;
+        const go = q("[data-go]");
+        go.addEventListener("click", async () => {
+          D8.busy(go, true);
+          try { const r = await api("/api/pricelist", { method: "POST", body: body(false) }); D8.toast("Đã nhập " + label + ": " + r.priced + " mã có giá" + (r.created ? ", " + r.created + " mã mới" : "") + "."); box.innerHTML = ""; if (onDone) onDone(r); }
+          catch (e2) { D8.busy(go, false); err(e2.message); }
+        });
+      } catch (e2) { q("[data-prev]").innerHTML = ""; err(e2.message); }
+    });
   }
   async function techRates(host, prods) {
     let data;
@@ -276,11 +386,13 @@
       host.innerHTML = `<div class="of-grid3 tight"><div><label class="field-label" for="trWho">KTV</label><select class="input" id="trWho"><option value="*">Mọi KTV (giá chung)</option>${team.map((t) => `<option value="${esc(t.email)}"${t.email === who ? " selected" : ""}>${esc(t.name || t.email)}</option>`).join("")}</select></div>
           <div><label class="field-label" for="trCur">Tiền tệ</label><select class="input" id="trCur">${["VND", "USD"].map((c) => `<option${c === cur ? " selected" : ""}>${c}</option>`).join("")}</select></div>
           <div><label class="field-label" for="trFrom">Tính lại công cho đơn nhận từ ngày</label><input class="input" type="date" id="trFrom" value="${vnToday().slice(0, 8)}01"></div></div>
-        <div class="tbl-wrap"><table class="grid-tbl"><thead><tr><th>Mã hàng</th><th>Tính theo</th><th class="num">Giá công</th></tr></thead><tbody>
+        <div class="tbl-wrap scroll-y"><table class="grid-tbl"><thead><tr><th>Mã hàng</th><th>Tính theo</th><th class="num">Giá công</th></tr></thead><tbody>
         ${prods.filter((p) => p.active).map((p) => { const r = mine.find((x) => x.product === p.code), d0 = def.find((x) => x.product === p.code);
           return `<tr><td><b>${esc(p.code)}</b><small>${esc(p.name)}</small></td><td>${esc(UNIT[p.unit] || p.unit)}</td><td class="num"><input class="input" type="number" min="0" step="any" data-tr="${esc(p.code)}" value="${r ? esc(r.rate) : ""}" placeholder="${who !== "*" && d0 ? esc(d0.rate) : "—"}"></td></tr>`; }).join("")}</tbody></table></div>
-        <div class="wf-actions"><button class="btn btn-primary small" type="button" id="trSave">Lưu tiền công</button></div>`;
+        <div class="wf-actions"><button class="btn btn-primary small" type="button" id="trSave">Lưu giá công</button><button class="btn small" type="button" id="trImp">Nhập file giá công (Excel)</button></div><div id="trBox"></div>`;
       $("trWho").addEventListener("change", () => { who = $("trWho").value; draw(); });
+      $("trImp").addEventListener("click", () => priceListImport($("trBox"), { target: "tech", email: who, label: "giá công " + (who === "*" ? "chung cho mọi KTV" : ws().teamName(who)), currency: $("trCur").value,
+        onDone: async () => { data = await api("/api/techrates"); draw(); } }));
       $("trSave").addEventListener("click", async (e) => {
         const b = e.currentTarget; D8.busy(b, true);
         const items = [...host.querySelectorAll("[data-tr]")].map((i) => ({ product: i.dataset.tr, rate: i.value.trim() === "" ? null : +i.value }));
@@ -511,12 +623,12 @@
 
   /* ============================================================ import from Excel */
   const IMPORTS = {
-    customers: { title: "Khách hàng", perm: "customers.edit", desc: "Mỗi dòng một khách. Mã khách có rồi thì cập nhật, chưa có thì thêm mới.",
+    customers: { title: "Khách hàng", perm: "customers.edit", desc: "Mỗi dòng một khách. Để trống Mã khách thì hệ thống tự cấp mã DR / LAB.",
       cols: { code: ["Mã khách", "ma khach", "code"], name: ["Tên khách", "ten khach", "khach hang", "name"], kind: ["Loại", "loai"], country: ["Quốc gia", "quoc gia", "country"], currency: ["Tiền tệ", "tien te", "currency"],
         contact: ["Người liên hệ", "lien he"], email: ["Email"], phone: ["Điện thoại / WhatsApp", "dien thoai", "whatsapp", "phone"], address: ["Địa chỉ", "dia chi"], terms: ["Điều khoản thanh toán", "dieu khoan"], note: ["Ghi chú", "ghi chu", "note"] },
-      need: ["code", "name"],
-      template: () => [{ name: "Khách hàng", cols: [{ h: "Mã khách", w: 12 }, { h: "Tên khách", w: 32 }, { h: "Loại", w: 14 }, { h: "Quốc gia", w: 12 }, { h: "Tiền tệ", w: 9 }, { h: "Người liên hệ", w: 20 }, { h: "Email", w: 26 }, { h: "Điện thoại / WhatsApp", w: 18 }, { h: "Địa chỉ", w: 26 }, { h: "Điều khoản thanh toán", w: 26 }, { h: "Ghi chú", w: 26 }],
-        rows: [["JAKE", "Dr Jake – Colorado", "Bác sĩ", "USA", "USD", "Dr Jake", "", "", "", "Trả từng ca qua WhatsApp / Payoneer", ""], ["ANNIE", "All Smiles (Dr Annie)", "Nền tảng", "USA", "USD", "Dr Annie", "", "", "", "Ứng trước 200 USD, trừ dần", ""], ["VCAD", "VCAD Lab", "Labo", "Việt Nam", "VND", "", "", "", "", "", ""]] }],
+      need: ["name"],
+      template: () => [{ name: "Khách hàng", cols: [{ h: "Mã khách", w: 14 }, { h: "Tên khách", w: 32 }, { h: "Loại", w: 14 }, { h: "Quốc gia", w: 12 }, { h: "Tiền tệ", w: 9 }, { h: "Người liên hệ", w: 20 }, { h: "Email", w: 26 }, { h: "Điện thoại / WhatsApp", w: 18 }, { h: "Địa chỉ", w: 26 }, { h: "Điều khoản thanh toán", w: 26 }, { h: "Ghi chú", w: 26 }],
+        rows: [["", "", "Bác sĩ", "", "USD", "", "", "", "", "", ""], ["", "", "Labo", "", "VND", "", "", "", "", "", ""]] }],
       row: (g) => ({ code: g("code"), name: g("name"), kind: kindOf(g("kind")), country: g("country"), currency: String(g("currency") || "").toUpperCase(), contact: g("contact"), email: g("email"), phone: g("phone"), address: g("address"), terms: g("terms"), note: g("note") }) },
     products: { title: "Mã hàng", perm: "pricing.manage", desc: "Danh mục mã hàng chung. Mã có rồi thì cập nhật tên, nhóm, đơn vị, giá mặc định.",
       cols: { code: ["Mã hàng", "ma hang", "code"], name: ["Tên tiếng Việt", "ten hang", "ten tieng viet", "ten"], name_en: ["Tên tiếng Anh", "ten tieng anh", "name"], grp: ["Nhóm dịch vụ", "nhom"], unit: ["Tính theo", "don vi", "don vi tinh", "unit"],
@@ -557,8 +669,8 @@
       row: (g) => ({ day: g("day"), customer: g("customer"), amount: g("amount"), currency: String(g("currency") || "").toUpperCase(), method: methodOf(g("method")), ref: g("ref"), order_code: g("order_code"), note: g("note") }) },
   };
   const fold = (s) => D8X.fold(s);
-  const kindOf = (v) => { const f = fold(v); return { "phong kham": "clinic", clinic: "clinic", lab: "lab", labo: "lab", "bac si": "doctor", doctor: "doctor", "nen tang": "platform", platform: "platform" }[f] || (f ? "other" : "clinic"); };
-  const unitOf = (v) => { const f = fold(v); return /ham|arch/.test(f) ? "arch" : /^ca$|case/.test(f) ? "case" : /gio|hour/.test(f) ? "hour" : "unit"; };
+  const kindOf = (v) => (/^(lab|labo|laboratory)$/.test(fold(v)) ? "lab" : "doctor");
+  const unitOf = (v) => { const f = fold(v); return /ham|arch|jaw/.test(f) ? "arch" : /^ca$|case/.test(f) ? "case" : /gio|hour/.test(f) ? "hour" : /^cau|bridge/.test(f) ? "bridge" : /^bo$|^set/.test(f) ? "set" : "unit"; };
   const grpOf = (v) => { const f = fold(v); return D8.SERVICES.find((s) => fold(s) === f || fold(D8.svcLabel(s)) === f) || String(v || "").trim(); };
   const methodOf = (v) => { const f = fold(v); return /paypal/.test(f) ? "paypal" : /payoneer/.test(f) ? "payoneer" : /remitly/.test(f) ? "remitly" : /chuyen|bank|ngan hang|swift|techcom/.test(f) ? "bank" : /tien mat|cash/.test(f) ? "cash" : /ung|deposit/.test(f) ? "deposit" : "other"; };
   const statusOf = (v) => { const f = fold(v); if (!f) return ""; const hit = Object.entries(D8.OST).find(([k, l]) => fold(l) === f || k === f); return hit ? hit[0] : /giao|done|deliver|complet|xong|hoan thanh/.test(f) ? "delivered" : /huy|cancel/.test(f) ? "cancelled" : /pending|progress|dang|cho|doing|design/.test(f) ? "design" : "INVALID"; };
@@ -715,7 +827,9 @@
         const pi = head.findIndex((x) => /^ma hang$|^code$/.test(fold(x)));
         if (pi < 0) continue;
         // wide: columns "CODE (USD)" or "Mặc định (USD)"
-        const wideCols = head.map((x, i) => { const m = /^(.+?)\s*\((USD|VND)\)\s*$/i.exec(String(x || "").trim()); if (!m || i === pi) return null; const def = /^mac dinh$|^default$/.test(fold(m[1])); return { i, customer: def ? "" : m[1].trim().toUpperCase(), currency: m[2].toUpperCase(), def }; }).filter(Boolean);
+        const wideCols = head.map((x, i) => { const m = /^(.+?)\s*\((USD|VND)\)\s*$/i.exec(String(x || "").trim()); if (!m || i === pi) return null; const f = fold(m[1]);
+          const tier = /^(muc 2|mid)$/.test(f) ? "mid" : /^(muc 3|min)$/.test(f) ? "min" : ""; const def = !tier && /^(mac dinh|default|niem yet|max)$/.test(f);
+          return { i, customer: def || tier ? "" : m[1].trim().toUpperCase(), tier, currency: m[2].toUpperCase(), def: def || !!tier }; }).filter(Boolean);
         if (wideCols.length) {
           const rowsP = [];
           s.rows.slice(h + 1).forEach((row, k) => {
@@ -724,10 +838,10 @@
               const v = row[c.i];
               if (v === "" || v === undefined || v === null) continue;
               const known = c.def || custs.some((x) => x.code === c.customer);
-              rowsP.push({ data: { customer: c.customer, product, price: v, currency: c.currency, row: h + k + 2 }, err: !known ? "Dòng " + (h + k + 2) + ": không có khách mã " + c.customer : isNaN(+v) || +v < 0 ? "Dòng " + (h + k + 2) + ": giá không hợp lệ" : "" });
+              rowsP.push({ data: { customer: c.customer, ...(c.tier ? { tier: c.tier } : {}), product, price: v, currency: c.currency, row: h + k + 2 }, err: !known ? "Dòng " + (h + k + 2) + ": không có khách mã " + c.customer : isNaN(+v) || +v < 0 ? "Dòng " + (h + k + 2) + ": giá không hợp lệ" : "" });
             }
           });
-          return { rows: rowsP, preview: [["Khách", (r) => r.data.customer || "Mặc định"], ["Mã hàng", (r) => r.data.product], ["Đơn giá", (r) => r.data.price], ["Tiền tệ", (r) => r.data.currency]] };
+          return { rows: rowsP, preview: [["Khách", (r) => r.data.customer || TIER[r.data.tier || ""]], ["Mã hàng", (r) => r.data.product], ["Đơn giá", (r) => r.data.price], ["Tiền tệ", (r) => r.data.currency]] };
         }
       }
     }

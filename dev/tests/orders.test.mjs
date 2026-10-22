@@ -438,4 +438,75 @@ await new Promise((res) => setTimeout(res, 50));
 r = await owner("/api/settings", { method: "POST", body: { onlinePay: false } });
 ok(r.data.settings.onlinePay === false, "and off again");
 
+// ---------- customer codes (owner's rule): DR / LAB + year + running number of the year, the prefix follows the kind
+const yr = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 4);
+r = await owner("/api/customers/next?kind=lab");
+ok(r.status === 200 && new RegExp("^LAB" + yr + "\\d{2,}$").test(r.data.code), "next code for a lab: " + r.data.code);
+const nLab = (await owner("/api/customers", { method: "POST", body: { name: "Dũng Lab", kind: "lab", currency: "VND" } })).data.customer;
+const nDr = (await owner("/api/customers", { method: "POST", body: { name: "Dr Jake (new code)", kind: "doctor" } })).data.customer;
+const numOf = (c) => +c.slice(-2);
+ok(nLab.code === r.data.code && new RegExp("^DR" + yr + "\\d{2,}$").test(nDr.code) && numOf(nDr.code) === numOf(nLab.code) + 1, "codes given in turn, shared by DR and LAB: " + nLab.code + ", " + nDr.code);
+r = await owner("/api/customers", { method: "POST", body: { id: nLab.id, code: nLab.code, name: "Dũng Lab", kind: "doctor", currency: "VND" } });
+ok(r.data.customer.code === nLab.code.replace(/^LAB/, "DR"), "changing the kind changes the prefix, keeps the number: " + r.data.customer.code);
+r = await ktv("/api/customers/next?kind=lab");
+ok(r.status === 403, "KTV cannot reserve customer codes");
+
+// ---------- price lists in the owner's layout: list price (MAX), level 2 (MID), level 3 (MIN), a customer's own, a KTV's pay
+const PL = (p1, p2) => [{ no: 7, group: "CROWN & BRIDGE", service: "Full Contour", desc: "Mão răng hoàn thiện toàn phần", unit: "Tooth", price: p1 },
+  { no: 30, group: "IMPLANTS", service: "Screw Retained Full Contour Implant", desc: "Phục hình implant toàn phần, bắt vít", unit: "Tooth", price: p2 },
+  { no: 48, group: "ORTHODONTICS / ALIGNER", service: "Visualizing Ortho Analyzer", desc: "Trực quan hoá phân tích chỉnh nha", unit: "Case", price: null }];
+r = await owner("/api/pricelist", { method: "POST", body: { target: "list", currency: "USD", items: PL(4.28, 6.17), dry: true } });
+const cb = r.data.items && r.data.items.find((x) => x.name_en === "Full Contour");
+ok(r.status === 200 && cb && cb.code === "CB07" && cb.isNew && r.data.items.find((x) => x.no === 30).code === "IM30" && r.data.noPrice === 1, "dry run: codes from group + number (CB07, IM30), quote-on-request has no price");
+ok(!(await owner("/api/products")).data.products.some((p) => p.code === "CB07"), "dry run saves nothing");
+r = await owner("/api/pricelist", { method: "POST", body: { target: "list", currency: "USD", items: PL(4.28, 6.17) } });
+ok(r.status === 200 && r.data.created === 3 && r.data.priced === 2, "list price imported, 3 codes created");
+r = await owner("/api/products");
+const cb07 = r.data.products.find((p) => p.code === "CB07"), or48 = r.data.products.find((p) => p.code === "OR48");
+ok(cb07 && cb07.name === "Mão răng hoàn thiện toàn phần" && cb07.name_en === "Full Contour" && cb07.grp === "Crown & bridge" && cb07.unit === "unit" && or48 && or48.unit === "case", "products: Vietnamese and English names, group, unit");
+await owner("/api/pricelist", { method: "POST", body: { target: "mid", currency: "USD", items: PL(3.83, 5.67) } });
+r = await owner("/api/pricelist", { method: "POST", body: { target: "min", currency: "USD", items: PL(3.38, 5.17) } });
+ok(r.status === 200 && r.data.created === 0, "levels 2 and 3 match the same codes by name");
+r = await owner("/api/prices?tier=mid");
+ok(r.data.prices.some((x) => x.product === "CB07" && x.price === 3.83) && !r.data.prices.some((x) => x.product === "OR48"), "level 2 prices stored");
+const plC = (await owner("/api/customers", { method: "POST", body: { name: "Level Clinic", kind: "doctor", currency: "USD" } })).data.customer;
+const total = async (cid) => (await owner("/api/orders", { method: "POST", body: { customer_id: cid, received: "2026-10-22", items: [{ product: "CB07", qty: 2 }, { product: "IM30", qty: 1 }] } })).data.order.total;
+ok(await total(plC.id) === 14.73, "list price for a new customer: 2×4.28 + 6.17");
+r = await owner(`/api/customers/${plC.id}/tier`, { method: "POST", body: { tier: "mid" } });
+ok(r.status === 200 && await total(plC.id) === 13.33, "level 2 customer: 2×3.83 + 5.67");
+await owner(`/api/customers/${plC.id}/tier`, { method: "POST", body: { tier: "min" } });
+ok(await total(plC.id) === 11.93, "level 3 customer: 2×3.38 + 5.17");
+r = await owner("/api/prices?customer=" + plC.id);
+ok(r.data.tier === "min" && r.data.defaults.some((x) => x.product === "CB07" && x.price === 3.38), "the customer's price page shows their level's prices");
+r = await owner("/api/pricelist", { method: "POST", body: { target: "customer", customer_id: plC.id, currency: "USD", items: [{ no: 7, group: "CROWN & BRIDGE", service: "Full Contour", unit: "Tooth", price: 3 }] } });
+ok(r.status === 200 && await total(plC.id) === 11.17, "a customer's own price wins over the level: 2×3 + 5.17");
+r = await owner("/api/customers/" + plC.id);
+ok(r.data.customer.tier === "min", "the level is on the customer");
+r = await ktv("/api/customers");
+ok(r.data.customers.every((c) => !("tier" in c)), "KTV never sees a customer's price level");
+r = await ktv("/api/pricelist", { method: "POST", body: { target: "list", currency: "USD", items: PL(1, 1) } });
+ok(r.status === 403, "KTV cannot import prices");
+r = await ktv("/api/prices?tier=mid");
+ok(r.status === 403, "KTV cannot read price levels");
+r = await ktv(`/api/customers/${plC.id}/tier`, { method: "POST", body: { tier: "max" } });
+ok(r.status === 403, "KTV cannot change a customer's level");
+r = await owner("/api/pricelist", { method: "POST", body: { target: "tech", email: KTV2, currency: "VND", from: "2026-01-01", items: [{ no: 7, group: "CROWN & BRIDGE", service: "Full Contour", unit: "Tooth", price: 60000 }] } });
+ok(r.status === 200 && r.data.priced === 1, "a KTV's pay imported from the same layout");
+r = await owner("/api/techrates");
+ok(r.data.rates.some((x) => x.email === KTV2 && x.product === "CB07" && x.rate === 60000 && x.currency === "VND"), "pay rate stored for that KTV");
+r = await owner("/api/pricelist", { method: "POST", body: { target: "nope", items: PL(1, 1) } });
+ok(r.status === 400, "an unknown price list is refused");
+
+// ---------- old customer codes (JAKE…) move to DR / LAB codes; their orders follow
+const jBefore = (await owner("/api/customers/" + jake)).data.customer.code;
+r = await owner("/api/customers/recode", { method: "POST" });
+const jAfter = (await owner("/api/customers/" + jake)).data.customer.code;
+ok(r.status === 200 && r.data.changed.some((x) => x.from === jBefore && x.code === jAfter) && /^DR\d{6,}$/.test(jAfter), "old code " + jBefore + " → " + jAfter);
+r = await owner("/api/orders?status=&customer=" + jake + "&limit=5");
+ok(r.data.items.length > 0 && r.data.items.every((x) => x.customer_code === jAfter), "the customer's orders show the new code");
+r = await owner("/api/orders?status=&q=" + encodeURIComponent(jAfter));
+ok(r.data.items.some((x) => x.customer_code === jAfter), "search finds the new customer code");
+r = await owner("/api/customers/recode", { method: "POST" });
+ok(r.data.changed.length === 0, "nothing left to re-code");
+
 done();

@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-22.5">
-<link rel="stylesheet" href="/case.css?v=2026-10-22.5">
+<link rel="stylesheet" href="/brand.css?v=2026-10-23.1">
+<link rel="stylesheet" href="/case.css?v=2026-10-23.1">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -435,6 +435,23 @@
   .imp-card:hover { border-color: var(--steel); }
   .imp-card p { margin: 0 0 6px; font-size: 14px; color: var(--muted); line-height: 1.55; flex: 1; }
   .imp-card .btn { align-self: flex-start; }
+  /* price levels and price list import */
+  .pl-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .pl-tile { display: grid; gap: 6px; align-content: start; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--hover); }
+  .pl-tile b { color: var(--navy); font-size: 15px; }
+  .pl-tile small { color: var(--muted); font-size: 12.5px; }
+  .pl-tile .band-btns { margin-top: 6px; flex-wrap: wrap; }
+  .pl-imp { margin-top: 16px; padding: 18px; border: 1px dashed var(--steel-300); border-radius: 14px; display: grid; gap: 12px; }
+  .pl-imp .drop { margin: 0; }
+  .pl-sum { margin-top: 2px; }
+  .pl-prev { max-height: 420px; overflow: auto; }
+  .pl-prev td small { display: block; color: var(--muted); font-size: 12px; }
+  .chip.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .cf-code output { font-size: 19px; }
+  .cu-tier { margin: 0 0 14px; max-width: 520px; }
+  .tbl-wrap.scroll-y { max-height: 560px; overflow: auto; overscroll-behavior: contain; }
+  .tbl-wrap.scroll-y thead th { position: sticky; top: 0; z-index: 1; background: var(--white); }
+  @media (max-width: 760px) { .pl-tiles { grid-template-columns: 1fr; } }
   /* KTV pages */
   .t-tools .t-month { display: flex; gap: 6px; align-items: center; }
   .t-tools .t-month .btn { min-width: 40px; padding-left: 0; padding-right: 0; justify-content: center; }
@@ -552,13 +569,13 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-22.5" defer></script>
-<script src="/xlsx.js?v=2026-10-22.5" defer></script>
-<script src="/orders.js?v=2026-10-22.5" defer></script>
-<script src="/books.js?v=2026-10-22.5" defer></script>
-<script src="/tech.js?v=2026-10-22.5" defer></script>
-<script src="/snap.js?v=2026-10-22.5" defer></script>
-<script src="/admin.js?v=2026-10-22.5" defer></script>
+<script src="/shell.js?v=2026-10-23.1" defer></script>
+<script src="/xlsx.js?v=2026-10-23.1" defer></script>
+<script src="/orders.js?v=2026-10-23.1" defer></script>
+<script src="/books.js?v=2026-10-23.1" defer></script>
+<script src="/tech.js?v=2026-10-23.1" defer></script>
+<script src="/snap.js?v=2026-10-23.1" defer></script>
+<script src="/admin.js?v=2026-10-23.1" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>

@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-22.5"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-23.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -226,7 +226,7 @@ async function handleApi(request, env, url) {
   if (path === "/api/ping" && method === "GET") return json({ ok: true, perms: keyOk ? PERM_KEYS : [...staff.perms] }); // no KV use for the password
   if (path === "/api/staff" || path.startsWith("/api/staff/") || path === "/api/roles") return handleStaff(request, env, url, who);
   if (path.startsWith("/api/prices/")) return handlePrices(request, env, url, who);
-  if (/^\/api\/(orders|customers|products|prices|payments|techrates|tech|reports|export|import|settings|book)(\/|$)/.test(path)) {
+  if (/^\/api\/(orders|customers|products|prices|pricelist|payments|techrates|tech|reports|export|import|settings|book)(\/|$)/.test(path)) {
     try { return await handleBook(request, env, url, who); }
     catch (err) { if (err && err.status) return json({ error: err.message, code: err.code || "", ...(err.dupes ? { dupes: err.dupes } : {}), ...(err.id ? { id: err.id } : {}) }, err.status); throw err; }
   }
@@ -1507,7 +1507,7 @@ async function handleJobs(request, env, url, who) {
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
@@ -1525,7 +1525,11 @@ const CHARGES = ["charge", "free", "warranty"];
 const CURRENCIES = ["USD", "VND"];
 const CUST_KINDS = ["clinic", "lab", "doctor", "platform", "other"];
 const PAY_METHODS = ["paypal", "payoneer", "remitly", "bank", "cash", "deposit", "other"];
-const UNIT_KINDS = ["unit", "arch", "case", "hour"];
+const UNIT_KINDS = ["unit", "arch", "case", "hour", "bridge", "set"];
+// price levels: '' = list price (MAX, customer_id 0), mid (-2), min (-3)
+const TIERS = { "": 0, max: 0, mid: -2, min: -3 };
+const tierId = (t) => TIERS[t] || 0;
+const cleanTier = (t) => (t === "mid" || t === "min" ? t : "");
 const ITEMS_MAX = 40;
 const IMG_MAX = 1600 * 1024;
 
@@ -1613,6 +1617,14 @@ const SCHEMA_V2 = [
     gz INTEGER NOT NULL DEFAULT 0, st TEXT NOT NULL DEFAULT 'kv', by TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS f_order ON order_files (order_id, fid)`,
 ];
+// v3: each customer gets a price level ('' = list price / MAX, 'mid', 'min'); level prices live in prices under customer_id -2 / -3
+const SCHEMA_V3 = [`ALTER TABLE customers ADD COLUMN tier TEXT NOT NULL DEFAULT ''`];
+async function migrateV3(DB) {
+  for (const sql of SCHEMA_V3) {
+    try { await DB.prepare(sql).run(); }
+    catch (err) { if (!/duplicate column|already exists/i.test(String(err && err.message))) throw err; }
+  }
+}
 async function migrateV2(DB) {
   for (const sql of SCHEMA_V2) {
     try { await DB.prepare(sql).run(); }
@@ -1637,6 +1649,7 @@ async function bookDb(env) {
     try { const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'schema'").first(); v = r ? +r.v : 0; } catch { v = 0; }
     if (v < 1) await env.DB.batch(SCHEMA_V1.map((s) => env.DB.prepare(s)));
     if (v < 2) await migrateV2(env.DB);
+    if (v < 3) await migrateV3(env.DB);
     if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }
@@ -1696,13 +1709,19 @@ const ORDER_SELECT = `SELECT o.*, c.code AS customer_code, c.name AS customer_na
   FROM orders o JOIN customers c ON c.id = o.customer_id`;
 
 /* ---- prices, KTV rates, totals */
-async function priceBook(DB, customerId) {
-  const list = await rows(DB.prepare("SELECT customer_id, product, currency, price FROM prices WHERE customer_id IN (0, ?)").bind(customerId || 0));
+// a customer's price: their own price, else their level's price (mid / min), else the list price
+function priceLookup(list, customerId, tier) {
+  const tid = tierId(tier), at = (cid, product, cur) => list.find((p) => p.customer_id === cid && p.product === product && p.currency === cur);
   return (product, cur) => {
-    const own = list.find((p) => p.customer_id === customerId && p.product === product && p.currency === cur);
-    const def = list.find((p) => p.customer_id === 0 && p.product === product && p.currency === cur);
-    return own ? own.price : def ? def.price : null;
+    const own = customerId ? at(customerId, product, cur) : null, lvl = tid ? at(tid, product, cur) : null, def = at(0, product, cur);
+    return own ? own.price : lvl ? lvl.price : def ? def.price : null;
   };
+}
+async function priceBook(DB, customerId) {
+  const c = customerId ? await DB.prepare("SELECT tier FROM customers WHERE id = ?").bind(customerId).first() : null;
+  const tid = tierId(c && c.tier);
+  const list = await rows(DB.prepare("SELECT customer_id, product, currency, price FROM prices WHERE customer_id IN (0, ?, ?)").bind(customerId || 0, tid));
+  return priceLookup(list, customerId, c && c.tier);
 }
 // KTV pay for orders (one query): qty x the designer's rate, or the rate for every KTV ("*").
 const TECH_COST_SQL = `UPDATE orders SET
@@ -1817,11 +1836,12 @@ async function customerForLogin(env, DB, email) {
   if (r) return r.customer_id;
   const u = (await env.CASES.get("user:" + email, "json")) || {};
   const name = clip(u.practice || u.name || email.split("@")[0], 120);
-  const code = await freeCustomerCode(DB, codeFromName(name));
-  const now = Date.now();
+  const now = Date.now(), year = vnDay(now).slice(0, 4);
+  let code = autoCustomerCode("doctor", year, (await customerSeq(DB, year)) + 1);
+  if (await DB.prepare("SELECT 1 FROM customers WHERE code = ?").bind(code).first()) code = await freeCustomerCode(DB, codeFromName(name));
   const c = { code, name, country: clip(u.country, 60), email, phone: clip(u.phone, 40), contact: clip(u.name, 100) };
   const ins = await DB.prepare(`INSERT INTO customers (code, name, kind, country, currency, contact, email, phone, auto, search, created_at, updated_at)
-    VALUES (?, ?, 'clinic', ?, 'USD', ?, ?, ?, 1, ?, ?, ?) RETURNING id`).bind(c.code, c.name, c.country, c.contact, c.email, c.phone, custSearch(c), now, now).first();
+    VALUES (?, ?, 'doctor', ?, 'USD', ?, ?, ?, 1, ?, ?, ?) RETURNING id`).bind(c.code, c.name, c.country, c.contact, c.email, c.phone, custSearch(c), now, now).first();
   await DB.prepare("INSERT OR REPLACE INTO customer_logins (email, customer_id, at) VALUES (?, ?, ?)").bind(email, ins.id, now).run();
   return ins.id;
 }
@@ -1961,9 +1981,22 @@ async function handleBook(request, env, url, who) {
       if (!who.can("pricing.manage")) return deny();
       return json({ prices: await rows(DB.prepare("SELECT customer_id, product, currency, price FROM prices")) });
     }
+    if (P.get("tier") !== null) {
+      if (!who.can("pricing.manage")) return deny();
+      return json({ tier: cleanTier(P.get("tier")), prices: await rows(DB.prepare("SELECT product, currency, price, updated_at FROM prices WHERE customer_id = ?").bind(tierId(cleanTier(P.get("tier"))))) });
+    }
     const cid = Math.max(0, parseInt(P.get("customer") || "0", 10) || 0);
-    const list = await rows(DB.prepare("SELECT customer_id, product, currency, price FROM prices WHERE customer_id IN (0, ?)").bind(cid));
-    return json({ customer: cid, own: list.filter((x) => x.customer_id === cid && cid), defaults: list.filter((x) => x.customer_id === 0) });
+    const c = cid ? await DB.prepare("SELECT tier FROM customers WHERE id = ?").bind(cid).first() : null, tier = (c && c.tier) || "", tid = tierId(tier);
+    const list = await rows(DB.prepare("SELECT customer_id, product, currency, price FROM prices WHERE customer_id IN (0, ?, ?)").bind(cid, tid));
+    // defaults = what the customer pays without an own price: their level's price, else the list price
+    const base = new Map();
+    for (const x of list) if (x.customer_id === 0 || x.customer_id === tid) { const k = x.product + "|" + x.currency; if (!base.has(k) || x.customer_id === tid) base.set(k, { customer_id: 0, product: x.product, currency: x.currency, price: x.price }); }
+    return json({ customer: cid, tier, own: list.filter((x) => x.customer_id === cid && cid), defaults: [...base.values()] });
+  }
+  if (path === "/api/pricelist" && method === "POST") {
+    const b = await body();
+    if (!(b.target === "tech" ? who.can("techpay.manage") : who.can("pricing.manage"))) return deny();
+    return importPriceList(DB, b, now);
   }
   if (path === "/api/prices" && method === "POST") {
     if (!who.can("pricing.manage")) return deny();
@@ -2008,10 +2041,39 @@ async function handleBook(request, env, url, who) {
     const logins = who.can("customers.view") ? await rows(DB.prepare("SELECT email, customer_id FROM customer_logins")) : [];
     return json({ customers: list.map((c) => custOut(c, who, logins)) });
   }
+  if (path === "/api/customers/next" && method === "GET") {
+    if (!who.can("customers.edit")) return deny();
+    const year = vnDay(now).slice(0, 4);
+    return json({ code: autoCustomerCode(CUST_KINDS.includes(P.get("kind")) ? P.get("kind") : "doctor", year, (await customerSeq(DB, year)) + 1) });
+  }
+  // give customers with an old-style code (JAKE, VCAD…) a DR / LAB code, oldest first, numbered within their year
+  if (path === "/api/customers/recode" && method === "POST") {
+    if (!who.can("customers.edit")) return deny();
+    const all = await rows(DB.prepare("SELECT id, code, name, kind, country, email, contact, phone, created_at FROM customers ORDER BY created_at, id"));
+    const old = all.filter((c) => !AUTO_CCODE.test(c.code));
+    if (!old.length) return json({ ok: true, changed: [] });
+    const seqs = {}, taken = new Set(all.map((c) => c.code)), changed = [];
+    for (const c of old) {
+      const year = vnDay(c.created_at || now).slice(0, 4);
+      if (!(year in seqs)) seqs[year] = await customerSeq(DB, year);
+      let code; do { code = autoCustomerCode(c.kind, year, ++seqs[year]); } while (taken.has(code));
+      taken.add(code); changed.push({ id: c.id, from: c.code, code, search: custSearch({ ...c, code }) });
+    }
+    for (let i = 0; i < changed.length; i += 300) await DB.prepare(`UPDATE customers SET code = json_extract(j.value, '$.code'), search = json_extract(j.value, '$.search'), updated_at = ?
+      FROM json_each(?) j WHERE customers.id = json_extract(j.value, '$.id')`).bind(now, JSON.stringify(changed.slice(i, i + 300))).run();
+    return json({ ok: true, changed: changed.map(({ id, from, code }) => ({ id, from, code })) });
+  }
+  if ((m = path.match(/^\/api\/customers\/(\d+)\/tier$/)) && method === "POST") {
+    if (!who.can("pricing.manage")) return deny();
+    const b = await body();
+    const r = await DB.prepare("UPDATE customers SET tier = ?, updated_at = ? WHERE id = ?").bind(cleanTier(b.tier), now, +m[1]).run();
+    if (!r.meta || !r.meta.changes) return json({ error: "Không tìm thấy khách hàng." }, 404);
+    return json({ ok: true, tier: cleanTier(b.tier) });
+  }
   if (path === "/api/customers" && method === "POST") {
     if (!who.can("customers.edit")) return deny();
     const b = await body();
-    const r = await saveCustomers(DB, [b], now);
+    const r = await saveCustomers(DB, [b], now, false, who.can("pricing.manage"));
     if (r.errors.length) return json({ error: r.errors[0].msg }, 400);
     const c = await DB.prepare("SELECT * FROM customers WHERE code = ?").bind(r.codes[0]).first();
     return json({ customer: custOut(c, who, []) });
@@ -2371,6 +2433,78 @@ function upsertProducts(DB, input, now, importing) {
   if (drop.length) stmts.push(DB.prepare(`DELETE FROM prices WHERE customer_id = 0 AND (product || '|' || currency) IN (SELECT json_extract(value, '$.product') || '|' || json_extract(value, '$.currency') FROM json_each(?))`).bind(JSON.stringify(drop)));
   return { stmts, count: set.length, errors };
 }
+/* ---- price lists in the owner's Excel layout (No. · SERVICE · DESCRIPTION · UNIT · UNIT PRICE), grouped by heading rows.
+   One file = one list: the list price (MAX), level 2 (MID), level 3 (MIN), one customer's own prices, or one KTV's pay.
+   Services are matched to product codes by code (if the file has one), English name, or Vietnamese name; new services get a
+   code from their group and number (Full Contour, No. 7 in CROWN & BRIDGE → CB07). */
+const PL_GROUPS = [[/model/i, "MD", "Digital models"], [/crown|bridge/i, "CB", "Crown & bridge"], [/wax/i, "WX", "Wax-up & smile design"],
+  [/smile/i, "SD", "Wax-up & smile design"], [/implant/i, "IM", "Implant restorations"], [/guide|surgical/i, "SG", "Surgical guides"],
+  [/ortho|align/i, "OR", "Aligner & ortho"], [/splint|tray/i, "ST", "Splints & trays"], [/denture|partial/i, "DN", "Dentures & partials"]];
+const plGroup = (g) => PL_GROUPS.find(([re]) => re.test(g || "")) || [null, "SV", ""];
+function plUnit(u) {
+  const f = fold(u);
+  return /^(tooth|teeth|unit|rang|don vi)/.test(f) ? "unit" : /^(jaw|arch|ham)/.test(f) ? "arch" : /^(bridge|cau)/.test(f) ? "bridge"
+    : /^(set|bo|kit)/.test(f) ? "set" : /^(hour|gio)/.test(f) ? "hour" : /^(case|ca)/.test(f) ? "case" : "unit";
+}
+async function importPriceList(DB, b, now) {
+  const target = ["list", "mid", "min", "customer", "tech"].includes(b.target) ? b.target : "";
+  if (!target) return json({ error: "Chọn bảng giá cần nhập." }, 400);
+  const items = (Array.isArray(b.items) ? b.items : []).slice(0, 600);
+  if (!items.length) return json({ error: "File không có dòng giá nào." }, 400);
+  const currency = CURRENCIES.includes(String(b.currency || "").toUpperCase()) ? String(b.currency).toUpperCase() : target === "tech" ? "VND" : "USD";
+  let cust = null, email = "";
+  if (target === "customer") {
+    cust = await DB.prepare("SELECT id, code, currency FROM customers WHERE id = ?").bind(+b.customer_id || 0).first();
+    if (!cust) return json({ error: "Chọn khách hàng." }, 400);
+  }
+  if (target === "tech") {
+    email = b.email === "*" ? "*" : String(b.email || "").trim().toLowerCase();
+    if (email !== "*" && !EMAIL_RE.test(email)) return json({ error: "Chọn KTV." }, 400);
+  }
+  const prods = await rows(DB.prepare("SELECT code, name, name_en, grp, unit, active, sort FROM products"));
+  const byCode = new Map(prods.map((p) => [p.code, p])), byEn = new Map(), byVi = new Map();
+  prods.forEach((p) => { if (p.name_en) byEn.set(fold(p.name_en), p); if (p.name) byVi.set(fold(p.name), p); });
+  const taken = new Set(prods.map((p) => p.code)), seen = new Set(), out = [], errors = [];
+  items.forEach((x, i) => {
+    const en = clip(x.service || x.name_en, 120), vi = clip(x.desc || x.name, 120), no = Math.max(0, parseInt(x.no, 10) || 0);
+    if (!en && !vi && !x.code) return;
+    const [, prefix, grp] = plGroup(x.group);
+    let p = (x.code && byCode.get(ucode(x.code))) || (en && byEn.get(fold(en))) || (vi && byVi.get(fold(vi))) || null, code = p ? p.code : "";
+    if (!p) {
+      code = ucode(x.code) || prefix + String(no || i + 1).padStart(2, "0");
+      if (!PCODE_RE.test(code)) return errors.push("Dòng " + (x.row || i + 1) + ": mã \"" + clip(x.code, 20) + "\" không hợp lệ.");
+      for (let k = 2; taken.has(code); k++) code = (ucode(x.code) || prefix + String(no || i + 1).padStart(2, "0")) + "-" + k;
+      taken.add(code);
+    }
+    if (seen.has(code)) return;
+    seen.add(code);
+    const v = x.price === null || x.price === undefined || x.price === "" ? null : numv(x.price);
+    out.push({ code, isNew: !p, name: vi || en, name_en: en, grp: grp || (p && p.grp) || "", unit: plUnit(x.unit), sort: (no || i + 1) * 10, price: v !== null && v >= 0 ? v : null, no });
+  });
+  const created = out.filter((x) => x.isNew), priced = out.filter((x) => x.price !== null);
+  const summary = { target, currency, rows: out.length, created: created.length, priced: priced.length, noPrice: out.length - priced.length,
+    items: out.map(({ code, isNew, name, name_en, unit, price, no }) => ({ code, isNew, name, name_en, unit, price, no })), errors };
+  if (b.dry) return json(summary);
+  const q = [];
+  // the list price file is the master list: names, groups, units and order follow it; a level / customer / KTV file only adds missing codes
+  const prodRows = (target === "list" ? out : created).map((x) => ({ code: x.code, name: x.name, name_en: x.name_en, grp: x.grp, unit: x.unit, active: 1, sort: x.sort, note: "", updated_at: now }));
+  if (prodRows.length) q.push(jsonInsert(DB, "products", ["code", "name", "name_en", "grp", "unit", "active", "sort", "note", "updated_at"], prodRows,
+    "WHERE 1 ON CONFLICT (code) DO UPDATE SET name = excluded.name, name_en = excluded.name_en, grp = excluded.grp, unit = excluded.unit, active = 1, sort = excluded.sort, updated_at = excluded.updated_at"));
+  if (target === "list" && b.retire) q.push(DB.prepare("UPDATE products SET active = 0, updated_at = ? WHERE code NOT IN (SELECT value FROM json_each(?))").bind(now, JSON.stringify(out.map((x) => x.code))));
+  if (target === "tech") {
+    const set = priced.map((x) => ({ email, product: x.code, rate: x.price, currency, updated_at: now })), del = out.filter((x) => x.price === null).map((x) => x.code);
+    if (set.length) q.push(jsonInsert(DB, "tech_rates", ["email", "product", "rate", "currency", "updated_at"], set, "WHERE 1 ON CONFLICT (email, product) DO UPDATE SET rate = excluded.rate, currency = excluded.currency, updated_at = excluded.updated_at"));
+    if (del.length) q.push(DB.prepare("DELETE FROM tech_rates WHERE email = ? AND product IN (SELECT value FROM json_each(?))").bind(email, JSON.stringify(del)));
+    const from = validDay(b.from) ? b.from : vnDay(now).slice(0, 8) + "01";
+    q.push(DB.prepare(TECH_COST_SQL + (email === "*" ? "day >= ?" : "designer = ? AND day >= ?")).bind(...(email === "*" ? [from] : [email, from])));
+  } else {
+    const cid = target === "customer" ? cust.id : tierId(target === "list" ? "" : target);
+    const list = out.map((x) => ({ customer_id: cid, product: x.code, currency, price: x.price }));
+    q.push(...priceStmts(DB, list, now));
+  }
+  await DB.batch(q);
+  return json({ ...summary, ok: true });
+}
 // rows: [{customer_id | customer (code), product, price (null = remove), currency}]
 async function priceRows(DB, input) {
   const list = Array.isArray(input) ? input.slice(0, 2000) : [];
@@ -2391,10 +2525,10 @@ async function priceRows(DB, input) {
     const product = ucode(x.product);
     if (!prods.has(product)) return errors.push({ row: i, msg: where + ": mã hàng \"" + clip(x.product, 30) + "\" chưa có trong danh mục." });
     const currency = CURRENCIES.includes(String(x.currency || "").toUpperCase()) ? String(x.currency).toUpperCase() : cust ? cust.currency : "USD";
-    if (x.price === null || x.price === "" || x.price === undefined) { out.push({ customer_id: cust ? cust.id : 0, product, currency, price: null }); return; }
+    if (x.price === null || x.price === "" || x.price === undefined) { out.push({ customer_id: cust ? cust.id : tierId(cleanTier(x.tier)), product, currency, price: null }); return; }
     const v = numv(x.price);
     if (!(v >= 0)) return errors.push({ row: i, msg: where + ": giá không hợp lệ." });
-    out.push({ customer_id: cust ? cust.id : 0, product, currency, price: v });
+    out.push({ customer_id: cust ? cust.id : tierId(cleanTier(x.tier)), product, currency, price: v });
   });
   return { rows: out, errors };
 }
@@ -2411,18 +2545,37 @@ function priceStmts(DB, list, now) {
 /* ---- customers */
 function custOut(c, who, logins) {
   const out = { id: c.id, code: c.code, name: c.name, kind: c.kind, currency: c.currency, country: c.country, active: !!c.active, auto: !!c.auto };
+  if (who.can("pricing.manage") || canMoney(who)) out.tier = c.tier || "";
   if (who.can("customers.view")) Object.assign(out, { contact: c.contact, email: c.email, phone: c.phone, address: c.address, terms: c.terms, note: c.note,
     created_at: c.created_at, updated_at: c.updated_at, logins: logins.filter((l) => l.customer_id === c.id).map((l) => l.email) });
   if ("orders" in c) { out.orders = c.orders; out.last_order = c.last_order || 0; }
   if ("billed" in c && canMoney(who)) Object.assign(out, { billed: c.billed, paid: c.paid_in, due: rnd(c.billed - c.paid_in, c.currency) });
   return out;
 }
-async function saveCustomers(DB, list, now, partial) {
+// Customer codes (owner's rule): DR for doctors and clinics, LAB for labs, then the year and a running number of that
+// year shared by both — DR202601, LAB202602. Changing the kind changes the prefix; the number stays.
+const custPrefix = (kind) => (kind === "lab" ? "LAB" : "DR");
+const AUTO_CCODE = /^(DR|LAB)(\d{4})(\d{2,4})$/;
+async function customerSeq(DB, year) {
+  const list = await rows(DB.prepare("SELECT code FROM customers WHERE code LIKE ? OR code LIKE ?").bind("DR" + year + "%", "LAB" + year + "%"));
+  let max = 0;
+  for (const c of list) { const m = AUTO_CCODE.exec(c.code); if (m && m[2] === year) max = Math.max(max, +m[3]); }
+  return max;
+}
+const autoCustomerCode = (kind, year, n) => custPrefix(kind) + year + String(n).padStart(2, "0");
+async function saveCustomers(DB, list, now, partial, canTier) {
   const errors = [], set = [], codes = [];
   const existing = await rows(DB.prepare("SELECT id, code FROM customers"));
+  const year = vnDay(now).slice(0, 4);
+  let seq = await customerSeq(DB, year);
+  const taken = new Set(existing.map((e) => e.code));
   list.forEach((x, i) => {
     const where = "Dòng " + (x.row || i + 1);
-    const code = ucode(x.code);
+    const kind = CUST_KINDS.includes(x.kind) ? x.kind : "doctor";
+    const old = x.id ? existing.find((e) => e.id === +x.id) : null;
+    let code = ucode(x.code) || (old ? old.code : "");
+    if (!code) { do { code = autoCustomerCode(kind, year, ++seq); } while (taken.has(code)); taken.add(code); }
+    else { const am = AUTO_CCODE.exec(code); if (am && am[1] !== custPrefix(kind)) code = custPrefix(kind) + am[2] + am[3]; }
     if (!CCODE_RE.test(code)) return errors.push({ row: i, msg: where + ": mã khách \"" + clip(x.code, 20) + "\" không hợp lệ (chữ in hoa, số, dấu - . _, tối đa 16 ký tự)." });
     const name = clip(x.name, 120);
     if (!name) return errors.push({ row: i, msg: where + " (" + code + "): thiếu tên khách." });
@@ -2430,7 +2583,7 @@ async function saveCustomers(DB, list, now, partial) {
       const same = existing.find((e) => e.code === code);
       if (same && same.id !== +x.id) return errors.push({ row: i, msg: where + ": mã khách " + code + " đã dùng cho khách khác." });
     }
-    const c = { code, name, kind: CUST_KINDS.includes(x.kind) ? x.kind : "clinic", country: clip(x.country, 60),
+    const c = { code, name, kind, country: clip(x.country, 60), tier: canTier && x.tier !== undefined ? cleanTier(x.tier) : null,
       currency: CURRENCIES.includes(String(x.currency || "").toUpperCase()) ? String(x.currency).toUpperCase() : "USD",
       contact: clip(x.contact, 100), email: clip(x.email, 160), phone: clip(x.phone, 60), address: clip(x.address, 300), terms: clip(x.terms, 300),
       note: clip(x.note, 1000), active: x.active === false || x.active === 0 ? 0 : 1, created_at: now, updated_at: now };
@@ -2441,10 +2594,10 @@ async function saveCustomers(DB, list, now, partial) {
   if (errors.length && !partial) return { errors, codes: [] };
   const stmts = [];
   const upd = set.filter((c) => c.id), ins = set.filter((c) => !c.id);
-  const cols = ["code", "name", "kind", "country", "currency", "contact", "email", "phone", "address", "terms", "note", "active", "search", "created_at", "updated_at"];
-  if (ins.length) stmts.push(jsonInsert(DB, "customers", cols, ins, "WHERE 1 ON CONFLICT (code) DO UPDATE SET name = excluded.name, kind = excluded.kind, country = excluded.country, currency = excluded.currency, contact = excluded.contact, email = excluded.email, phone = excluded.phone, address = excluded.address, terms = excluded.terms, note = excluded.note, active = excluded.active, search = excluded.search, auto = 0, updated_at = excluded.updated_at"));
-  for (const c of upd.slice(0, 20)) stmts.push(DB.prepare(`UPDATE customers SET code = ?, name = ?, kind = ?, country = ?, currency = ?, contact = ?, email = ?, phone = ?, address = ?, terms = ?, note = ?, active = ?, search = ?, auto = 0, updated_at = ? WHERE id = ?`)
-    .bind(c.code, c.name, c.kind, c.country, c.currency, c.contact, c.email, c.phone, c.address, c.terms, c.note, c.active, c.search, now, c.id));
+  const cols = ["code", "name", "kind", "country", "currency", "contact", "email", "phone", "address", "terms", "note", "active", "search", "created_at", "updated_at", "tier"];
+  if (ins.length) stmts.push(jsonInsert(DB, "customers", cols, ins.map((c) => ({ ...c, tier: c.tier || "" })), "WHERE 1 ON CONFLICT (code) DO UPDATE SET name = excluded.name, kind = excluded.kind, country = excluded.country, currency = excluded.currency, contact = excluded.contact, email = excluded.email, phone = excluded.phone, address = excluded.address, terms = excluded.terms, note = excluded.note, active = excluded.active, search = excluded.search, auto = 0, updated_at = excluded.updated_at"));
+  for (const c of upd.slice(0, 20)) stmts.push(DB.prepare(`UPDATE customers SET code = ?, name = ?, kind = ?, country = ?, currency = ?, contact = ?, email = ?, phone = ?, address = ?, terms = ?, note = ?, active = ?, search = ?, auto = 0, updated_at = ?, tier = COALESCE(?, tier) WHERE id = ?`)
+    .bind(c.code, c.name, c.kind, c.country, c.currency, c.contact, c.email, c.phone, c.address, c.terms, c.note, c.active, c.search, now, c.tier, c.id));
   if (stmts.length) await DB.batch(stmts);
   return { errors, codes };
 }
@@ -2884,16 +3037,13 @@ async function exportData(DB, who, P, now) {
 // Old orders from Excel: rows are already grouped into orders by the browser ({key, code, day, customer, items: [...], ...}).
 async function importOrders(env, DB, list, who, now, partial, dry) {
   const canPrice = who.viaKey || who.can("billing.edit");
-  const [cs, ps, pr] = await DB.batch([DB.prepare("SELECT id, code, currency FROM customers"), DB.prepare("SELECT code, name, unit FROM products"),
+  const [cs, ps, pr] = await DB.batch([DB.prepare("SELECT id, code, currency, tier FROM customers"), DB.prepare("SELECT code, name, unit FROM products"),
     DB.prepare("SELECT customer_id, product, currency, price FROM prices")]);
   const custs = new Map((cs.results || []).map((c) => [c.code, c]));
   const prods = new Map((ps.results || []).map((p) => [p.code, p]));
   const prices = pr.results || [];
-  const priceFor = (cid) => (product, cur) => {
-    const own = prices.find((p) => p.customer_id === cid && p.product === product && p.currency === cur);
-    const def = prices.find((p) => p.customer_id === 0 && p.product === product && p.currency === cur);
-    return own ? own.price : def ? def.price : null;
-  };
+  const tierOf = new Map([...custs.values()].map((c) => [c.id, c.tier || ""]));
+  const priceFor = (cid) => priceLookup(prices, cid, tierOf.get(cid));
   const team = (await listStaffRecords(env)).map((t) => ({ ...t }));
   await fillNames(env, team);
   const admins = conf(env).admins;

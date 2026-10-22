@@ -16,7 +16,7 @@
   const OST_ORDER = ["new", "design", "qc", "fix", "ready", "review", "revise", "approved", "delivered", "hold", "cancelled"];
   const KIND = { new: "Đơn mới", redo: "Làm lại", continue: "Làm tiếp" };
   const CHARGE = { charge: "Tính tiền", free: "Miễn phí", warranty: "Bảo hành (miễn phí)" };
-  const UNIT = { unit: "răng / đơn vị", arch: "hàm", case: "ca", hour: "giờ" };
+  const UNIT = { unit: "răng / đơn vị", arch: "hàm", bridge: "cầu", set: "bộ", case: "ca", hour: "giờ" };
   D8.OST = OST; D8.OST_ORDER = OST_ORDER; D8.UNIT_LABEL = UNIT;
   D8.ostChip = (s) => `<span class="ost ost-${esc(s)}">${esc(OST[s] || s)}</span>`;
   // code 26102101R1C2: stage 1 is the plain code, C2 = stage 2, R1 = first redo
