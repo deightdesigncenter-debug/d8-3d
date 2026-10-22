@@ -60,7 +60,7 @@
 .st-delivered { background: var(--ok-bg); color: var(--success); }
 .st-cancelled { background: var(--mute-bg); color: var(--mute-fg); }
 .pt-empty { text-align: center; padding: 64px 24px; background: var(--white); border: 1px dashed var(--steel-300); border-radius: 18px; }
-.pt-empty img { width: 60px; opacity: .9; }
+.pt-empty img { display: block; width: 60px; margin: 0 auto; opacity: .9; }
 .pt-empty h2 { margin: 18px 0 8px; }
 .pt-empty p { margin: 0 auto 22px; max-width: 420px; color: var(--muted); line-height: 1.7; }
 .pt-note { margin: 16px 0 0; font-size: 13px; color: var(--muted); }

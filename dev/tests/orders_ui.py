@@ -74,6 +74,13 @@ with sync_playwright() as p:
     op.select_option("#ofDes", KTV); op.select_option("#ofQc", QC)
     op.fill("#ofChat", "Lưu ý tiếp xúc nhẹ, khớp cắn 0.4 mm")
     op.screenshot(path=f"{OUT}/order-form.png", full_page=True)
+    # the summary panel never spills over, even where the text renders larger (Windows fonts, minimum font size)
+    SPILL = """() => { const c = document.querySelector('.of-side .card'), cr = c.getBoundingClientRect(), pad = parseFloat(getComputedStyle(c).paddingRight);
+      return [...c.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && r.right > cr.right - pad + 0.5; }).map((e) => e.id || e.tagName).slice(0, 5); }"""
+    ok(op.evaluate(SPILL) == [], "order form panel: nothing spills over the card")
+    big = op.add_style_tag(content=".seg span{font-size:12.5px !important} .of-side .input{font-size:17px !important}"); op.wait_for_timeout(200)
+    ok(op.evaluate(SPILL) == [], "order form panel: nothing spills over with larger text either")
+    big.evaluate("e => e.remove()")
     op.click("#ofSave"); op.wait_for_timeout(2000)
     m = re.search(r"#orders/(\d+)$", op.url); ok(m is not None, "order saved, order page opened")
     OID = m.group(1) if m else "0"
