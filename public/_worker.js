@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-22.2"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-22.3"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -226,7 +226,7 @@ async function handleApi(request, env, url) {
   if (path === "/api/ping" && method === "GET") return json({ ok: true, perms: keyOk ? PERM_KEYS : [...staff.perms] }); // no KV use for the password
   if (path === "/api/staff" || path.startsWith("/api/staff/") || path === "/api/roles") return handleStaff(request, env, url, who);
   if (path.startsWith("/api/prices/")) return handlePrices(request, env, url, who);
-  if (/^\/api\/(orders|customers|products|prices|payments|techrates|reports|export|import|settings|book)(\/|$)/.test(path)) {
+  if (/^\/api\/(orders|customers|products|prices|payments|techrates|tech|reports|export|import|settings|book)(\/|$)/.test(path)) {
     try { return await handleBook(request, env, url, who); }
     catch (err) { if (err && err.status) return json({ error: err.message, code: err.code || "", ...(err.dupes ? { dupes: err.dupes } : {}), ...(err.id ? { id: err.id } : {}) }, err.status); throw err; }
   }
@@ -669,7 +669,7 @@ const PERMS = [
 const PERM_KEYS = PERMS.map((p) => p[0]);
 const DEFAULT_ROLES = {
   admin: { label: "Quản trị", perms: PERM_KEYS },
-  designer: { label: "Kỹ thuật viên thiết kế", perms: ["cases.files", "cases.design", "cases.notes", "cases.chat_read", "ai.use", "links.manage"] },
+  designer: { label: "Kỹ thuật viên thiết kế", perms: ["cases.files", "cases.design", "cases.notes", "cases.chat_read", "ai.use", "links.manage", "techpay.own"] },
   qc: { label: "QC – kiểm tra chất lượng", perms: ["cases.files", "cases.qc", "cases.notes", "cases.chat_read", "ai.use", "links.manage"] },
 };
 const ROLE_KEY_RE = /^[a-z][a-z0-9_]{1,23}$/;
@@ -2254,6 +2254,17 @@ async function handleBook(request, env, url, who) {
     if (!who.can("reports.view")) return deny();
     return reportData(DB, who, P, now);
   }
+  // KTV pages: the whole team (managers) and one KTV — month, work in hand, QC returns, redos, pay
+  if (path === "/api/tech" && method === "GET") {
+    if (!canTeam(who)) return deny();
+    return techTeam(DB, who, P, now);
+  }
+  if ((m = path.match(/^\/api\/tech\/([^/]+)$/)) && method === "GET") {
+    let email = "";
+    try { email = decodeURIComponent(m[1]).trim().toLowerCase(); } catch { return json({ error: "Email không hợp lệ." }, 400); }
+    if (!canTeam(who) && !(who.email && email === who.email && who.can("cases.design"))) return deny();
+    return techOne(DB, who, email, P, now);
+  }
   if (path === "/api/export" && method === "GET") {
     if (!who.can("export.csv")) return deny();
     return exportData(DB, who, P, now);
@@ -2757,6 +2768,48 @@ async function orderDash(DB, who, now) {
     out[k] = ["money", "debt"].includes(k) ? r : k === "today" ? (r[0] || {}).n || 0 : r.map((o) => orderOut(o, who));
   });
   return json(out);
+}
+// Who sees every KTV's page; pay is shown to techpay.manage, or to a KTV for their own orders with techpay.own.
+const canTeam = (who) => who.viaKey || who.can("staff.manage") || who.can("techpay.manage") || who.can("reports.view");
+const canPayOf = (who, email) => who.viaKey || who.can("techpay.manage") || (!!who.email && email === who.email && who.can("techpay.own"));
+const ITEMS_TEXT = `(SELECT group_concat(CASE WHEN i.qty = 1 THEN i.product WHEN i.qty = CAST(i.qty AS INTEGER) THEN (CAST(i.qty AS INTEGER) || '× ' || i.product) ELSE (i.qty || '× ' || i.product) END, ', ') FROM order_items i WHERE i.order_id = o.id)`;
+const REDONE = `EXISTS (SELECT 1 FROM orders c WHERE c.parent_id = o.id AND c.kind = 'redo')`;
+// A month of work: by delivery day (default — what is paid) or by received day. Delivered orders without a delivery day
+// (old imports) count on their received day.
+function techPeriod(P, now) {
+  const today = vnDay(now), q = P.get("month") || "";
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(q) ? q : today.slice(0, 7);
+  const [y, mo] = month.split("-").map(Number), t = y * 12 + mo - 1 - 11;
+  const del = P.get("basis") !== "received";
+  return { month, from: month + "-01", to: month + "-31", first: Math.floor(t / 12) + "-" + String((t % 12) + 1).padStart(2, "0") + "-01", del,
+    D: del ? "COALESCE(NULLIF(o.dday, ''), o.day)" : "o.day", W: del ? "o.status = 'delivered'" : "o.status != 'cancelled'" };
+}
+const TECH_SUM = `COUNT(*) AS n, SUM(o.units) AS u, SUM(o.qc_fails) AS f, SUM(o.qc_fails > 0) AS fo, SUM(o.kind = 'redo') AS r, SUM(${REDONE}) AS rd, SUM(o.tech_cost) AS k, MAX(o.tech_currency) AS kc`;
+const noPay = ({ k, kc, tech_cost, tech_currency, ...x }) => x;
+async function techTeam(DB, who, P, now) {
+  const T = techPeriod(P, now), pay = canPayOf(who, "");
+  const [mon, open, free] = await DB.batch([
+    DB.prepare(`SELECT o.designer AS email, ${TECH_SUM} FROM orders o WHERE o.designer != '' AND ${T.W} AND ${T.D} >= ? AND ${T.D} <= ? GROUP BY o.designer`).bind(T.from, T.to),
+    DB.prepare(`SELECT o.designer AS email, COUNT(*) AS n, SUM(o.units) AS u, SUM(o.due_at > 0 AND o.due_at < ?) AS late, SUM(o.status IN ('new', 'design', 'fix', 'revise')) AS mine
+      FROM orders o WHERE o.designer != '' AND o.status NOT IN ('delivered', 'cancelled') GROUP BY o.designer`).bind(now),
+    DB.prepare(`SELECT COUNT(*) AS n FROM orders WHERE designer = '' AND status NOT IN ('delivered', 'cancelled')`),
+  ]);
+  return json({ month: T.month, basis: T.del ? "delivered" : "received", pay, unassigned: ((free.results || [])[0] || {}).n || 0,
+    rows: (mon.results || []).map((x) => (pay ? x : noPay(x))), open: open.results || [] });
+}
+async function techOne(DB, who, email, P, now) {
+  const T = techPeriod(P, now), pay = canPayOf(who, email);
+  const SEL = `o.id, o.code, o.kind, o.day, o.dday, o.doctor, o.patient, o.status, o.units, o.qc_fails, o.due_at, o.tech_cost, o.tech_currency, ${ITEMS_TEXT} AS items_text, ${REDONE} AS redone`;
+  const [series, list, open, prods] = await DB.batch([
+    DB.prepare(`SELECT substr(${T.D}, 1, 7) AS m, ${TECH_SUM} FROM orders o WHERE o.designer = ? AND ${T.W} AND ${T.D} >= ? AND ${T.D} <= ? GROUP BY m ORDER BY m`).bind(email, T.first, T.to),
+    DB.prepare(`SELECT ${SEL}, ${T.D} AS at FROM orders o WHERE o.designer = ? AND ${T.W} AND ${T.D} >= ? AND ${T.D} <= ? ORDER BY at, o.code LIMIT 3000`).bind(email, T.from, T.to),
+    DB.prepare(`SELECT ${SEL} FROM orders o WHERE o.designer = ? AND o.status NOT IN ('delivered', 'cancelled') ORDER BY o.due_at = 0, o.due_at, o.day, o.code LIMIT 500`).bind(email),
+    DB.prepare(`SELECT i.product AS code, MAX(i.name) AS name, SUM(i.qty) AS q, COUNT(DISTINCT o.id) AS n FROM order_items i JOIN orders o ON o.id = i.order_id
+      WHERE o.designer = ? AND ${T.W} AND ${T.D} >= ? AND ${T.D} <= ? GROUP BY i.product ORDER BY q DESC, i.product`).bind(email, T.from, T.to),
+  ]);
+  const clean = (x) => { const o = { ...x, redone: !!x.redone }; return pay ? o : noPay(o); };
+  return json({ email, month: T.month, basis: T.del ? "delivered" : "received", pay, months: (series.results || []).map(clean),
+    orders: (list.results || []).map(clean), open: (open.results || []).map(clean), products: prods.results || [], now });
 }
 async function reportData(DB, who, P, now) {
   const to = validDay(P.get("to")) ? P.get("to") : vnDay(now);

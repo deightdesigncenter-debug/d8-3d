@@ -167,6 +167,59 @@ with sync_playwright() as p:
     op.click("#opAddBtn"); op.fill("#opRef", "PP-" + stamp); op.click("#opForm [type=submit]"); op.wait_for_timeout(1500)
     ok(re.search(r"Còn nợ\s*US\$0", op.inner_text("#p-order")) is not None, "payment recorded, nothing owed")
 
+    # KTV pages: the team, one KTV's month, "Công của tôi", pay slips in Excel
+    op.evaluate(API, ["/api/techrates", {"email": KTV, "currency": "VND", "from": "2026-01-01", "items": [{"product": "CR", "rate": 100000}, {"product": "IMC", "rate": 150000}]}])
+    nav = op.eval_on_selector_all("#wsNav nav a > span:not(.count)", "els=>els.map(e=>e.textContent.trim())")
+    ok("Kỹ thuật viên" in nav and "Công của tôi" not in nav, "owner sidebar: Kỹ thuật viên (not Công của tôi)")
+    op.goto(B + "/admin#team"); op.wait_for_timeout(1500)
+    row = op.query_selector(f'#tmBody tr[data-href="#team/{KTV.replace("@", "%40")}"]')
+    ok(row is not None and "450.000" in row.inner_text(), "team page: KTV row with this month's pay 3×100,000 + 150,000")
+    ok("1" in (row.query_selector('[data-l="QC trả về"]').inner_text() if row else ""), "team page: QC return counted")
+    op.screenshot(path=f"{OUT}/team.png", full_page=True)
+    with op.expect_download() as dl:
+        op.click("#tmExport")
+    allp = os.path.join(OUT, "phieu-cong-tat-ca.xlsx"); dl.value.save_as(allp)
+    wb = openpyxl.load_workbook(allp)
+    summ = list(wb["Tổng hợp"].iter_rows(values_only=True))
+    ok(len(wb.sheetnames) >= 2 and any(r and r[1] == KTV and r[6] == 450000 for r in summ), "pay slips for all KTVs: summary + one sheet per KTV " + ", ".join(wb.sheetnames))
+    if row: row.click()
+    op.wait_for_timeout(1500)
+    ok("#team/" in op.url and code_preview in text(op, "#tkBody") and "450.000" in text(op, "#tkBody .kpis"), "KTV page: this month's case and pay")
+    ok(op.query_selector("#tkChart svg") is not None, "KTV page: 12-month chart")
+    op.screenshot(path=f"{OUT}/tech.png", full_page=True)
+    with op.expect_download() as dl:
+        op.click("#tkExport")
+    one = os.path.join(OUT, "phieu-cong.xlsx"); dl.value.save_as(one)
+    wb = openpyxl.load_workbook(one)
+    ok(wb.sheetnames == ["Phiếu công", "Chi tiết ca", "Theo mã hàng"], "pay slip sheets: " + ", ".join(wb.sheetnames))
+    head = {r[0]: r[1] for r in wb["Phiếu công"].iter_rows(values_only=True) if r and r[0]}
+    det = [r for r in wb["Chi tiết ca"].iter_rows(values_only=True) if r and r[0] == code_preview]
+    ok(head.get("Email") == KTV and head.get("Tổng tiền công (VND)") == 450000 and head.get("Ca bị QC trả về") == 1, "pay slip head: KTV, total pay, QC returns " + json.dumps({k: str(v) for k, v in head.items()})[:220])
+    ok(det and det[0][10] == 450000 and det[0][8] == 1, "pay slip line for " + code_preview)
+    op.select_option("#tkBasis", "received"); op.wait_for_timeout(1200)
+    ok("ca nhận tháng" in text(op, "#tkBody").lower(), "switch to received day")
+    op.click('#p-tech [data-mon="-1"]'); op.wait_for_timeout(1200)
+    ok(op.input_value("#tkMon") != op.evaluate("new Date(Date.now()+7*3600e3).toISOString().slice(0,7)"), "previous month")
+    op.select_option("#tkBasis", "delivered"); op.select_option("#tkMon", op.evaluate("new Date(Date.now()+7*3600e3).toISOString().slice(0,7)")); op.wait_for_timeout(1200)
+
+    kp.reload(); kp.wait_for_timeout(1500)
+    nav = kp.eval_on_selector_all("#wsNav nav a > span:not(.count)", "els=>els.map(e=>e.textContent.trim())")
+    ok("Công của tôi" in nav and "Kỹ thuật viên" not in nav, "KTV sidebar: Công của tôi, no team page")
+    kp.goto(B + "/admin#me"); kp.wait_for_timeout(1500)
+    kb = text(kp, "#tkBody")
+    ok(code_preview in kb and "450.000" in kb and "US$" not in kb, "Công của tôi: own case and pay, no prices")
+    kp.screenshot(path=f"{OUT}/ktv-me.png", full_page=True)
+    with kp.expect_download() as dl:
+        kp.click("#tkExport")
+    ok(dl.value.suggested_filename.startswith("D8-phieu-cong-"), "KTV downloads their own pay slip")
+    kp.goto(B + "/admin#team"); kp.wait_for_timeout(1000)
+    ok(kp.is_visible("#p-denied"), "KTV cannot open the team page")
+    kp.goto(B + "/admin#team/" + QC.replace("@", "%40")); kp.wait_for_timeout(1000)
+    ok(kp.is_visible("#p-denied"), "KTV cannot open someone else's page")
+    qp.reload(); qp.wait_for_timeout(1500)
+    nav = qp.eval_on_selector_all("#wsNav nav a > span:not(.count)", "els=>els.map(e=>e.textContent.trim())")
+    ok("Công của tôi" not in nav and "Kỹ thuật viên" not in nav, "QC sidebar: no KTV pages")
+
     # reports + Excel export
     op.goto(B + "/admin#reports"); op.wait_for_timeout(1800)
     ok(op.query_selector("#rpMoney svg path, #rpMoney svg rect:not(.hit)") is not None and op.query_selector("#rpCases svg") is not None, "report charts drawn")
@@ -282,7 +335,7 @@ with sync_playwright() as p:
     mp.goto(B + "/admin#orders/" + OID); mp.wait_for_timeout(1500)
     rows = mp.eval_on_selector_all(".o-items tbody tr", "els => els.map((e) => e.getBoundingClientRect().width)")
     ok(rows and all(w <= 360 for w in rows) and mp.eval_on_selector(".o-items tbody tr td", "e => e.getBoundingClientRect().width") > 250, "phone: order items as full-width rows")
-    for h in ["orders", "orders/" + OID, "orders/new", "reports", "catalog", "cust/" + CID, "import/orders"]:
+    for h in ["orders", "orders/" + OID, "orders/new", "reports", "catalog", "cust/" + CID, "import/orders", "team", "team/" + KTV.replace("@", "%40")]:
         mp.goto(B + "/admin#" + h); mp.wait_for_timeout(1500)
         w = mp.evaluate("document.documentElement.scrollWidth")
         ok(w <= 390, "phone: no sideways scroll on #" + h + " (" + str(w) + ")")

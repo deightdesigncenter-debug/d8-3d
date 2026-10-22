@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-22.2">
-<link rel="stylesheet" href="/case.css?v=2026-10-22.2">
+<link rel="stylesheet" href="/brand.css?v=2026-10-22.3">
+<link rel="stylesheet" href="/case.css?v=2026-10-22.3">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -431,6 +431,30 @@
   .imp-card:hover { border-color: var(--steel); }
   .imp-card p { margin: 0 0 6px; font-size: 14px; color: var(--muted); line-height: 1.55; flex: 1; }
   .imp-card .btn { align-self: flex-start; }
+  /* KTV pages */
+  .t-tools .t-month { display: flex; gap: 6px; align-items: center; }
+  .t-tools .t-month .btn { min-width: 40px; padding-left: 0; padding-right: 0; justify-content: center; }
+  .t-tools select.input { width: auto; min-width: 170px; }
+  .t-tools-r { margin-left: auto; }
+  .t-tools-r:empty { display: none; }
+  table.t-tbl { min-width: 760px; }
+  .t-tbl tfoot td { font-weight: 600; border-top: 1px solid var(--line); }
+  .t-months tr.on td { background: var(--hover); }
+  .t-months td .muted { font-size: 12px; }
+  .linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--navy); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  #tkChart { margin-bottom: 14px; }
+  @media (max-width: 760px) {
+    .t-tools .t-month { flex: 1 1 100%; }
+    .t-tools .t-month select.input { flex: 1 1 auto; }
+    .t-tools > select.input { flex: 1 1 100%; }
+    .t-tools-r { margin-left: 0; flex: 1 1 100%; }
+    table.t-tbl { min-width: 0; }
+    table.t-tbl td[data-l]::before { min-width: 118px; }
+    table.t-tbl td small { margin-left: 118px; }
+    .t-tbl td.o-code small { margin-left: 0; }
+    .t-tbl td.num small { display: inline; margin-left: 8px; }
+    .t-tbl tfoot tr { background: var(--hover); }
+  }
   .im-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin: 4px 0 16px; }
   @media (max-width: 760px) { .im-opts { grid-template-columns: 1fr; } }
   .im-map { display: grid; gap: 10px; }
@@ -524,12 +548,13 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-22.2" defer></script>
-<script src="/xlsx.js?v=2026-10-22.2" defer></script>
-<script src="/orders.js?v=2026-10-22.2" defer></script>
-<script src="/books.js?v=2026-10-22.2" defer></script>
-<script src="/snap.js?v=2026-10-22.2" defer></script>
-<script src="/admin.js?v=2026-10-22.2" defer></script>
+<script src="/shell.js?v=2026-10-22.3" defer></script>
+<script src="/xlsx.js?v=2026-10-22.3" defer></script>
+<script src="/orders.js?v=2026-10-22.3" defer></script>
+<script src="/books.js?v=2026-10-22.3" defer></script>
+<script src="/tech.js?v=2026-10-22.3" defer></script>
+<script src="/snap.js?v=2026-10-22.3" defer></script>
+<script src="/admin.js?v=2026-10-22.3" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
@@ -602,6 +627,7 @@
     <section class="panel" id="p-cust" hidden></section>
     <section class="panel" id="p-catalog" hidden></section>
     <section class="panel" id="p-reports" hidden></section>
+    <section class="panel" id="p-tech" hidden></section>
     <section class="panel" id="p-import" hidden></section>
     <section class="panel" id="p-settings" hidden></section>
 

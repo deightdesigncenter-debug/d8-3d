@@ -20,7 +20,10 @@ The owner wants the site to run without errors or jank, and every new feature ch
 - `public/portal.*`: customer portal. `public/admin.*`: staff workspace (sidebar, dashboard, orders, portal cases,
   customers, product codes & prices, reports, Excel import, staff & permissions, settings, 3D links, contact messages). `public/stl.html`: HTML → STL tool.
 - `public/orders.js` (order list/form/page, order chat), `public/books.js` (customers, product codes & prices, reports,
-  import, settings), `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser).
+  import, settings), `public/tech.js` (KTV pages `#team`, `#team/<email>`, `#me` "Công của tôi", monthly pay slips),
+  `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format).
+- `/api/tech` (team: staff.manage / techpay.manage / reports.view) and `/api/tech/<email>` (also the KTV themself with
+  cases.design); pay fields only with techpay.manage, or techpay.own for one's own page (on in the default designer role).
 - Order book (D1, schema auto-created and migrated: `SCHEMA_V1`, `SCHEMA_V2`): codes `yymmddxx` (26102101 = stage 1),
   next stage `C2`, `C3`…, redo `R1`, `R2`…, redo then next stage `R1C2` (owner's rules; old `26/10/21/01` is normalised). Free-plan D1
   limits: ≤50 queries per request, ≤100 bound params per query — bulk writes go through `json_each(?)`. The local D1

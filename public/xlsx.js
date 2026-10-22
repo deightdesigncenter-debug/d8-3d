@@ -113,6 +113,7 @@
     const cols = sh.cols || [], rows = sh.rows || [];
     const out = [];
     const cell = (r, c, v, t, total) => {
+      if (v && typeof v === "object" && "v" in v) { t = v.t || t; v = v.v; } // one cell with its own format: { v, t }
       const ref = colName(c) + r, st = (STYLE[t] || 2) + (total ? 10 : 0);
       if (v === null || v === undefined || v === "") return total ? `<c r="${ref}" s="${st}"/>` : "";
       if (typeof v === "object" && v.f) return `<c r="${ref}" s="${st}"><f>${xml(v.f)}</f></c>`;
