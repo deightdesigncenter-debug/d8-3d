@@ -28,6 +28,8 @@ run rbac      node dev/tests/rbac.test.mjs
 run orders    node dev/tests/orders.test.mjs
 run privacy   node dev/tests/privacy.test.mjs
 run pay       node dev/tests/pay.test.mjs
+run contact   node dev/tests/contact.test.mjs
+run contact-ui python3 dev/tests/contact_ui.py "$OUT/contact"
 run workspace python3 dev/tests/workspace_ui.py "$OUT/workspace" light
 run workspace-dark python3 dev/tests/workspace_ui.py "$OUT/workspace-dark" dark
 run orders-ui python3 dev/tests/orders_ui.py "$OUT/orders" light
@@ -44,6 +46,12 @@ run portal-plain python3 dev/tests/portal_ui.py "$OUT/portal-plain"
 run site-plain   python3 dev/tests/site_ui.py "$OUT/site-plain"
 run nodb-ui      python3 dev/tests/nodb_ui.py "$OUT/nodb"
 run access-plain python3 dev/tests/access_ui.py "$OUT/access-plain"
+stop
+
+# Cloudflare Turnstile switched on (keys set; the check is answered by the emulator's mock)
+start TS=1
+run contact-ts    node dev/tests/contact.test.mjs
+run contact-ui-ts python3 dev/tests/contact_ui.py "$OUT/contact-ts"
 stop
 
 # the database bound under another variable name still works

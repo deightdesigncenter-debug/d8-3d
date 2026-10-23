@@ -175,7 +175,7 @@
     for (const r of D8.wsRoutes) { const mm = hp.match(r.re); if (mm) { if (dbOn && D8.refreshOrderBadge) D8.refreshOrderBadge(); return r.fn(mm, hq); } }
     if ((m = h.match(/^customers\/(.+)$/))) { let e = ""; try { e = decodeURIComponent(m[1]); } catch {} return can("customers.view") && e ? openCustomer(e) : denied(); }
     if (h === "links") { if (!can("links.manage")) return denied(); setBand(...BANDS.links); show("p-links"); return refreshList(); }
-    if (h === "messages") { if (!can("messages.view")) return denied(); setBand(...BANDS.messages); show("p-messages"); return refreshMessages(); }
+    if (h === "messages") { if (!can("messages.view")) return denied(); setBand(...BANDS.messages); show("p-messages"); refreshSpam(); return refreshMessages(); }
     if (h === "customers") { if (!can("customers.view")) return denied(); setBand(...BANDS.customers); show("p-customers"); return loadCustomers(); }
     if (h === "staff") { if (!can("staff.manage")) return denied(); show("p-staff"); return drawStaff(); }
     if (h === "jobs" || h.startsWith("jobs?")) {
@@ -1320,7 +1320,53 @@
       $("msgError").hidden = true;
     } catch (err) { if (!quiet) { $("msgError").textContent = err.message; $("msgError").hidden = false; } }
   }
-  $("msgReload").addEventListener("click", () => refreshMessages());
+  /* messages the anti-spam checks stopped (kept 30 days in D1) */
+  const SPAM_WHY = { honeypot: "Bot điền ô ẩn", token: "Không có mã chống bot", fast: "Gửi quá nhanh", captcha: "Không qua Turnstile", links: "Chứa link quảng cáo", words: "Từ khóa quảng cáo", email: "Email bị chặn", ip: "Gửi quá nhiều trong ngày" };
+  let spam = [];
+  async function refreshSpam() {
+    try {
+      const data = await api("/api/messages/spam");
+      if (!data.db) { $("spamCard").hidden = true; return; }
+      spam = data.items || [];
+      renderSpam();
+      $("spamError").hidden = true;
+    } catch (err) { $("spamError").textContent = err.message; $("spamError").hidden = false; }
+  }
+  $("spamToggle").addEventListener("click", () => {
+    const open = $("spamList").hidden;
+    $("spamList").hidden = !open;
+    $("spamToggle").setAttribute("aria-expanded", String(open));
+    $("spamToggle").textContent = open ? "Thu gọn" : "Xem";
+  });
+  function renderSpam() {
+    $("spamCard").hidden = false;
+    $("spamCount").textContent = spam.length ? "(" + spam.length + ")" : "";
+    $("spamToggle").hidden = !spam.length;
+    const ul = $("spamList");
+    ul.innerHTML = "";
+    if (!spam.length) { ul.hidden = true; $("spamToggle").setAttribute("aria-expanded", "false"); $("spamToggle").textContent = "Xem"; return; }
+    for (const m of spam) {
+      const li = document.createElement("li");
+      li.className = "msg spam";
+      const where = [m.practice, m.country || (m.ip_country ? "(IP: " + m.ip_country + ")" : "")].filter(Boolean).join(" · ");
+      li.innerHTML = `<div class="msg-head"><div class="msg-who"><b>${esc(m.name || "(không tên)")}</b><span>${esc(m.email || "")}${where ? " · " + esc(where) : ""}</span></div>
+          <div class="msg-when"><span class="chip why" title="${esc(m.detail || "")}">${esc(SPAM_WHY[m.reason] || m.reason)}</span><span>${esc(fmtDateTimeVi(m.at))}</span></div></div>
+        <pre class="msg-body">${esc(m.message || "")}</pre>
+        <div class="msg-actions"><button class="btn small" data-act="ok">Không phải spam</button><button class="btn small btn-danger" data-act="del">Xóa</button></div>`;
+      const act = async (btn, restore) => {
+        btn.disabled = true;
+        try {
+          await api("/api/messages/spam/" + m.id + (restore ? "/restore" : ""), { method: restore ? "POST" : "DELETE" });
+          spam = spam.filter((x) => x.id !== m.id); renderSpam();
+          if (restore) refreshMessages(true);
+        } catch (err) { btn.disabled = false; $("spamError").textContent = err.message; $("spamError").hidden = false; }
+      };
+      li.querySelector('[data-act="ok"]').addEventListener("click", (e) => act(e.currentTarget, true));
+      li.querySelector('[data-act="del"]').addEventListener("click", (e) => act(e.currentTarget, false));
+      ul.appendChild(li);
+    }
+  }
+  $("msgReload").addEventListener("click", () => { refreshMessages(); refreshSpam(); });
   $("msgReadAll").addEventListener("click", () => { messages.forEach((m) => seenMsgs.add(m.id)); saveSeen(); renderMessages(); noteMessages(); });
   function markSeen(id) { if (!seenMsgs.has(id)) { seenMsgs.add(id); saveSeen(); renderMessages(); noteMessages(); } }
   function noteMessages() { const n = messages.filter((m) => !seenMsgs.has(m.id)).length; D8.notify.set("messages", n ? [{ key: "msg", n, text: "tin nhắn mới từ trang web", href: "#messages" }] : []); }

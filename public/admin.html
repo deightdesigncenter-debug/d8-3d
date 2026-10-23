@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-23.2">
-<link rel="stylesheet" href="/case.css?v=2026-10-23.2">
+<link rel="stylesheet" href="/brand.css?v=2026-10-23.3">
+<link rel="stylesheet" href="/case.css?v=2026-10-23.3">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -114,6 +114,17 @@
   .msg-body { margin: 12px 0 0; padding: 14px 16px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
   .msg-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
   .msg.seen .msg-who b { font-weight: 500; }
+  .spam-card { margin-top: 20px; }
+  .as-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; font-size: 14px; line-height: 1.5; }
+  .as-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: baseline; }
+  .as-st { font-size: 12px; font-weight: 600; padding: 1px 9px; border-radius: 999px; white-space: nowrap; background: var(--ok-bg); color: var(--ok-fg); border: 1px solid var(--ok-bd); }
+  .as-st.off { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-bd); }
+  .as-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+  .as-grid textarea { min-height: 110px; }
+  @media (max-width: 720px) { .as-grid { grid-template-columns: minmax(0, 1fr); } }
+  .spam .msg-who b { font-weight: 500; }
+  .spam .msg-body { max-height: 7.4em; overflow: hidden; color: var(--muted); }
+  .chip.why { background: var(--soft); border: 1px solid var(--line); color: var(--ink); }
 
   /* customers */
   .tbl-wrap { overflow-x: auto; margin: 0 -4px; }
@@ -571,14 +582,14 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-23.2" defer></script>
-<script src="/xlsx.js?v=2026-10-23.2" defer></script>
-<script src="/orders.js?v=2026-10-23.2" defer></script>
-<script src="/books.js?v=2026-10-23.2" defer></script>
-<script src="/tech.js?v=2026-10-23.2" defer></script>
-<script src="/viewer3d.js?v=2026-10-23.2" defer></script>
-<script src="/snap.js?v=2026-10-23.2" defer></script>
-<script src="/admin.js?v=2026-10-23.2" defer></script>
+<script src="/shell.js?v=2026-10-23.3" defer></script>
+<script src="/xlsx.js?v=2026-10-23.3" defer></script>
+<script src="/orders.js?v=2026-10-23.3" defer></script>
+<script src="/books.js?v=2026-10-23.3" defer></script>
+<script src="/tech.js?v=2026-10-23.3" defer></script>
+<script src="/viewer3d.js?v=2026-10-23.3" defer></script>
+<script src="/snap.js?v=2026-10-23.3" defer></script>
+<script src="/admin.js?v=2026-10-23.3" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
@@ -749,6 +760,17 @@
         </div>
         <ul class="msgs" id="msgList"></ul>
         <p class="error" id="msgError" hidden></p>
+      </section>
+      <section class="card spam-card" aria-labelledby="spamTitle" id="spamCard" hidden>
+        <div class="card-head">
+          <div>
+            <h2 class="h-caps" id="spamTitle">Tin bị chặn <span class="muted" id="spamCount"></span></h2>
+            <p class="muted" style="margin:6px 0 0;font-size:13px">Tin của bot và quảng cáo bị hệ thống chống spam chặn trong 30 ngày qua. Thấy tin của khách thật thì bấm “Không phải spam” để chuyển vào hộp thư.</p>
+          </div>
+          <div class="msg-tools"><button class="btn small" id="spamToggle" aria-expanded="false" aria-controls="spamList">Xem</button></div>
+        </div>
+        <ul class="msgs" id="spamList" hidden></ul>
+        <p class="error" id="spamError" hidden></p>
       </section>
     </section>
 

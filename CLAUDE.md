@@ -43,7 +43,13 @@ The owner wants the site to run without errors or jank, and every new feature ch
 - KTV privacy (owner's rule, `dev/tests/privacy.test.mjs` with two KTVs): a KTV sees only what is assigned to them; `/api/staff/team`
   leaves out the other KTVs for a KTV who does not run the team; 3D links carry their maker (`u`) and are listed / deleted
   only by them unless `links.all`; `/api/settings` needs staff.manage or billing.edit.
-- Settings KV `cfg:settings`: `onlinePay` and `autoTrial` are OFF by default (owner's choice).
+- Settings KV `cfg:settings`: `onlinePay` and `autoTrial` are OFF by default (owner's choice); `spamWords` / `blockEmails` are the owner's
+  own block lists (newline-joined, lower case).
+- Contact form anti-spam (`submitContact`, `dev/tests/contact.test.mjs` + `contact_ui.py`, also run with `TS=1`): honeypot `website`,
+  signed time token from `/api/contact/token` (HMAC with the session key, ≥3 s, ≤24 h; the page fetches it on first focus and waits),
+  optional Cloudflare Turnstile (`TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET`; `TURNSTILE_API` points at the mock locally), link / keyword /
+  disposable-email filters, `CONTACT_PER_IP` per address per day (KV `msgip:`) and `MSG_DAILY_CAP`. Bots get a quiet ok; filtered people
+  get a 400 with our email. Blocked messages go to D1 `spam_log` (schema v4, 30 days) for review / restore (`messages.view`).
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.
 - Motion rules: 200–300 ms, ease-out curves, transform/opacity only, off under `prefers-reduced-motion`.

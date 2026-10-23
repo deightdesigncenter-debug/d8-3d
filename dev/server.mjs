@@ -169,6 +169,8 @@ const PAY = process.env.PAY || "";
 const payEnv = {
   ...(PAY === "1" || PAY === "paypal" ? { PAYPAL_CLIENT_ID: "test-client", PAYPAL_CLIENT_SECRET: "test-secret", PAYPAL_API: `http://localhost:${PORT}/__mock/paypal` } : {}),
   ...(PAY === "1" || PAY === "stripe" ? { STRIPE_SECRET_KEY: "sk_test_mock", STRIPE_API: `http://localhost:${PORT}/__mock/stripe` } : {}),
+  // TS=1: Cloudflare Turnstile on, verified by the mock below (the response "ok-token" passes)
+  ...(process.env.TS ? { TURNSTILE_SITE_KEY: "1x-test-site", TURNSTILE_SECRET: "1x-test-secret", TURNSTILE_API: `http://localhost:${PORT}/__mock/turnstile` } : {}),
 };
 const ppOrders = new Map(), stSessions = new Map();
 const rid = (p) => p + crypto.randomBytes(6).toString("hex").toUpperCase();
@@ -180,6 +182,10 @@ async function payMock(req, res) {
   const chunks = []; for await (const c of req) chunks.push(c);
   const raw = Buffer.concat(chunks).toString();
   ops.pay = (ops.pay || 0) + 1;
+  if (p === "/__mock/turnstile") {
+    const f = new URLSearchParams(raw);
+    return sendJson(res, 200, { success: f.get("secret") === "1x-test-secret" && f.get("response") === "ok-token" });
+  }
   // PayPal
   if (p === "/__mock/paypal/v1/oauth2/token") {
     if (req.headers.authorization !== "Basic " + Buffer.from("test-client:test-secret").toString("base64")) return sendJson(res, 401, { error: "invalid_client" });

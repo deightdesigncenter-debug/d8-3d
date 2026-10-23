@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-23.2"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-23.3"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -132,6 +132,7 @@ async function handleApi(request, env, url) {
   }
 
   /* ---- public ---- */
+  if (path === "/api/contact/token" && method === "GET") return contactToken(env);
   if (path === "/api/contact") {
     if (method !== "POST") return json({ error: "Method not allowed." }, 405);
     return submitContact(request, env);
@@ -139,6 +140,7 @@ async function handleApi(request, env, url) {
   if (path === "/api/config" && method === "GET") {
     const pc = payConf(env), on = (await loadSettings(env)).onlinePay;
     return json({ googleClientId: conf(env).clientId, trialCases: TRIAL_CASES, trialCredit: TRIAL_CREDIT_USD, translate: !!env.AI, fileStore: activeStore(env),
+      ...(turnstileOn(env) ? { turnstile: env.TURNSTILE_SITE_KEY } : {}),
       pay: { paypal: on && !!pc.paypal, stripe: on && !!pc.stripe }, db: !!env.DB },
       200, { "Cache-Control": "public, max-age=300" });
   }
@@ -241,6 +243,10 @@ async function handleApi(request, env, url) {
   if (del && method === "DELETE") return can("links.manage") ? deleteCase(env, del[1], who) : deny();
 
   if (path === "/api/messages" && method === "GET") return can("messages.view") ? listMessages(env) : deny();
+  // blocked contact messages kept 30 days for review ("not spam" puts one back in the inbox)
+  if (path === "/api/messages/spam" && method === "GET") return can("messages.view") ? listSpam(env) : deny();
+  const spamOne = path.match(/^\/api\/messages\/spam\/(\d+)(\/restore)?$/);
+  if (spamOne && (method === "DELETE" || (method === "POST" && spamOne[2]))) return can("messages.view") ? spamAction(env, +spamOne[1], !!spamOne[2]) : deny();
   const delMsg = path.match(/^\/api\/messages\/([^/]+)$/);
   if (delMsg && method === "DELETE") return can("messages.view") ? deleteMessage(env, delMsg[1]) : deny();
 
@@ -1507,7 +1513,7 @@ async function handleJobs(request, env, url, who) {
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
@@ -1619,6 +1625,12 @@ const SCHEMA_V2 = [
 ];
 // v3: each customer gets a price level ('' = list price / MAX, 'mid', 'min'); level prices live in prices under customer_id -2 / -3
 const SCHEMA_V3 = [`ALTER TABLE customers ADD COLUMN tier TEXT NOT NULL DEFAULT ''`];
+// v4: contact messages stopped by the spam checks, kept 30 days for review
+const SCHEMA_V4 = [`CREATE TABLE IF NOT EXISTS spam_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, day TEXT NOT NULL, reason TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '', lang TEXT NOT NULL DEFAULT 'en', name TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', practice TEXT NOT NULL DEFAULT '',
+  country TEXT NOT NULL DEFAULT '', service TEXT NOT NULL DEFAULT '', message TEXT NOT NULL DEFAULT '', ip_country TEXT NOT NULL DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS spam_day ON spam_log (day)`];
+async function migrateV4(DB) { for (const sql of SCHEMA_V4) await DB.prepare(sql).run(); }
 async function migrateV3(DB) {
   for (const sql of SCHEMA_V3) {
     try { await DB.prepare(sql).run(); }
@@ -1650,6 +1662,7 @@ async function bookDb(env) {
     if (v < 1) await env.DB.batch(SCHEMA_V1.map((s) => env.DB.prepare(s)));
     if (v < 2) await migrateV2(env.DB);
     if (v < 3) await migrateV3(env.DB);
+    if (v < 4) await migrateV4(env.DB);
     if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }
@@ -1664,7 +1677,7 @@ function jsonInsert(DB, table, cols, list, tail = "") {
 }
 
 /* ---- settings (KV, work without the database) */
-const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false };
+const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false, spamWords: "", blockEmails: "" };
 async function loadSettings(env) {
   const c = cacheGet("@settings");
   if (c) return c.v;
@@ -1906,12 +1919,13 @@ async function handleBook(request, env, url, who) {
 
   // settings work without the database
   if (path === "/api/settings") {
-    if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB }) : deny();
+    if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB, turnstile: turnstileOn(env), spam: { minSec: CONTACT_MIN_MS / 1000, perIp: CONTACT_PER_IP, daily: MSG_DAILY_CAP } }) : deny();
     if (method === "POST") {
       if (!who.can("staff.manage")) return deny();
       const b = await body(), cur = await loadSettings(env);
       const next = { ...cur };
-      for (const k of Object.keys(SETTINGS_DEFAULT)) if (typeof b[k] === "boolean") next[k] = b[k];
+      for (const k of Object.keys(SETTINGS_DEFAULT)) if (typeof b[k] === "boolean" && typeof SETTINGS_DEFAULT[k] === "boolean") next[k] = b[k];
+      for (const k of ["spamWords", "blockEmails"]) if (typeof b[k] === "string") next[k] = b[k].split(/[\n,;]+/).map((x) => x.trim().toLowerCase().slice(0, 80)).filter(Boolean).slice(0, 300).join("\n");
       await env.CASES.put("cfg:settings", JSON.stringify(next));
       staffCache.delete("@settings");
       return json({ settings: next });
@@ -3157,15 +3171,73 @@ async function importOrders(env, DB, list, who, now, partial, dry) {
 
 /* ------------------------------------------------------ Contact messages */
 
+/* ---- contact form spam protection (the only form anyone can send without signing in), in layers like WPForms:
+   1. honeypot: a hidden field people never fill; 2. a time token signed by the server when the form is first used — it must be
+   at least 3 s and at most 24 h old (bots that post directly have none, and cannot fake the time); 3. optional Cloudflare Turnstile
+   (TURNSTILE_SITE_KEY + TURNSTILE_SECRET); 4. link / keyword / email filters (built in + the owner's lists in Settings);
+   5. at most CONTACT_PER_IP messages per address per day and MSG_DAILY_CAP in all. Bots get a quiet "ok"; a person caught by a
+   filter is told to email instead. Everything stopped is kept 30 days in the database for review. */
+const CONTACT_MIN_MS = 3000, CONTACT_TOKEN_MS = 24 * 3600 * 1000, CONTACT_PER_IP = 4, SPAM_LOG_DAILY = 200;
+const SPAM_WORDS = ["casino", "viagra", "cialis", "porn", "escort", "betting", "bitcoin", "crypto", "forex", "binary option", "payday loan", "loan offer",
+  "seo service", "seo package", "backlink", "guest post", "link building", "rank your website", "first page of google", "google ranking",
+  "web design service", "website redesign", "increase your traffic", "traffic to your website", "lead generation", "marketing agency", "whatsapp marketing"];
+const TEMP_MAIL = ["mailinator.com", "guerrillamail.com", "guerrillamail.net", "sharklasers.com", "10minutemail.com", "tempmail.com", "temp-mail.org", "yopmail.com",
+  "trashmail.com", "getnada.com", "dispostable.com", "maildrop.cc", "throwawaymail.com", "fakeinbox.com", "mintemail.com", "emailondeck.com", "moakt.com",
+  "mohmal.com", "tempail.com", "spamgourmet.com", "mailnesia.com", "mytemp.email", "tempmailo.com", "burnermail.io", "33mail.com"];
+const turnstileOn = (env) => !!(env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET);
+async function contactSig(env, ts) { return b64urlEncode(await crypto.subtle.sign("HMAC", await sessionKey(env), te.encode("contact:" + ts))).slice(0, 32); }
+async function contactToken(env) {
+  const ts = Date.now();
+  return json({ token: ts + "." + (await contactSig(env, ts)), minMs: CONTACT_MIN_MS }, 200, { "Cache-Control": "no-store" });
+}
+async function tokenAge(env, token) { // ms since the token was signed, or -1 when it is missing or forged
+  const m = /^(\d{12,14})\.([A-Za-z0-9_-]{32})$/.exec(String(token || ""));
+  if (!m || (await contactSig(env, +m[1])) !== m[2]) return -1;
+  return Date.now() - +m[1];
+}
+function spamCheck(msg, settings) {
+  const text = (msg.message + " " + msg.practice).toLowerCase(), links = (msg.message.match(/(?:https?:\/\/|\bwww\.)\S+/gi) || []).length;
+  if (/https?:\/\/|www\.|<a\s|\[url/i.test(msg.name)) return ["links", "đường link trong ô họ tên"];
+  if (/<a\s+href|\[url[=\]]|\[link[=\]]/i.test(msg.message)) return ["links", "mã HTML / BBCode chèn link"];
+  if (links >= 3) return ["links", links + " đường link"];
+  const own = String(settings.spamWords || "").split("\n").filter(Boolean);
+  const word = [...SPAM_WORDS, ...own].find((w) => new RegExp("(^|[^a-z0-9])" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(text + " " + msg.name.toLowerCase()));
+  if (word) return ["words", "từ khóa “" + word + "”"];
+  const email = msg.email.toLowerCase(), domain = email.split("@")[1] || "";
+  const blocked = String(settings.blockEmails || "").split("\n").filter(Boolean);
+  const hit = blocked.find((b) => (b.includes("@") ? email === b : domain === b.replace(/^\*?\.?/, "") || domain.endsWith("." + b.replace(/^\*?\.?/, ""))));
+  if (hit) return ["email", "email / tên miền bị chặn: " + hit];
+  if (TEMP_MAIL.some((d) => domain === d || domain.endsWith("." + d))) return ["email", "email tạm thời (" + domain + ")"];
+  return null;
+}
+async function logSpam(env, reason, detail, msg, request) {
+  if (!env.DB) return;
+  try {
+    const DB = await bookDb(env), now = Date.now(), day = vnDay(now);
+    const n = await DB.prepare("SELECT COUNT(*) AS n FROM spam_log WHERE day = ?").bind(day).first();
+    if (n && n.n >= SPAM_LOG_DAILY) return;
+    await DB.batch([
+      DB.prepare(`INSERT INTO spam_log (at, day, reason, detail, lang, name, email, practice, country, service, message, ip_country) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(now, day, reason, clip(detail, 160), msg.lang || "en", msg.name || "", msg.email || "", msg.practice || "", msg.country || "", msg.service || "", msg.message || "", request.headers.get("CF-IPCountry") || ""),
+      DB.prepare("DELETE FROM spam_log WHERE at < ?").bind(now - 30 * DAY_MS),
+    ]);
+  } catch (err) { console.error("spam log", err && err.message); }
+}
+async function turnstileOk(env, token, ip) {
+  if (!token) return false;
+  try {
+    const r = await fetch(env.TURNSTILE_API || "https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: String(token).slice(0, 2048), ...(ip ? { remoteip: ip } : {}) }) });
+    const d = await r.json();
+    return !!(d && d.success);
+  } catch { return false; }
+}
 async function submitContact(request, env) {
   const len = parseInt(request.headers.get("Content-Length") || "0", 10);
   if (len > 16384) return json({ error: "Your message is too long." }, 413);
   let body;
   try { body = JSON.parse(await request.text()); } catch { return json({ error: "Please check the form and try again." }, 400); }
   if (!body || typeof body !== "object") return json({ error: "Please check the form and try again." }, 400);
-
-  // Bots: hidden field filled in, or the form sent within 3 seconds of loading. Pretend it worked.
-  if (String(body.website || "").trim() || !(Number(body.elapsed) >= 3000)) return json({ ok: true });
 
   const field = (k, max) => String(body[k] == null ? "" : body[k]).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max);
   const vi = body.lang === "vi";
@@ -3183,7 +3255,29 @@ async function submitContact(request, env) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(msg.email)) return json({ error: E("Please add a valid email address.", "Vui lòng nhập email hợp lệ.") }, 400);
   if (msg.message.length < 10) return json({ error: E("Please write a little more in your message.", "Vui lòng viết thêm nội dung.") }, 400);
 
+  // bots: the hidden field filled in, no signed time token (or a forged / old one), or sent too fast. Pretend it worked.
+  const quiet = () => json({ ok: true });
+  if (String(body.website || "").trim()) { await logSpam(env, "honeypot", "ô ẩn bị điền", msg, request); return quiet(); }
+  const age = await tokenAge(env, body.token);
+  if (age < 0 || age > CONTACT_TOKEN_MS) { await logSpam(env, "token", age < 0 ? "không có mã chống bot" : "mã chống bot quá cũ", msg, request); return quiet(); }
+  if (age < CONTACT_MIN_MS) { await logSpam(env, "fast", "gửi sau " + (age / 1000).toFixed(1) + " giây", msg, request); return quiet(); }
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  const refuse = (code) => json({ error: E("We couldn't send this message. Please email us at d.eightdesigncenter@gmail.com.", "Không gửi được tin nhắn này. Vui lòng email cho chúng tôi: d.eightdesigncenter@gmail.com."), code }, 400);
+  if (turnstileOn(env) && !(await turnstileOk(env, body.turnstile, ip === "local" ? "" : ip))) {
+    await logSpam(env, "captcha", "không qua Cloudflare Turnstile", msg, request);
+    return json({ error: E("Please complete the security check and send again, or email us at d.eightdesigncenter@gmail.com.", "Vui lòng hoàn tất bước kiểm tra an toàn rồi gửi lại, hoặc email cho chúng tôi: d.eightdesigncenter@gmail.com."), code: "captcha" }, 400);
+  }
+  const caught = spamCheck(msg, await loadSettings(env));
+  if (caught) { await logSpam(env, caught[0], caught[1], msg, request); return refuse(caught[0]); }
+
   const now = Date.now();
+  // one address can send a few messages a day (so a bot cannot use up the day's quota)
+  const ipKey = "msgip:" + new Date(now).toISOString().slice(0, 10) + ":" + b64urlEncode(new Uint8Array(await crypto.subtle.digest("SHA-256", te.encode("d8-ip:" + ip)))).slice(0, 16);
+  const ipCount = parseInt((await env.CASES.get(ipKey)) || "0", 10) || 0;
+  if (ipCount >= CONTACT_PER_IP) {
+    await logSpam(env, "ip", "quá " + CONTACT_PER_IP + " tin trong ngày từ một địa chỉ", msg, request);
+    return json({ error: E("You've sent several messages today. We'll reply soon, or email us at d.eightdesigncenter@gmail.com.", "Hôm nay bạn đã gửi nhiều tin nhắn. Chúng tôi sẽ trả lời sớm, hoặc email: d.eightdesigncenter@gmail.com."), code: "ip" }, 429);
+  }
   const day = new Date(now).toISOString().slice(0, 10);
   const countKey = "msgcount:" + day;
   const count = parseInt((await env.CASES.get(countKey)) || "0", 10) || 0;
@@ -3198,7 +3292,27 @@ async function submitContact(request, env) {
   const meta = { n: msg.name.slice(0, 60), s: msg.service.slice(0, 40), c: now };
   await env.CASES.put("msg:" + id, JSON.stringify(msg), { expiration, metadata: meta });
   await env.CASES.put(countKey, String(count + 1), { expiration: Math.floor(now / 1000) + 2 * 86400 });
+  await env.CASES.put(ipKey, String(ipCount + 1), { expiration: Math.floor(now / 1000) + 2 * 86400 });
   return json({ ok: true }, 201);
+}
+async function listSpam(env) {
+  if (!env.DB) return json({ items: [], db: false });
+  const DB = await bookDb(env);
+  const items = await rows(DB.prepare("SELECT * FROM spam_log WHERE at > ? ORDER BY at DESC LIMIT 300").bind(Date.now() - 30 * DAY_MS));
+  return json({ items, db: true });
+}
+async function spamAction(env, id, restore) {
+  if (!env.DB) return json({ error: "Không tìm thấy." }, 404);
+  const DB = await bookDb(env);
+  const x = await DB.prepare("SELECT * FROM spam_log WHERE id = ?").bind(id).first();
+  if (!x) return json({ error: "Không tìm thấy." }, 404);
+  if (restore) { // not spam: into the inbox like any message
+    const now = Date.now(), mid = String(now) + newId().slice(0, 6);
+    const msg = { lang: x.lang, name: x.name, email: x.email, practice: x.practice, country: x.country, service: x.service, message: x.message, created: x.at, country_hint: x.ip_country };
+    await env.CASES.put("msg:" + mid, JSON.stringify(msg), { expiration: Math.floor(now / 1000) + MSG_KEEP_DAYS * 86400, metadata: { n: x.name.slice(0, 60), s: x.service.slice(0, 40), c: x.at } });
+  }
+  await DB.prepare("DELETE FROM spam_log WHERE id = ?").bind(id).run();
+  return json({ ok: true, restored: restore });
 }
 
 async function listMessages(env) {

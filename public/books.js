@@ -943,13 +943,45 @@
             <p style="margin:6px 0 0">Chưa tạo thì: Storage &amp; Databases › D1 SQL Database › <b>Create</b>, tên <code>d8-db</code>, rồi làm bước 1 và 2 ở trên. Bảng dữ liệu tự tạo ở lần mở đầu tiên.</p></div></div>`}</section>
       <section class="card"><h2 class="h-caps">Thanh toán của khách</h2>
         <label class="switch"><input type="checkbox" id="setPay"${s.settings.onlinePay ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Thanh toán online trên cổng khách hàng (PayPal / Stripe)</b></label>
-        <label class="switch" style="margin-top:18px"><input type="checkbox" id="setTrial"${s.settings.autoTrial ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Tự đánh dấu 2 ca đầu của khách mới là dùng thử</b></label></section>`;
+        <label class="switch" style="margin-top:18px"><input type="checkbox" id="setTrial"${s.settings.autoTrial ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Tự đánh dấu 2 ca đầu của khách mới là dùng thử</b></label></section>
+      ${spamCard(s)}`;
+    const save = $("asSave");
+    if (save) save.addEventListener("click", async () => {
+      D8.busy(save, true);
+      try {
+        const r = await api("/api/settings", { method: "POST", body: { spamWords: $("asWords").value, blockEmails: $("asMails").value } });
+        $("asWords").value = r.settings.spamWords || ""; $("asMails").value = r.settings.blockEmails || "";
+        D8.done(save, "Đã lưu");
+      } catch (err) { D8.toast(err.message); } finally { D8.busy(save, false); }
+    });
     for (const [id, k] of [["setPay", "onlinePay"], ["setTrial", "autoTrial"]]) {
       const el = $(id);
       el.addEventListener("change", async () => {
         try { await api("/api/settings", { method: "POST", body: { [k]: el.checked } }); D8.toast("Đã lưu."); } catch (err) { el.checked = !el.checked; D8.toast(err.message); }
       });
     }
+  }
+
+  // Contact-form anti-spam: what is on, Turnstile status, and the owner's own block lists.
+  function spamCard(s) {
+    const sp = s.spam || { minSec: 3, perIp: 4, daily: 30 }, edit = can("staff.manage");
+    const on = '<span class="as-st">Đang bật</span>', off = '<span class="as-st off">Chưa bật</span>';
+    return `<section class="card" id="asCard"><h2 class="h-caps">Chống spam ở form Liên hệ</h2>
+      <ul class="as-list">
+        <li>${on}<span><b>Ô ẩn bẫy bot (honeypot)</b>: người thật không thấy ô này; bot điền vào là bị loại.</span></li>
+        <li>${on}<span><b>Mã chống bot do máy chủ ký</b> + chặn tin gửi nhanh hơn ${esc(sp.minSec)} giây: bot gửi thẳng vào máy chủ hoặc mã giả, mã quá 24 giờ đều bị loại.</span></li>
+        <li>${on}<span><b>Giới hạn</b>: mỗi địa chỉ IP tối đa ${esc(sp.perIp)} tin/ngày, cả trang tối đa ${esc(sp.daily)} tin/ngày.</span></li>
+        <li>${on}<span><b>Bộ lọc nội dung</b>: tin có nhiều link, mã chèn link, từ khóa quảng cáo (SEO, casino, crypto…), email tạm thời hoặc email bị chặn.</span></li>
+        <li>${s.db ? on : off}<span><b>Lưu tin bị chặn 30 ngày</b> để xem lại ở mục <a href="#messages">Tin nhắn</a>${s.db ? "" : " (cần cơ sở dữ liệu D1)"}.</span></li>
+        <li>${s.turnstile ? on : off}<span><b>Cloudflare Turnstile</b> (CAPTCHA miễn phí, khách không phải giải đố)${s.turnstile ? "." : `: tạo widget ở Cloudflare › Turnstile › Add widget (tên miền <code>${esc(location.hostname)}</code>), rồi ở Workers &amp; Pages › d8-3d › Settings › Variables and Secrets thêm <code>TURNSTILE_SITE_KEY</code> và <code>TURNSTILE_SECRET</code> (loại Secret), sau đó triển khai lại.`}</span></li>
+      </ul>
+      <div class="as-grid">
+        <div><label class="field-label" for="asWords">Từ khóa chặn thêm (mỗi dòng một từ)</label>
+          <textarea class="input" id="asWords" maxlength="24000" placeholder="Bạn muốn chặn thêm từ hoặc cụm từ nào?"${edit ? "" : " disabled"}>${esc(s.settings.spamWords || "")}</textarea></div>
+        <div><label class="field-label" for="asMails">Email hoặc tên miền bị chặn (mỗi dòng một mục)</label>
+          <textarea class="input" id="asMails" maxlength="24000" placeholder="Bạn muốn chặn email hoặc tên miền nào?"${edit ? "" : " disabled"}>${esc(s.settings.blockEmails || "")}</textarea></div>
+      </div>
+      ${edit ? '<div style="margin-top:14px"><button class="btn btn-primary small" id="asSave">Lưu bộ lọc</button></div>' : ""}</section>`;
   }
 
   /* ------------------------------------------------------------ routes */

@@ -185,6 +185,7 @@ window.D8_DICT = {
   "ct.m.email": ["a valid email", "email hợp lệ"],
   "ct.m.msg": ["a message (at least 10 characters)", "nội dung (ít nhất 10 ký tự)"],
   "ct.err": ["Something went wrong. Please email us directly.", "Có lỗi xảy ra. Vui lòng gửi email trực tiếp cho chúng tôi."],
+  "ct.check": ["Please complete the security check, then send again.", "Vui lòng hoàn tất bước kiểm tra an toàn rồi gửi lại."],
   "ct.offline": ["Couldn't reach the server. Check your connection, or email us directly.", "Không kết nối được máy chủ. Kiểm tra mạng hoặc gửi email trực tiếp cho chúng tôi."],
   "t.cb": ["Crown &amp; bridge", "Mão &amp; cầu răng"],
   "t.imp": ["Implant restorations", "Phục hình implant"],

@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-23.2">
+<link rel="stylesheet" href="/brand.css?v=2026-10-23.3">
 <link rel="preload" as="image" href="/site/hero-full-mouth.webp" fetchpriority="high">
 <style>
   /* --wrap (container width) comes from brand.css: wider on large screens */
@@ -247,6 +247,8 @@
   textarea.input { height: auto; min-height: 140px; padding: 14px 16px; line-height: 1.6; resize: vertical; }
   .form-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 22px; }
   .form-foot .hint { margin: 0; max-width: 340px; }
+  .ts-box { min-height: 65px; }
+  .ts-box[hidden] { display: none; }
   .hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
   .thanks { text-align: center; padding: 40px 10px; }
   .thanks:focus { outline: none; }
@@ -339,8 +341,8 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/home-dict.js?v=2026-10-23.2"></script>
-<script src="/shell.js?v=2026-10-23.2" defer></script>
+<script src="/site/home-dict.js?v=2026-10-23.3"></script>
+<script src="/shell.js?v=2026-10-23.3" defer></script>
 </head>
 <body data-page="home" data-title-key="title">
 <div id="d8-header"></div>
@@ -725,6 +727,7 @@
               </div>
               <div class="full"><label class="field-label" for="cMsg"><span data-i="ct.msg">Message</span><span class="req">*</span></label>
                 <textarea class="input" id="cMsg" name="message" maxlength="4000" required data-i-attr="placeholder:ct.ph" placeholder="Case types, monthly volume, software or scanner you use…"></textarea></div>
+              <div class="full ts-box" id="cTurnstile" hidden></div>
               <div class="hp" aria-hidden="true"><label for="cWebsite">Website</label><input id="cWebsite" name="website" tabindex="-1" autocomplete="off"></div>
             </div>
             <div class="form-foot">
@@ -749,6 +752,6 @@
 </a>
 
 <div id="d8-footer"></div>
-<script src="/site/home.js?v=2026-10-23.2" defer></script>
+<script src="/site/home.js?v=2026-10-23.3" defer></script>
 </body>
 </html>

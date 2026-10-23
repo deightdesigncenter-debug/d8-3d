@@ -151,8 +151,39 @@
   /* ---------------- contact form ---------------- */
   const form = $("contactForm");
   if (!form) return;
-  const started = Date.now();
   const showError = (msg) => { $("cError").textContent = msg; $("cError").hidden = false; };
+  // Anti-bot: a time token signed by the server (fetched when the visitor starts on the form; a message sent
+  // sooner than 3 s after it, without it, or with a forged one is dropped) and, when the owner turns it on,
+  // Cloudflare Turnstile (no puzzles for people; loaded only once someone starts on the form).
+  let token = "", tokenAt = 0, tokenWait = 3000, tokenP = null;
+  const getToken = () => {
+    if (token && Date.now() - tokenAt < 12 * 3600e3) return Promise.resolve(token);
+    return (tokenP = tokenP || fetch("/api/contact/token", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("token"))))
+      .then((j) => { token = j.token || ""; tokenAt = Date.now(); tokenWait = (j.minMs || 3000) + 250; return token; })
+      .finally(() => { tokenP = null; }));
+  };
+  let tsWidget = null, tsP = null;
+  const turnstile = () => (tsP = tsP || D8.config().then((cfg) => new Promise((resolve) => {
+    if (!cfg || !cfg.turnstile) return resolve(false);
+    const box = $("cTurnstile");
+    box.hidden = false;
+    const draw = () => {
+      try {
+        tsWidget = window.turnstile.render(box, { sitekey: cfg.turnstile, theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light", language: (D8.lang === "vi" ? "vi" : "en"), action: "contact" });
+        resolve(true);
+      } catch { resolve(false); }
+    };
+    if (window.turnstile) return draw();
+    const s = document.createElement("script");
+    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    s.async = true;
+    s.onload = draw;
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  })));
+  form.addEventListener("focusin", () => { getToken().catch(() => {}); turnstile(); }, { once: true });
+  D8.config().then((cfg) => { if (cfg && cfg.turnstile) $("cTurnstile").hidden = false; }); // keep its place so nothing moves
   // Prefill name/email for signed-in customers.
   document.addEventListener("d8:user", (e) => {
     const u = e.detail;
@@ -170,14 +201,23 @@
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) missing.push(t("ct.m.email", "a valid email"));
     if (data.message.length < 10) missing.push(t("ct.m.msg", "a message (at least 10 characters)"));
     if (missing.length) { showError(t("ct.add", "Please add {list}.").replace("{list}", missing.join(", "))); return; }
-    data.elapsed = Date.now() - started;
     data.lang = (window.D8 && D8.lang) || "en";
     const send = $("cSend");
     D8.busy(send, true);
     try {
+      try { data.token = await getToken(); } catch { throw new Error("Failed to fetch"); }
+      const wait = tokenAt + tokenWait - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      if (await turnstile()) {
+        data.turnstile = (window.turnstile && tsWidget != null && window.turnstile.getResponse(tsWidget)) || "";
+        if (!data.turnstile) throw new Error(t("ct.check", "Please complete the security check, then send again."));
+      }
       const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
       let out = {}; try { out = await res.json(); } catch {}
-      if (!res.ok) throw new Error(out.error || t("ct.err", "Something went wrong. Please email us directly."));
+      if (!res.ok) {
+        if (out.code === "captcha" && window.turnstile && tsWidget != null) window.turnstile.reset(tsWidget);
+        throw new Error(out.error || t("ct.err", "Something went wrong. Please email us directly."));
+      }
       form.hidden = true;
       $("cThanksText").textContent = t("ct.thanks", "Thank you, {name}. We'll reply to {email}.").replace("{name}", data.name).replace("{email}", data.email);
       $("cThanks").hidden = false;
