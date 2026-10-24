@@ -941,10 +941,19 @@
               <li>Chưa triển khai lại sau khi thêm binding: Deployments › bản <b>Production</b> mới nhất › <b>⋯</b> › <b>Retry deployment</b> (binding chỉ có hiệu lực từ lần triển khai sau khi lưu).</li>
               <li>Cơ sở dữ liệu tạo ở một tài khoản Cloudflare khác với tài khoản chứa d8-3d.</li></ol>
             <p style="margin:6px 0 0">Chưa tạo thì: Storage &amp; Databases › D1 SQL Database › <b>Create</b>, tên <code>d8-db</code>, rồi làm bước 1 và 2 ở trên. Bảng dữ liệu tự tạo ở lần mở đầu tiên.</p></div></div>`}</section>
+      ${domainCard(s)}
       <section class="card"><h2 class="h-caps">Thanh toán của khách</h2>
         <label class="switch"><input type="checkbox" id="setPay"${s.settings.onlinePay ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Thanh toán online trên cổng khách hàng (PayPal / Stripe)</b></label>
         <label class="switch" style="margin-top:18px"><input type="checkbox" id="setTrial"${s.settings.autoTrial ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Tự đánh dấu 2 ca đầu của khách mới là dùng thử</b></label></section>
       ${spamCard(s)}`;
+    for (const [id, host] of [["domSet", location.hostname], ["domOff", ""]]) {
+      const btn = $(id);
+      if (btn) btn.addEventListener("click", async () => {
+        D8.busy(btn, true);
+        try { await api("/api/settings", { method: "POST", body: { siteHost: host } }); D8.toast(host ? "Đã đặt tên miền chính." : "Đã bỏ tên miền chính."); drawSettings(); }
+        catch (err) { D8.busy(btn, false); D8.toast(err.message); }
+      });
+    }
     const save = $("asSave");
     if (save) save.addEventListener("click", async () => {
       D8.busy(save, true);
@@ -960,6 +969,17 @@
         try { await api("/api/settings", { method: "POST", body: { [k]: el.checked } }); D8.toast("Đã lưu."); } catch (err) { el.checked = !el.checked; D8.toast(err.message); }
       });
     }
+  }
+
+  // The main domain: set only from the domain itself (the server checks), so a typo can never send everyone to a dead address.
+  function domainCard(s) {
+    const main = s.settings.siteHost || "", here = location.hostname, edit = can("staff.manage"), pagesDev = /\.pages\.dev$/.test(here);
+    const body = main
+      ? `<div class="pt-alert ok"><div>Tên miền chính: <b>${esc(main)}</b>. Địa chỉ d8-3d.pages.dev và các link xem 3D cũ tự chuyển về đây; Google tìm thấy được trang chủ, Chính sách bảo mật và Điều khoản.${here !== main ? ` Bạn đang mở ở <code>${esc(here)}</code>.` : ""}</div></div>
+        ${edit ? '<div style="margin-top:14px"><button class="btn small" id="domOff">Bỏ tên miền chính</button></div>' : ""}`
+      : `<p style="margin:10px 0 0">Chưa đặt tên miền chính. Web đang mở ở <code>${esc(here)}</code>.${pagesDev ? " Sau khi gắn tên miền ở Cloudflare, mở trang này ngay tại tên miền mới để đặt." : ""}</p>
+        ${edit && !pagesDev ? `<div style="margin-top:14px"><button class="btn btn-primary small" id="domSet">Đặt ${esc(here)} làm tên miền chính</button></div>` : ""}`;
+    return `<section class="card" id="domCard"><h2 class="h-caps">Tên miền</h2>${body}</section>`;
   }
 
   // Contact-form anti-spam: what is on, Turnstile status, and the owner's own block lists.

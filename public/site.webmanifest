@@ -1,7 +1,7 @@
 {
-  "name": "D.EIGHT 3D",
-  "short_name": "D.EIGHT 3D",
-  "description": "D.EIGHT DESIGN CENTER — 3D preview links & HTML to STL",
+  "name": "D.EIGHT DESIGN CENTER",
+  "short_name": "D.EIGHT",
+  "description": "D.EIGHT DESIGN CENTER — remote dental CAD design: workspace and customer portal",
   "start_url": "/admin",
   "scope": "/",
   "icons": [

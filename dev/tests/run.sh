@@ -30,6 +30,8 @@ run privacy   node dev/tests/privacy.test.mjs
 run pay       node dev/tests/pay.test.mjs
 run contact   node dev/tests/contact.test.mjs
 run contact-ui python3 dev/tests/contact_ui.py "$OUT/contact"
+run domain    node dev/tests/domain.test.mjs
+run domain-ui python3 dev/tests/domain_ui.py "$OUT/domain"
 run workspace python3 dev/tests/workspace_ui.py "$OUT/workspace" light
 run workspace-dark python3 dev/tests/workspace_ui.py "$OUT/workspace-dark" dark
 run orders-ui python3 dev/tests/orders_ui.py "$OUT/orders" light

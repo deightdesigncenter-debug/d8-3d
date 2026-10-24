@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-23.3"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-24.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -45,6 +45,34 @@ const PAY_STATES = ["", "trial", "due", "check", "paid"];
 const JOB_STAGES = ["", "design", "qc", "fix", "ready", "done"]; // internal design workflow, never shown to customers
 const AI_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/meta/llama-3.1-8b-instruct-fp8"]; // chat translation, tried in order
 
+// The site's addresses. Pages carry the Cloudflare address; it is swapped for the main domain (or the address in use) when served.
+const PAGES_ORIGIN = "https://d8-3d.pages.dev";
+const PREVIEW_HOST = /^[^.]+\.[^.]+\.pages\.dev$/; // <branch or deploy>.d8-3d.pages.dev
+const PUBLIC_PAGES = new Set(["/", "/index.html", "/privacy", "/privacy.html", "/terms", "/terms.html"]);
+const isLocal = (h) => h === "localhost" || h === "127.0.0.1";
+function siteOf(settings, url) {
+  const main = settings.siteHost || "";
+  const origin = !main ? url.origin : isLocal(main) ? `${url.protocol}//${main}${url.port ? ":" + url.port : ""}` : "https://" + main;
+  return { main, here: !!main && url.hostname === main, origin };
+}
+function robotsOpen(origin) {
+  return ["# Search engines may read the homepage and the legal pages; the portal, the workspace and the tools stay private.",
+    "User-agent: *", "Allow: /", "Disallow: /admin", "Disallow: /portal", "Disallow: /stl", "Disallow: /api/", "Disallow: /raw/", "", `Sitemap: ${origin}/sitemap.xml`, ""].join("\n");
+}
+function sitemap(origin) {
+  const urls = ["/", "/privacy", "/terms"].map((p) => `  <url><loc>${escapeHtml(origin + p)}</loc></url>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+}
+// Homepage and legal pages: the right address in canonical / share tags; open to search engines only at the main domain.
+async function publicPage(res, site) {
+  let html = await res.text();
+  html = html.split(PAGES_ORIGIN).join(site.origin);
+  if (site.here) html = html.replace(/<meta name="robots" content="noindex[^"]*">\n?/, "");
+  const headers = new Headers(res.headers);
+  headers.delete("Content-Length"); headers.delete("ETag");
+  for (const [k, v] of Object.entries(PRIVATE_HEADERS)) if (!(site.here && k === "X-Robots-Tag")) headers.set(k, v);
+  return new Response(html, { status: 200, headers });
+}
 const PRIVATE_HEADERS = {
   "X-Robots-Tag": "noindex, nofollow, noarchive",
   // Google sign-in needs the page origin; cross-site requests get the origin only, never the path.
@@ -97,6 +125,23 @@ export default {
     try {
       if (path.startsWith("/api/")) return await handleApi(request, env, url);
 
+      // the main domain (set from Settings while the site is open at it): every other address of the site sends
+      // pages and links there; branch previews (<branch>.d8-3d.pages.dev) stay as they are
+      let site = null;
+      if ((request.method === "GET" || request.method === "HEAD") && env.CASES) {
+        site = siteOf(await loadSettings(env), url);
+        if (site.main && !site.here && !PREVIEW_HOST.test(url.hostname)) {
+          // way back in if the main domain ever stops working: <this address>/admin?stay=1 keeps this browser here for a day
+          if (url.searchParams.has("stay")) {
+            url.searchParams.delete("stay");
+            return new Response(null, { status: 302, headers: { Location: path + url.search, "Cache-Control": "no-store", "Set-Cookie": `d8stay=1; Path=/; Max-Age=86400; SameSite=Lax${url.protocol === "https:" ? "; Secure" : ""}` } });
+          }
+          if (!/(?:^|;\s*)d8stay=1(?:;|$)/.test(request.headers.get("Cookie") || "")) return new Response(null, { status: 301, headers: { Location: site.origin + path + url.search, "Cache-Control": "no-store" } });
+        }
+        if (path === "/robots.txt" && site.here) return new Response(robotsOpen(site.origin), { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+        if (path === "/sitemap.xml") return new Response(sitemap(site.origin), { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+      }
+
       let m = path.match(/^\/v\/([^/]+)\/?$/);
       if (m) return await viewerPage(env, m[1], url);
 
@@ -107,6 +152,7 @@ export default {
       if (m) return await ogImage(request, env, m[1]);
 
       const res = await env.ASSETS.fetch(request);
+      if (site && PUBLIC_PAGES.has(path) && request.method === "GET" && res.status === 200) return publicPage(res, site);
       return withHeaders(res, PRIVATE_HEADERS);
     } catch (err) {
       console.error(err && err.stack ? err.stack : err);
@@ -1677,7 +1723,7 @@ function jsonInsert(DB, table, cols, list, tail = "") {
 }
 
 /* ---- settings (KV, work without the database) */
-const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false, spamWords: "", blockEmails: "" };
+const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false, spamWords: "", blockEmails: "", siteHost: "" };
 async function loadSettings(env) {
   const c = cacheGet("@settings");
   if (c) return c.v;
@@ -1919,12 +1965,17 @@ async function handleBook(request, env, url, who) {
 
   // settings work without the database
   if (path === "/api/settings") {
-    if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB, turnstile: turnstileOn(env), spam: { minSec: CONTACT_MIN_MS / 1000, perIp: CONTACT_PER_IP, daily: MSG_DAILY_CAP } }) : deny();
+    if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB, turnstile: turnstileOn(env), spam: { minSec: CONTACT_MIN_MS / 1000, perIp: CONTACT_PER_IP, daily: MSG_DAILY_CAP }, host: url.hostname }) : deny();
     if (method === "POST") {
       if (!who.can("staff.manage")) return deny();
       const b = await body(), cur = await loadSettings(env);
       const next = { ...cur };
       for (const k of Object.keys(SETTINGS_DEFAULT)) if (typeof b[k] === "boolean" && typeof SETTINGS_DEFAULT[k] === "boolean") next[k] = b[k];
+      if (typeof b.siteHost === "string") { // only the address the site is open at right now, so a typo cannot send everyone to a dead domain
+        const h = b.siteHost.trim().toLowerCase();
+        if (h && (h !== url.hostname || /\.pages\.dev$/.test(h))) return json({ error: "Chỉ đặt được tên miền đang mở trang này (không phải địa chỉ .pages.dev). Mở Cài đặt ngay tại tên miền mới rồi bấm lại." }, 400);
+        next.siteHost = h;
+      }
       for (const k of ["spamWords", "blockEmails"]) if (typeof b[k] === "string") next[k] = b[k].split(/[\n,;]+/).map((x) => x.trim().toLowerCase().slice(0, 80)).filter(Boolean).slice(0, 300).join("\n");
       await env.CASES.put("cfg:settings", JSON.stringify(next));
       staffCache.delete("@settings");
@@ -3573,7 +3624,7 @@ function unavailablePage() {
   <div class="wrap d8-footer-in">
     <img class="logo-rev" src="/brand/logo-horizontal-reversed.svg" alt="D.EIGHT DESIGN CENTER" width="106" height="30">
     <div class="d8-footer-meta">
-      <a class="caps" href="https://d8designcenter.com">d8designcenter.com</a>
+      <a class="caps" href="/">d8designcenter.com</a>
       <span class="caps">© 2026 D.EIGHT DESIGN CENTER</span>
     </div>
   </div>

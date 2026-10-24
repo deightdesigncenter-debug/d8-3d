@@ -50,6 +50,11 @@ The owner wants the site to run without errors or jank, and every new feature ch
   optional Cloudflare Turnstile (`TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET`; `TURNSTILE_API` points at the mock locally), link / keyword /
   disposable-email filters, `CONTACT_PER_IP` per address per day (KV `msgip:`) and `MSG_DAILY_CAP`. Bots get a quiet ok; filtered people
   get a 400 with our email. Blocked messages go to D1 `spam_log` (schema v4, 30 days) for review / restore (`messages.view`).
+- Main domain (`settings.siteHost`, `dev/tests/domain.test.mjs` + `domain_ui.py`): set from Settings only while the site is open at
+  that host (server checks `url.hostname`, never `.pages.dev`). Then every other host 301s GET pages / `/v/` links there (not `/api/`,
+  not branch previews `<x>.d8-3d.pages.dev`); `/admin?stay=1` sets cookie `d8stay` to stay on the old host for a day. Pages carry
+  `https://d8-3d.pages.dev` in canonical / og tags; `publicPage` swaps in the right origin and, at the main domain only, drops noindex
+  for `/`, `/privacy`, `/terms`; `/robots.txt` opens and `/sitemap.xml` is served there.
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.
 - Motion rules: 200–300 ms, ease-out curves, transform/opacity only, off under `prefers-reduced-motion`.
