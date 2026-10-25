@@ -20,8 +20,8 @@
 <meta name="theme-color" content="#05316E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-25.1">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css?v=2026-10-25.2">
 <link rel="preload" as="image" href="/site/hero-full-mouth.webp" fetchpriority="high">
 <style>
   /* --wrap (container width) comes from brand.css: wider on large screens */
@@ -52,8 +52,8 @@
   .slide-art.narrow { width: min(46vw, 640px); }
   .stage-copy { position: absolute; left: 0; right: 0; bottom: 120px; z-index: 2; }
   .stage-copy .chip { background: rgba(143, 172, 203, .18); color: var(--on-brand-2); }
-  .stage h1, .stage .h1 { margin: 22px 0 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase;
-             letter-spacing: .1em; font-size: clamp(34px, 5.2vw, 76px); line-height: 1.04; color: var(--on-brand); max-width: 12ch; }
+  .stage h1, .stage .h1 { margin: 22px 0 0; font-family: var(--f-display); font-weight: 700;
+             letter-spacing: -.025em; font-size: clamp(40px, 5.6vw, 84px); line-height: 1.02; color: var(--on-brand); max-width: 12ch; }
   .stage p.lede { margin: 20px 0 0; max-width: 520px; font-size: 16.5px; line-height: 1.7; color: #DCE5EE; }
   .stage-btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
   .stage .btn-light:hover { background: rgba(252, 253, 246, .1); }
@@ -81,8 +81,8 @@
   .section.tight { padding: 80px 0; }
   .sec-head { max-width: 760px; margin-bottom: 48px; }
   .sec-head .eyebrow { color: var(--steel); margin-bottom: 14px; }
-  .sec-head h2 { margin: 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .1em;
-                 font-size: clamp(24px, 3.2vw, 40px); line-height: 1.18; color: var(--navy); }
+  .sec-head h2 { margin: 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.02em;
+                 font-size: clamp(28px, 3.4vw, 46px); line-height: 1.12; color: var(--navy); }
   .sec-head .serif { margin: 10px 0 0; color: var(--steel); font-size: clamp(28px, 3.8vw, 46px); }
   .sec-head p.intro { margin: 18px 0 0; font-size: 16px; line-height: 1.7; color: var(--muted); max-width: 640px; }
   .navy-band { background: var(--band); color: var(--on-brand); }
@@ -140,16 +140,31 @@
                     transform: translate3d(0, var(--py, 0px), 0); will-change: transform; }
   .editorial::before { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(4, 37, 82, .1) 0%, rgba(4, 37, 82, .25) 45%, rgba(4, 37, 82, .92) 100%); }
   .editorial .wrap { position: relative; z-index: 2; padding-top: 140px; padding-bottom: 96px; }
-  .editorial h2 { margin: 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(30px, 5vw, 68px); line-height: 1.06; max-width: 14ch; }
+  .editorial h2 { margin: 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.025em; font-size: clamp(34px, 5vw, 72px); line-height: 1.04; max-width: 14ch; }
   .editorial p { margin: 18px 0 30px; max-width: 520px; color: #DCE5EE; font-size: 16px; line-height: 1.7; }
 
   /* ---------- why ---------- */
-  .why { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .why > div { padding: 8px 30px 8px 0; }
-  .why > div + div { padding-left: 30px; border-left: 1px solid var(--line); }
-  .why .ic { width: 46px; height: 46px; border-radius: 50%; background: var(--steel-100); color: var(--navy); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
-  .why h3 { margin: 0 0 10px; font-family: var(--f-display); font-weight: 600; font-size: 12.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); line-height: 1.45; }
-  .why p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.7; }
+  /* picture / text chequerboard (row 1: picture, text, picture, text; row 2 the other way round) */
+  .checker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-radius: 22px; overflow: hidden; border: 1px solid var(--line); }
+  .checker > :nth-child(5) { order: 6; } .checker > :nth-child(6) { order: 5; }
+  .checker > :nth-child(7) { order: 8; } .checker > :nth-child(8) { order: 7; }
+  .ck-pic { margin: 0; position: relative; min-height: 300px; overflow: hidden; background: #473A6D; }
+  .ck-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .ck-txt { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 36px 30px; background: var(--paper); }
+  .ck-txt .ic { width: 46px; height: 46px; border-radius: 50%; background: var(--steel-100); color: var(--navy); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+  .ck-txt h3 { margin: 0 0 10px; font-family: var(--f-display); font-weight: 600; font-size: 12.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); line-height: 1.45; }
+  .ck-txt p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.7; max-width: 300px; }
+
+  /* ---------- finished work: full-width photo strip ---------- */
+  .sec-head.center { margin-left: auto; margin-right: auto; text-align: center; }
+  .sec-head.center p.intro { margin-left: auto; margin-right: auto; }
+  .strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .strip figure { margin: 0; position: relative; overflow: hidden; aspect-ratio: 3 / 2; background: #0B0D12; }
+  .strip img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--t-slow) var(--ease-out); }
+  .strip figure:hover img { transform: scale(1.03); }
+  .strip figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 22px 18px; color: var(--c-cream); font-size: 14px; line-height: 1.45;
+                      background: linear-gradient(180deg, rgba(4, 18, 40, 0) 0%, rgba(4, 18, 40, .78) 100%); }
+  .strip-foot { display: flex; justify-content: center; margin-top: 36px; }
 
   /* ---------- process ---------- */
   .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: relative; }
@@ -207,7 +222,7 @@
   .faq-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 56px; align-items: start; }
   .faq { max-width: 880px; }
   .faq-help { position: sticky; top: 120px; overflow: hidden; padding: 32px; border-radius: 20px; background: var(--band); color: var(--on-brand); }
-  .faq-help h3 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .08em; font-size: 22px; line-height: 1.25; color: var(--on-brand); }
+  .faq-help h3 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.01em; font-size: 26px; line-height: 1.2; color: var(--on-brand); }
   .faq-help p { position: relative; margin: 14px 0 0; color: #C9D6E4; font-size: 15px; line-height: 1.7; }
   .fh-btns { position: relative; display: grid; gap: 10px; margin-top: 24px; }
   .fh-btns .btn { width: 100%; justify-content: center; gap: 10px; }
@@ -229,7 +244,7 @@
   .contact { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); border-radius: 20px; overflow: hidden; border: 1px solid var(--line);
              box-shadow: 0 2px 4px rgba(11, 27, 51, .04), 0 30px 60px rgba(11, 27, 51, .08); background: var(--white); }
   .contact-info { position: relative; overflow: hidden; background: var(--band); color: var(--on-brand); padding: 48px 44px; }
-  .contact-info h2 { margin: 14px 0 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .08em; font-size: clamp(22px, 2.6vw, 30px); line-height: 1.2; color: var(--on-brand); }
+  .contact-info h2 { margin: 14px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.015em; font-size: clamp(26px, 2.8vw, 34px); line-height: 1.15; color: var(--on-brand); }
   .contact-info .serif { margin: 8px 0 0; color: var(--steel); font-size: clamp(28px, 3.4vw, 38px); }
   .contact-info p { margin: 22px 0 0; color: #C9D6E4; line-height: 1.7; }
   .contact-list { list-style: none; margin: 30px 0 0; padding: 0; display: grid; gap: 18px; position: relative; z-index: 1; }
@@ -279,7 +294,7 @@
   .offer-fig .cap { font-family: var(--f-display); font-weight: 600; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--on-brand-2); line-height: 1.7; }
   .offer-fig .cap b { display: block; color: var(--on-brand); font-size: 15px; letter-spacing: .1em; }
   .offer-fig .mark { position: absolute; right: -50px; bottom: -40px; width: 200px; opacity: .08; }
-  .offer h2 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(24px, 3.2vw, 40px); line-height: 1.18; color: var(--navy); }
+  .offer h2 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.02em; font-size: clamp(28px, 3.4vw, 46px); line-height: 1.12; color: var(--navy); }
   .offer .serif { margin: 8px 0 0; color: var(--steel); font-size: clamp(26px, 3.4vw, 40px); }
   .offer p.intro { margin: 18px 0 0; font-size: 16px; line-height: 1.7; color: var(--muted); max-width: 560px; }
   .offer ul { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px 10px; }
@@ -293,8 +308,9 @@
     .faq-grid { grid-template-columns: 1fr; gap: 36px; }
     .faq-help { position: relative; top: 0; }
     .fh-btns { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-    .why { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 36px; }
-    .why > div:nth-child(3) { padding-left: 0; border-left: 0; }
+    .checker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .checker > :nth-child(3) { order: 4; } .checker > :nth-child(4) { order: 3; }
+    .checker > :nth-child(5) { order: 5; } .checker > :nth-child(6) { order: 6; }
     .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 44px; }
     .steps::before { display: none; }
     .lineup { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -323,8 +339,12 @@
     .scroll-cue, .stage-count { display: none; }
     .dots button { width: 36px; }
     .lineup { grid-template-columns: 1fr; }
-    .why { grid-template-columns: 1fr; }
-    .why > div, .why > div + div { padding: 0; border: 0; }
+    .checker { grid-template-columns: 1fr; }
+    .checker > .ck-pic, .checker > .ck-txt { order: 0; }
+    .ck-pic { min-height: 0; aspect-ratio: 16 / 10; }
+    .ck-txt { padding: 28px 22px 32px; }
+    .strip { grid-template-columns: 1fr; gap: 4px; }
+    .strip-foot .btn-line { width: 100%; justify-content: center; }
     .steps { grid-template-columns: 1fr; }
     .contact-info, .contact-form { padding: 30px 22px; }
     .contact-form .grid { grid-template-columns: 1fr; }
@@ -343,8 +363,8 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/home-dict.js?v=2026-10-25.1"></script>
-<script src="/shell.js?v=2026-10-25.1" defer></script>
+<script src="/site/home-dict.js?v=2026-10-25.2"></script>
+<script src="/shell.js?v=2026-10-25.2" defer></script>
 </head>
 <body data-page="home" data-title-key="title">
 <div id="d8-header"></div>
@@ -522,15 +542,15 @@
         </div>
         <p class="head-lead" data-i="why.lead">We only design. Every file follows your Rx and your libraries, is checked before export, and is ready when your lab opens.</p>
       </div>
-      <div class="why reveal">
-        <div><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r=".8" fill="currentColor"/></svg></span>
-          <h3 data-i="why.1.t">Precision over shortcuts</h3><p data-i="why.1.p">Every design is checked for margins, contacts, occlusion and emergence before export.</p></div>
-        <div><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h9M15 5h2M3 10h3M9 10h8M3 15h7M13 15h4"/><circle cx="13.5" cy="5" r="1.6"/><circle cx="7.5" cy="10" r="1.6"/><circle cx="11.5" cy="15" r="1.6"/></svg></span>
-          <h3 data-i="why.2.t">Your parameters, your libraries</h3><p data-i="why.2.p">Material, cement gap, minimum thickness and implant libraries follow your Rx. FDI or Universal numbering.</p></div>
-        <div><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2Z"/></svg></span>
-          <h3 data-i="why.3.t">Built across time zones</h3><p data-i="why.3.p">Based in Vietnam (UTC+7), we work while your lab is closed, with set delivery windows for Europe and the Americas.</p></div>
-        <div><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="9" width="12" height="9" rx="2"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg></span>
-          <h3 data-i="why.4.t">Confidential by default</h3><p data-i="why.4.p">Patient files are handled confidentially and named by case ID. Previews use private links that expire.</p></div>
+      <div class="checker reveal">
+        <figure class="ck-pic"><img src="/site/about/s-margin.webp" alt="Margin checked on a cross-section in exocad" width="1200" height="591" loading="lazy"></figure>
+        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r=".8" fill="currentColor"/></svg></span><h3 data-i="why.1.t">Precision over shortcuts</h3><p data-i="why.1.p">Every design is checked for margins, contacts, occlusion and emergence before export.</p></div>
+        <figure class="ck-pic"><img src="/site/about/s-implant-pos.webp" alt="Choosing the implant library and position" width="760" height="447" loading="lazy"></figure>
+        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h9M15 5h2M3 10h3M9 10h8M3 15h7M13 15h4"/><circle cx="13.5" cy="5" r="1.6"/><circle cx="7.5" cy="10" r="1.6"/><circle cx="11.5" cy="15" r="1.6"/></svg></span><h3 data-i="why.2.t">Your parameters, your libraries</h3><p data-i="why.2.p">Material, cement gap, minimum thickness and implant libraries follow your Rx. FDI or Universal numbering.</p></div>
+        <figure class="ck-pic"><img src="/site/about/s-fullmouth.webp" alt="Full-mouth wax-up on the design screen" width="1200" height="767" loading="lazy"></figure>
+        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2Z"/></svg></span><h3 data-i="why.3.t">Built across time zones</h3><p data-i="why.3.p">Based in Vietnam (UTC+7), we work while your lab is closed, with set delivery windows for Europe and the Americas.</p></div>
+        <figure class="ck-pic"><img src="/site/about/s-waxup.webp" alt="Transparent wax-up over preps and abutments" width="1200" height="768" loading="lazy"></figure>
+        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="9" width="12" height="9" rx="2"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg></span><h3 data-i="why.4.t">Confidential by default</h3><p data-i="why.4.p">Patient files are handled confidentially and named by case ID. Previews use private links that expire.</p></div>
       </div>
     </div>
   </section>
@@ -616,6 +636,23 @@
       </div>
       <div class="rail-foot"><a class="btn-line" href="/about#screens" data-i="wk.more">See more of our work</a></div>
     </div>
+  </section>
+
+  <!-- ============ FINISHED WORK ============ -->
+  <section class="section white-band" id="finished" aria-labelledby="fwTitle">
+    <div class="wrap">
+      <div class="sec-head center reveal">
+        <span class="eyebrow" data-i="fw.eyebrow">Finished work</span>
+        <h2 id="fwTitle" data-i="fw.h">From our files to the finished piece</h2>
+        <p class="intro" data-i="fw.p">Bars, bridges and try-ins milled and printed by our clients' labs from D.EIGHT design files.</p>
+      </div>
+    </div>
+    <div class="strip reveal">
+      <figure><img src="/site/about/p-hybrid-bar.webp" alt="" width="1200" height="798" loading="lazy"><figcaption data-i="fw.1">Lower bridge on its titanium bar</figcaption></figure>
+      <figure><img src="/site/about/p-crowns-model.webp" alt="" width="1200" height="798" loading="lazy"><figcaption data-i="fw.2">Crowns on the model, shade A2</figcaption></figure>
+      <figure><img src="/site/about/p-bar-cyl.webp" alt="" width="1200" height="798" loading="lazy"><figcaption data-i="fw.3">Milled titanium bar with its cylinders</figcaption></figure>
+    </div>
+    <div class="wrap strip-foot reveal"><a class="btn-line" href="/about#finished" data-i="fw.more">See all finished work</a></div>
   </section>
 
   <!-- ============ ABOUT ============ -->
@@ -750,6 +787,6 @@
 </a>
 
 <div id="d8-footer"></div>
-<script src="/site/home.js?v=2026-10-25.1" defer></script>
+<script src="/site/home.js?v=2026-10-25.2" defer></script>
 </body>
 </html>

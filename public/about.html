@@ -20,8 +20,8 @@
 <meta name="theme-color" content="#05316E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-25.1">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css?v=2026-10-25.2">
 <link rel="preload" as="image" href="/site/about/case-upper-34.webp" fetchpriority="high">
 <style>
   html { scroll-behavior: smooth; scroll-padding-top: 104px; } /* sections start just under the sticky header */
@@ -37,8 +37,8 @@
   .navy-band { background: var(--band); color: var(--on-brand); }
   .sec-head { max-width: 760px; margin: 0 auto 52px; text-align: center; }
   .sec-head .eyebrow { color: var(--steel); margin-bottom: 14px; }
-  .sec-head h2, .intro-copy h2 { margin: 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .1em;
-                 font-size: clamp(24px, 3.1vw, 38px); line-height: 1.2; color: var(--navy); }
+  .sec-head h2, .intro-copy h2 { margin: 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.02em;
+                 font-size: clamp(28px, 3.4vw, 46px); line-height: 1.12; color: var(--navy); }
   .sec-head .serif, .intro-copy .serif { margin: 10px 0 0; color: var(--steel); font-size: clamp(26px, 3.4vw, 42px); }
   .sec-head p.intro { margin: 18px auto 0; font-size: 16px; line-height: 1.75; color: var(--muted); max-width: 620px; }
   .navy-band .sec-head h2 { color: var(--on-brand); }
@@ -53,8 +53,8 @@
   .ab-hero-in { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 32px 48px; align-items: center;
                 padding-top: 72px; padding-bottom: 64px; }
   .ab-hero .chip { background: rgba(143, 172, 203, .18); color: var(--on-brand-2); }
-  .ab-hero h1 { margin: 22px 0 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase; letter-spacing: .1em;
-                font-size: clamp(32px, 4.6vw, 64px); line-height: 1.06; color: var(--on-brand); max-width: 16ch; }
+  .ab-hero h1 { margin: 22px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.025em;
+                font-size: clamp(38px, 5vw, 72px); line-height: 1.04; color: var(--on-brand); max-width: 14ch; }
   .ab-hero .serif { margin: 12px 0 0; color: var(--steel); font-size: clamp(28px, 3.4vw, 44px); }
   .ab-hero .lede { margin: 22px 0 0; max-width: 540px; font-size: 16.5px; line-height: 1.75; color: #DCE5EE; }
   .ab-hero .btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
@@ -127,6 +127,8 @@
   .zoom:hover::after, .zoom:focus-visible::after { opacity: 1; transform: none; }
   .zoom:focus-visible { outline: 2px solid var(--navy); outline-offset: 3px; }
   .shot-card figcaption { margin-top: 12px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .photos .zoom { background: #0B0D12; }
+  .photos .zoom img { aspect-ratio: 3 / 2; }
 
   /* ---------- recordings ---------- */
   .clips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
@@ -155,7 +157,7 @@
   .cta { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.2fr) auto; gap: 28px 56px; align-items: center;
          padding: 56px 60px; border-radius: 24px; color: var(--on-brand); background: radial-gradient(120% 140% at 90% 10%, #0B3F86 0%, var(--brand) 55%, var(--brand-800) 100%); }
   .cta .eyebrow { color: var(--steel); }
-  .cta h2 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(24px, 3vw, 36px); line-height: 1.2; color: var(--on-brand); }
+  .cta h2 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.02em; font-size: clamp(28px, 3.2vw, 42px); line-height: 1.12; color: var(--on-brand); }
   .cta p { margin: 14px 0 0; max-width: 560px; color: #C9D6E4; font-size: 15.5px; line-height: 1.7; }
   .cta .btns { display: flex; flex-wrap: wrap; gap: 12px; position: relative; z-index: 1; }
   .cta .mark { position: absolute; right: -50px; bottom: -60px; width: 220px; opacity: .08; pointer-events: none; }
@@ -232,8 +234,8 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/about-dict.js?v=2026-10-25.1"></script>
-<script src="/shell.js?v=2026-10-25.1" defer></script>
+<script src="/site/about-dict.js?v=2026-10-25.2"></script>
+<script src="/shell.js?v=2026-10-25.2" defer></script>
 </head>
 <body data-page="about" data-title-key="title">
 <div id="d8-header"></div>
@@ -260,6 +262,7 @@
     </div>
     <nav class="ab-jump" aria-label="On this page"><div class="wrap">
       <a href="#case" data-i="nav.case">Featured case</a>
+      <a href="#finished" data-i="nav.finished">Finished work</a>
       <a href="#screens" data-i="nav.screens">CAD screens</a>
       <a href="#clips" data-i="nav.clips">Recordings</a>
       <a href="#cases" data-i="nav.cases">More cases</a>
@@ -335,8 +338,31 @@
     </div>
   </section>
 
+  <!-- ============ FINISHED WORK ============ -->
+  <section class="section paper-band" id="finished" aria-labelledby="fwTitle">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow" data-i="fw.eyebrow">Finished work</span>
+        <h2 id="fwTitle" data-i="fw.h">From our files to the finished piece</h2>
+        <p class="serif" lang="en" data-i="fw.serif">Designed here, made by our clients</p>
+        <p class="intro" data-i="fw.p">Bars, bridges and try-ins milled and printed by our clients' labs from D.EIGHT design files. Tap a photo to see it larger.</p>
+      </div>
+      <div class="gal photos reveal" data-lb="finished">
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-hybrid.webp" width="1200" height="800" alt="" loading="lazy"></button><figcaption data-i="fw.1">Finished hybrid bridge</figcaption></figure>
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-hybrid-bar.webp" width="1200" height="798" alt="" loading="lazy"></button><figcaption data-i="fw.2">Lower bridge on its titanium bar, occlusal view</figcaption></figure>
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-bar-cyl.webp" width="1200" height="798" alt="" loading="lazy"></button><figcaption data-i="fw.3">Milled titanium bar with its cylinders</figcaption></figure>
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-bar.webp" width="1200" height="798" alt="" loading="lazy"></button><figcaption data-i="fw.4">Titanium bar, milled</figcaption></figure>
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-bars.webp" width="1200" height="600" alt="" loading="lazy"></button><figcaption data-i="fw.5">Upper and lower titanium bars</figcaption></figure>
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-denture.webp" width="1200" height="800" alt="" loading="lazy"></button><figcaption data-i="fw.6">Denture with pink gingiva</figcaption></figure>
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-crowns-model.webp" width="1200" height="798" alt="" loading="lazy"></button><figcaption data-i="fw.7">Crowns on the model, shade A2</figcaption></figure>
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-tryin-print.webp" width="1200" height="823" alt="" loading="lazy"></button><figcaption data-i="fw.8">3D-printed try-in, straight off the printer</figcaption></figure>
+        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-model-tryin.webp" width="753" height="655" alt="" loading="lazy"></button><figcaption data-i="fw.9">Try-in on the printed model</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ CAD SCREENS ============ -->
-  <section class="section paper-band" id="screens" aria-labelledby="scTitle">
+  <section class="section white-band" id="screens" aria-labelledby="scTitle">
     <div class="wrap">
       <div class="sec-head reveal">
         <span class="eyebrow" data-i="sc.eyebrow">From our CAD screens</span>
@@ -453,6 +479,6 @@
 </dialog>
 
 <div id="d8-footer"></div>
-<script src="/site/about.js?v=2026-10-25.1" defer></script>
+<script src="/site/about.js?v=2026-10-25.2" defer></script>
 </body>
 </html>

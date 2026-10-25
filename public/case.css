@@ -3,7 +3,7 @@
 .pt-band::after { content: ""; position: absolute; right: -160px; top: -200px; width: 560px; height: 560px; border-radius: 50%; border: 1px solid rgba(143, 172, 203, .18); pointer-events: none; }
 .pt-band .wrap { position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding-top: 44px; padding-bottom: 44px; }
 .pt-band .eyebrow { color: var(--steel); }
-.pt-band h1 { margin: 10px 0 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .08em; font-size: clamp(24px, 3.4vw, 38px); line-height: 1.15; color: var(--on-brand); word-break: break-word; }
+.pt-band h1 { margin: 10px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.015em; font-size: clamp(28px, 3.6vw, 42px); line-height: 1.12; color: var(--on-brand); word-break: break-word; }
 .pt-band .serif { margin: 6px 0 0; color: var(--steel); font-size: clamp(24px, 3vw, 34px); }
 .pt-band .btn-cream { background: var(--c-cream); border-color: var(--c-cream); color: var(--c-navy); }
 .pt-band .btn-cream:hover { background: #FFFFFF; }
@@ -18,7 +18,7 @@
 .pt-signin { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); border-radius: 22px; overflow: hidden; background: var(--white); border: 1px solid var(--line);
              box-shadow: 0 2px 4px rgba(11, 27, 51, .04), 0 30px 60px rgba(11, 27, 51, .1); margin: 20px 0 0; }
 .pt-signin-art { position: relative; overflow: hidden; background: radial-gradient(120% 100% at 80% 20%, #0B3F86 0%, var(--brand) 50%, var(--brand-800) 100%); color: var(--on-brand); padding: 54px 48px; min-height: 520px; }
-.pt-signin-art h1 { margin: 16px 0 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(28px, 3.6vw, 44px); line-height: 1.1; color: var(--on-brand); }
+.pt-signin-art h1 { margin: 16px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.02em; font-size: clamp(32px, 3.8vw, 48px); line-height: 1.08; color: var(--on-brand); }
 .pt-signin-art .serif { margin: 8px 0 0; color: var(--steel); font-size: clamp(26px, 3vw, 36px); }
 .pt-signin-art ul { list-style: none; margin: 32px 0 0; padding: 0; display: grid; gap: 14px; position: relative; z-index: 1; }
 .pt-signin-art li { display: flex; gap: 12px; align-items: flex-start; color: #DCE5EE; line-height: 1.6; }

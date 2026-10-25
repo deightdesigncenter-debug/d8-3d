@@ -29,7 +29,12 @@ The owner wants the site to run without errors or jank, and every new feature ch
   themselves with reduced motion), 6 more cases, one image viewer (`<dialog>`). Media in `public/site/about/` with neutral
   names. The owner has the doctors' and patients' consent for these cases; still never put patient or client-lab names,
   faces (exocad HTML "2D Images") or prices on the page — the test checks. Header "About" links here; the homepage About
-  section is a short teaser that links to it.
+  section is a short teaser that links to it. Also on the About page: "Finished work" (9 product photos, `p-*.webp`).
+- Type (owner's choice 2026-10-25): one family, Be Vietnam Pro (300–700). `--f-display` = Be Vietnam Pro; page headings
+  (home, About, legal / portal bands) are bold, sentence case, slightly negative tracking; small labels, buttons, eyebrows
+  stay in spaced caps. Lexend Exa is gone. Noto Serif Display stays only for the serif accent lines (slogans, English in VI).
+- Homepage, Lumina-style: "Why D.EIGHT" is a 4×2 picture/text chequerboard of real CAD screens (2 columns on tablet,
+  stacked on phone); a full-width "Finished work" strip of 3 product photos links to `/about#finished`.
 - Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
   the server; the prefix follows the kind. Price levels: list price (MAX) = prices.customer_id 0, MID = -2, MIN = -3; `customers.tier`
   ('' / mid / min, schema v3). Lookup: customer's own price → their level → list price. `/api/pricelist` imports the owner's Excel layout
@@ -61,7 +66,7 @@ The owner wants the site to run without errors or jank, and every new feature ch
   that host (server checks `url.hostname`, never `.pages.dev`). Then every other host 301s GET pages / `/v/` links there (not `/api/`,
   not branch previews `<x>.d8-3d.pages.dev`); `/admin?stay=1` sets cookie `d8stay` to stay on the old host for a day. Pages carry
   `https://d8-3d.pages.dev` in canonical / og tags; `publicPage` swaps in the right origin and, at the main domain only, drops noindex
-  for `/`, `/privacy`, `/terms`; `/robots.txt` opens and `/sitemap.xml` is served there.
+  for `/`, `/about`, `/privacy`, `/terms`; `/robots.txt` opens and `/sitemap.xml` is served there.
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.
 - Motion rules: 200–300 ms, ease-out curves, transform/opacity only, off under `prefers-reduced-motion`.

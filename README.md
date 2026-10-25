@@ -6,7 +6,8 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - Cổng khách hàng: `/portal`
 - Quản trị: `/admin` (Đơn hàng, Ca cổng khách, Khách hàng, Mã hàng & bảng giá, Báo cáo, Nhập Excel, Nhân sự, Cài đặt, Link xem 3D, Tin nhắn) và `/stl`
 - Link gửi bác sĩ: `/v/<mã>`
-- Giới thiệu: `/about` (ca tiêu biểu toàn hàm, 17 ảnh màn hình CAD có lọc, 3 video quay màn hình, thêm 6 ca; bố cục theo kiểu luminadental.com.au)
+- Giới thiệu: `/about` (ca tiêu biểu toàn hàm, 9 ảnh sản phẩm hoàn thiện, 17 ảnh màn hình CAD có lọc, 3 video quay màn hình, thêm 6 ca; bố cục theo kiểu luminadental.com.au)
+- Font: chỉ dùng Be Vietnam Pro (tiêu đề đậm, viết thường như câu; nhãn nhỏ và nút in hoa). Dòng chữ nghiêng có chân (slogan) vẫn là Noto Serif Display.
 - Pháp lý: `/privacy`, `/terms` (Google yêu cầu khi cho khách đăng nhập)
 
 ## Đăng nhập

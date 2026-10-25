@@ -107,7 +107,7 @@
     g.fillText("3D Design View", W - 48, 86);
     const bot = g.createLinearGradient(0, H - 70, 0, H); bot.addColorStop(0, "rgba(5,37,82,0)"); bot.addColorStop(1, "rgba(5,37,82,.75)");
     g.fillStyle = bot; g.fillRect(0, H - 70, W, 70);
-    g.textAlign = "left"; g.font = '600 15px "Lexend Exa", "Be Vietnam Pro", system-ui, sans-serif'; g.fillStyle = "#D6E1E7";
+    g.textAlign = "left"; g.font = '600 15px "Be Vietnam Pro", system-ui, sans-serif'; g.fillStyle = "#D6E1E7";
     try { g.letterSpacing = "3px"; } catch {}
     g.fillText("OPEN TO ROTATE AND ZOOM · NO SOFTWARE NEEDED", 48, H - 30);
     for (const q of [0.86, 0.78, 0.7]) {

@@ -1,7 +1,7 @@
 /* D.EIGHT DESIGN CENTER — shared web styles (brand kit v1.1, 07-WEB web UI kit)
    Fonts: TF Phodest / TF The Gold Bachelor are licensed print fonts and are not embedded.
    Web stand-ins (Google Fonts, Vietnamese subsets):
-     display  Lexend Exa  (for TF Phodest: wide geometric caps)
+     display  Be Vietnam Pro (owner's choice 2026-10-25: headings bold, sentence case; small labels in caps)
      accent   Noto Serif Display, condensed (for TF The Gold Bachelor)
      body     Be Vietnam Pro (brand body font)
    The logo and the "Design to fit" tagline are used as outlined SVG files from the kit. */
@@ -26,7 +26,7 @@
   --warning: #B7791F;
   --error: #B3261E;
 
-  --f-display: "Lexend Exa", "Be Vietnam Pro", system-ui, sans-serif;
+  --f-display: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --f-serif: "Noto Serif Display", "Times New Roman", Georgia, serif;
 

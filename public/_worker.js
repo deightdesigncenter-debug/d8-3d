@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-25.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-25.2"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -3459,10 +3459,10 @@ async function viewerPage(env, id, url) {
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600&family=Lexend+Exa:wght@600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root { --navy:#05316E; --navy-600:#315686; --steel:#8FACCB; --steel-100:#EBF0EF; --cream:#FCFDF6; --ink:#0B1B33; --line:#E3E7E6;
-          --display:"Lexend Exa","Be Vietnam Pro",system-ui,sans-serif; --bar:64px; }
+          --display:"Be Vietnam Pro",system-ui,sans-serif; --bar:64px; }
   * { box-sizing:border-box; }
   html, body { margin:0; height:100%; background:var(--navy); }
   body { display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; color:var(--ink);
@@ -3584,7 +3584,7 @@ function unavailablePage() {
 <meta name="theme-color" content="#05316E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/brand.css?v=${ASSET_VERSION}">
 <style>
   :root { --wrap: 680px; }
