@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>try{var t=localStorage.getItem("d8-theme");if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<meta name="robots" content="noindex, nofollow">
+<title>About D.EIGHT | Dental CAD design, built at the bench</title>
+<meta name="description" content="Who designs your cases at D.EIGHT DESIGN CENTER: a featured full-mouth case, real exocad and 3Shape screenshots, screen recordings and recent work.">
+<link rel="canonical" href="https://d8-3d.pages.dev/about">
+<meta property="og:type" content="website">
+<meta property="og:title" content="About D.EIGHT DESIGN CENTER — Built at the bench">
+<meta property="og:description" content="A featured full-mouth case, real CAD screenshots and screen recordings from our design desk.">
+<meta property="og:image" content="https://d8-3d.pages.dev/site/og.jpg">
+<meta property="og:url" content="https://d8-3d.pages.dev/about">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png">
+<meta name="theme-color" content="#05316E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/brand.css?v=2026-10-25.1">
+<link rel="preload" as="image" href="/site/about/case-upper-34.webp" fetchpriority="high">
+<style>
+  html { scroll-behavior: smooth; scroll-padding-top: 104px; } /* sections start just under the sticky header */
+  body { background: var(--paper); }
+  .btn-cream { background: var(--c-cream); border-color: var(--c-cream); color: var(--c-navy); }
+  .btn-cream:hover { background: var(--white); border-color: var(--white); }
+  [data-theme="dark"] .btn-cream:hover { background: #fff; border-color: #fff; }
+
+  /* ---------- sections (centred heads, calm bands) ---------- */
+  .section { padding: 108px 0; }
+  .paper-band { background: var(--paper); }
+  .white-band { background: var(--white); }
+  .navy-band { background: var(--band); color: var(--on-brand); }
+  .sec-head { max-width: 760px; margin: 0 auto 52px; text-align: center; }
+  .sec-head .eyebrow { color: var(--steel); margin-bottom: 14px; }
+  .sec-head h2, .intro-copy h2 { margin: 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .1em;
+                 font-size: clamp(24px, 3.1vw, 38px); line-height: 1.2; color: var(--navy); }
+  .sec-head .serif, .intro-copy .serif { margin: 10px 0 0; color: var(--steel); font-size: clamp(26px, 3.4vw, 42px); }
+  .sec-head p.intro { margin: 18px auto 0; font-size: 16px; line-height: 1.75; color: var(--muted); max-width: 620px; }
+  .navy-band .sec-head h2 { color: var(--on-brand); }
+  .navy-band .sec-head p.intro { color: #C9D6E4; }
+
+  /* ---------- hero ---------- */
+  .ab-hero { position: relative; overflow: hidden; color: var(--on-brand);
+             background: radial-gradient(110% 100% at 78% 40%, #0B3F86 0%, var(--brand) 48%, var(--brand-800) 100%); }
+  .ring { position: absolute; border-radius: 50%; border: 1px solid rgba(143, 172, 203, .16); pointer-events: none; }
+  .ring.r1 { width: 900px; height: 900px; right: -260px; top: -260px; }
+  .ring.r2 { width: 640px; height: 640px; right: -130px; top: -130px; border-color: rgba(143, 172, 203, .1); }
+  .ab-hero-in { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 32px 48px; align-items: center;
+                padding-top: 72px; padding-bottom: 64px; }
+  .ab-hero .chip { background: rgba(143, 172, 203, .18); color: var(--on-brand-2); }
+  .ab-hero h1 { margin: 22px 0 0; font-family: var(--f-display); font-weight: 400; text-transform: uppercase; letter-spacing: .1em;
+                font-size: clamp(32px, 4.6vw, 64px); line-height: 1.06; color: var(--on-brand); max-width: 16ch; }
+  .ab-hero .serif { margin: 12px 0 0; color: var(--steel); font-size: clamp(28px, 3.4vw, 44px); }
+  .ab-hero .lede { margin: 22px 0 0; max-width: 540px; font-size: 16.5px; line-height: 1.75; color: #DCE5EE; }
+  .ab-hero .btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+  .ab-hero-art { margin: 0; position: relative; }
+  .ab-hero-art img { width: 100%; height: auto; filter: drop-shadow(0 30px 40px rgba(2, 18, 42, .45)); }
+  .ab-hero-art figcaption { margin-top: 6px; text-align: right; font-size: 12.5px; color: var(--steel); }
+  .ab-jump { position: relative; z-index: 1; border-top: 1px solid rgba(143, 172, 203, .22); }
+  .ab-jump .wrap { display: flex; gap: 6px 28px; flex-wrap: wrap; padding-top: 18px; padding-bottom: 18px; }
+  .ab-jump a { color: var(--on-brand-2); text-decoration: none; font-family: var(--f-display); font-weight: 600; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+               display: inline-flex; align-items: center; gap: 8px; min-height: 32px; }
+  .ab-jump a::before { content: ""; width: 14px; height: 1px; background: var(--steel); transition: width var(--t-fast) var(--ease-out); }
+  .ab-jump a:hover { color: var(--on-brand); }
+  .ab-jump a:hover::before { width: 22px; }
+
+  /* ---------- who we are ---------- */
+  .who { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 64px; align-items: center; }
+  .glance { margin: 0; padding: 34px; background: var(--band); border-color: var(--band); color: var(--on-brand); position: relative; overflow: hidden; }
+  .glance dl { margin: 18px 0 0; position: relative; z-index: 1; }
+  .glance dl > div { padding: 13px 0; border-top: 1px solid rgba(143, 172, 203, .28); }
+  .glance dt { font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--steel); }
+  .glance dd { margin: 4px 0 0; font-size: 15px; color: var(--on-brand); }
+  .glance .eyebrow { color: var(--steel); }
+  .glance .mark { position: absolute; right: -40px; bottom: -36px; width: 170px; height: auto; opacity: .1; }
+  .intro-copy { text-align: center; max-width: 600px; justify-self: center; }
+  .intro-copy .eyebrow { color: var(--steel); margin-bottom: 14px; }
+  .intro-copy p.body { margin: 22px 0 0; font-size: 16px; line-height: 1.8; color: var(--ink); }
+  .intro-copy p.body + p.body { margin-top: 14px; color: var(--muted); }
+
+  /* ---------- featured case: facts + chequerboard ---------- */
+  .specs { margin: 0 auto 56px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 920px; }
+  .specs > div { padding: 4px 28px; text-align: center; }
+  .specs > div + div { border-left: 1px solid var(--line); }
+  .specs dt { font-family: var(--f-display); font-weight: 300; font-size: clamp(34px, 3.6vw, 50px); line-height: 1; color: var(--navy); letter-spacing: -.01em; }
+  .specs dd { margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: var(--muted); }
+  .zig { border-radius: 22px; overflow: hidden; border: 1px solid var(--line); }
+  .zrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 420px; }
+  .zrow + .zrow { border-top: 1px solid var(--line); }
+  .zrow.flip .zpic { order: 2; }
+  .zpic { margin: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 44px 40px; overflow: hidden;
+          background: radial-gradient(120% 110% at 50% 30%, #0B3F86 0%, var(--brand) 55%, var(--brand-800) 100%); }
+  .zpic img { width: 100%; height: auto; max-height: 340px; object-fit: contain; }
+  .zpic.tall img { max-height: 380px; width: auto; max-width: 100%; }
+  .zpic.shot { padding: 0; background: #473A6D; }
+  .zpic.shot img { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; object-fit: cover; }
+  .ztxt { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 56px 64px; background: var(--white); }
+  .zn { font-family: var(--f-display); font-weight: 300; font-size: 13px; letter-spacing: .2em; color: var(--steel); }
+  .ztxt h3 { margin: 14px 0 0; font-family: var(--f-display); font-weight: 600; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); line-height: 1.45; }
+  .ztxt p { margin: 14px 0 0; max-width: 420px; font-size: 15.5px; line-height: 1.75; color: var(--muted); }
+  .consent { display: flex; gap: 12px; align-items: flex-start; justify-content: center; margin: 28px auto 0; max-width: 760px; font-size: 13.5px; line-height: 1.6; color: var(--muted); text-align: left; }
+  .consent svg { flex: 0 0 auto; margin-top: 2px; color: var(--steel); }
+
+  /* ---------- CAD screens: filter + gallery ---------- */
+  .filters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 32px; }
+  .filters button { height: 38px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--steel-300); background: var(--white); color: var(--navy); cursor: pointer;
+                    font-family: var(--f-display); font-weight: 600; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase;
+                    transition: background-color var(--t-fast) var(--ease-out), color var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out); }
+  .filters button:hover { border-color: var(--steel); }
+  .filters button[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+  .filters button .n { margin-left: 6px; opacity: .65; font-weight: 400; }
+  .gal { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; }
+  .shot-card { margin: 0; }
+  .shot-card[hidden] { display: none; }
+  .shot-card.fade { animation: d8-in var(--t-med) var(--ease-out) both; }
+  .zoom { display: block; width: 100%; padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: #473A6D; cursor: zoom-in; position: relative; }
+  .zoom img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; transition: transform var(--t-slow) var(--ease-out); }
+  .zoom:hover img { transform: scale(1.03); }
+  .zoom::after { content: ""; position: absolute; right: 12px; bottom: 12px; width: 34px; height: 34px; border-radius: 50%; opacity: 0; transform: scale(.9);
+                 background: rgba(4, 37, 82, .78) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23FCFDF6' stroke-width='1.6'%3E%3Ccircle cx='9' cy='9' r='5.5'/%3E%3Cpath d='M13 13l4 4M9 6.5v5M6.5 9h5'/%3E%3C/svg%3E") center / 18px no-repeat;
+                 transition: opacity var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out); }
+  .zoom:hover::after, .zoom:focus-visible::after { opacity: 1; transform: none; }
+  .zoom:focus-visible { outline: 2px solid var(--navy); outline-offset: 3px; }
+  .shot-card figcaption { margin-top: 12px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+
+  /* ---------- recordings ---------- */
+  .clips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .clip { margin: 0; border-radius: 18px; overflow: hidden; background: rgba(143, 172, 203, .08); border: 1px solid rgba(143, 172, 203, .24); }
+  .clip-media { position: relative; background: #17131F; aspect-ratio: 720 / 498; }
+  .clip video { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .vt { position: absolute; left: 12px; bottom: 12px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(252, 253, 246, .5); background: rgba(4, 37, 82, .7);
+        color: var(--c-cream); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background-color var(--t-fast) var(--ease-out); }
+  .vt:hover { background: rgba(4, 37, 82, .92); }
+  .vt:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+  .vt .i-play { display: none; } .vt.paused .i-play { display: block; } .vt.paused .i-pause { display: none; }
+  .clip figcaption { padding: 20px 22px 22px; }
+  .clip figcaption b { display: block; font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--on-brand); line-height: 1.5; }
+  .clip figcaption span { display: block; margin-top: 6px; font-size: 13.5px; color: var(--steel); }
+
+  /* ---------- more cases ---------- */
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  .case-card { margin: 0; border-radius: 18px; overflow: hidden; background: var(--white); border: 1px solid var(--line); display: flex; flex-direction: column; }
+  .case-card .zoom { border-radius: 0; }
+  .case-card .zoom img { aspect-ratio: 1160 / 800; }
+  .case-card figcaption { padding: 22px 24px 24px; text-align: center; }
+  .case-card b { display: block; font-family: var(--f-display); font-weight: 600; font-size: 12.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); }
+  .case-card span { display: block; margin-top: 6px; font-size: 14px; color: var(--muted); }
+
+  /* ---------- call to action ---------- */
+  .cta { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.2fr) auto; gap: 28px 56px; align-items: center;
+         padding: 56px 60px; border-radius: 24px; color: var(--on-brand); background: radial-gradient(120% 140% at 90% 10%, #0B3F86 0%, var(--brand) 55%, var(--brand-800) 100%); }
+  .cta .eyebrow { color: var(--steel); }
+  .cta h2 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 500; text-transform: uppercase; letter-spacing: .1em; font-size: clamp(24px, 3vw, 36px); line-height: 1.2; color: var(--on-brand); }
+  .cta p { margin: 14px 0 0; max-width: 560px; color: #C9D6E4; font-size: 15.5px; line-height: 1.7; }
+  .cta .btns { display: flex; flex-wrap: wrap; gap: 12px; position: relative; z-index: 1; }
+  .cta .mark { position: absolute; right: -50px; bottom: -60px; width: 220px; opacity: .08; pointer-events: none; }
+
+  /* ---------- lightbox ---------- */
+  .lb { padding: 0; border: 0; background: transparent; max-width: none; max-height: none; width: 100%; height: 100%; color: var(--c-cream); overflow: hidden; }
+  .lb::backdrop { background: rgba(3, 14, 32, .9); }
+  .lb[open] .lb-in { animation: d8-in var(--t-med) var(--ease-out) both; }
+  .lb-in { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 84px 40px; }
+  .lb figure { margin: 0; display: flex; flex-direction: column; align-items: center; max-width: min(1200px, 100%); }
+  .lb img { display: block; max-width: 100%; max-height: calc(100vh - 190px); max-height: calc(100svh - 190px); width: auto; height: auto; border-radius: 12px; background: #473A6D; }
+  .lb figcaption { margin-top: 16px; text-align: center; font-size: 15px; line-height: 1.5; color: #DCE5EE; max-width: 720px; }
+  .lb-n { margin-top: 6px; font-family: var(--f-display); font-weight: 600; font-size: 10.5px; letter-spacing: .16em; color: var(--steel); }
+  .lb button { position: absolute; width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid rgba(252, 253, 246, .45); background: rgba(4, 37, 82, .6); color: var(--c-cream);
+               cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background-color var(--t-fast) var(--ease-out); }
+  .lb button:hover { background: rgba(252, 253, 246, .14); }
+  .lb button:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+  .lb-x { top: 16px; right: 16px; }
+  .lb-prev { left: 20px; top: 50%; margin-top: -24px; }
+  .lb-next { right: 20px; top: 50%; margin-top: -24px; }
+
+  .fab { position: fixed; right: 22px; bottom: 22px; z-index: 40; width: 56px; height: 56px; border-radius: 50%; background: var(--brand); color: var(--on-brand);
+         display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(5, 49, 110, .35); text-decoration: none; transition: transform var(--t-fast) var(--ease-out), opacity var(--t-fast) var(--ease-out); }
+  .fab:hover { transform: translateY(-2px); }
+  .fab.hide { opacity: 0; pointer-events: none; }
+
+  .js .reveal { opacity: 0; transform: translateY(14px); transition: opacity var(--t-slow) var(--ease-out), transform var(--t-slow) var(--ease-out); }
+  .js .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 1080px) {
+    .ztxt { padding: 44px 40px; }
+    .cta { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 900px) {
+    .ab-hero-in { grid-template-columns: 1fr; padding-top: 48px; padding-bottom: 40px; }
+    .ab-hero-art { max-width: 620px; }
+    .who { grid-template-columns: 1fr; gap: 40px; }
+    .intro-copy { order: -1; }
+    .zrow { grid-template-columns: 1fr; min-height: 0; }
+    .zrow.flip .zpic { order: 0; }
+    .zpic { padding: 34px 28px; }
+    .zpic.shot { aspect-ratio: 1080 / 745; }
+    .gal { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .clips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    .section { padding: 72px 0; }
+    .sec-head { margin-bottom: 36px; }
+    .ab-hero .btns .btn { flex: 1 1 100%; }
+    .ab-jump .wrap { gap: 2px 20px; }
+    .specs { grid-template-columns: 1fr; margin-bottom: 40px; }
+    .specs > div { padding: 14px 0; }
+    .specs > div + div { border-left: 0; border-top: 1px solid var(--line); }
+    .ztxt { padding: 32px 22px 36px; }
+    .zpic img { max-height: 260px; }
+    .zpic.tall img { max-height: 300px; }
+    .gal { gap: 14px 12px; }
+    .shot-card figcaption { font-size: 12.5px; margin-top: 8px; }
+    .zoom { border-radius: 10px; }
+    .clips, .cards { grid-template-columns: 1fr; }
+    .cta { padding: 36px 26px; border-radius: 20px; }
+    .cta .btns .btn { flex: 1 1 100%; }
+    .lb-in { padding: 64px 12px 84px; }
+    .lb-prev, .lb-next { top: auto; bottom: 20px; margin-top: 0; }
+    .lb-prev { left: calc(50% - 60px); } .lb-next { right: calc(50% - 60px); }
+    .fab { width: 50px; height: 50px; right: 16px; bottom: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .js .reveal { opacity: 1; transform: none; }
+    .zoom img, .zoom:hover img { transition: none; transform: none; }
+    .shot-card.fade, .lb[open] .lb-in { animation: none; }
+  }
+</style>
+<script>document.documentElement.classList.add("js");</script>
+<script src="/site/about-dict.js?v=2026-10-25.1"></script>
+<script src="/shell.js?v=2026-10-25.1" defer></script>
+</head>
+<body data-page="about" data-title-key="title">
+<div id="d8-header"></div>
+
+<main id="top">
+  <!-- ============ HERO ============ -->
+  <section class="ab-hero" aria-labelledby="abTitle">
+    <div class="ring r1" aria-hidden="true"></div><div class="ring r2" aria-hidden="true"></div>
+    <div class="wrap ab-hero-in">
+      <div>
+        <span class="chip" data-i="ah.eyebrow">About D.EIGHT</span>
+        <h1 id="abTitle" data-i="ab.h">Built at the bench</h1>
+        <p class="serif" lang="en" data-i="ab.serif">Dental technicians first</p>
+        <p class="lede" data-i="ab.p1">D.EIGHT DESIGN CENTER grew out of nearly five years of hands-on dental design work: first as a technician in a dental lab in Vietnam, then designing directly for clinics and labs in the United States and Australia.</p>
+        <div class="btns">
+          <a class="btn btn-cream" href="#case" data-i="ah.case">See the featured case</a>
+          <a class="btn btn-light" href="/portal#/new" data-i="ah.send">Send a case</a>
+        </div>
+      </div>
+      <figure class="ab-hero-art">
+        <img src="/site/about/case-upper-34.webp" width="1300" height="817" alt="Full upper-arch wax-up seen from below, rendered from the STL file" fetchpriority="high">
+        <figcaption data-i="ah.cap">Upper arch of the featured case, rendered from its STL file</figcaption>
+      </figure>
+    </div>
+    <nav class="ab-jump" aria-label="On this page"><div class="wrap">
+      <a href="#case" data-i="nav.case">Featured case</a>
+      <a href="#screens" data-i="nav.screens">CAD screens</a>
+      <a href="#clips" data-i="nav.clips">Recordings</a>
+      <a href="#cases" data-i="nav.cases">More cases</a>
+    </div></nav>
+  </section>
+
+  <!-- ============ WHO WE ARE ============ -->
+  <section class="section paper-band" id="who" aria-labelledby="inTitle">
+    <div class="wrap who">
+      <aside class="card glance reveal" aria-label="D.EIGHT at a glance">
+        <span class="eyebrow" data-i="ab.glance">At a glance</span>
+        <dl>
+          <div><dt data-i="ab.d1">Based in</dt><dd data-i="ab.v1">Vietnam · UTC+7</dd></div>
+          <div><dt data-i="ab.d2">Experience</dt><dd data-i="ab.v2">Nearly 5 years of dental CAD design</dd></div>
+          <div><dt data-i="ab.d3">Clients</dt><dd data-i="ab.v3">Labs and clinics in the US and Australia</dd></div>
+          <div><dt data-i="ab.d6">Software</dt><dd data-i="ab.v6">exocad, 3Shape, Implant Studio, exoplan</dd></div>
+          <div><dt data-i="ab.d4">What we deliver</dt><dd data-i="ab.v4">Design only, as production-ready STL</dd></div>
+          <div><dt data-i="ab.d5">Languages</dt><dd data-i="ab.v5">English · Vietnamese</dd></div>
+        </dl>
+        <img class="mark" src="/brand/symbol-reversed.svg" alt="" width="170" height="154">
+      </aside>
+      <div class="intro-copy reveal">
+        <span class="eyebrow" data-i="in.eyebrow">Who we are</span>
+        <h2 id="inTitle" data-i="in.h">A design team, nothing else</h2>
+        <p class="body" data-i="ab.p2">Today D.EIGHT is a dedicated design team. Implant work is our core: single implant crowns, custom abutments, All-on-X bridges and bars. Around it we cover crown and bridge, removable and appliance design.</p>
+        <p class="body" data-i="ab.p3">We only design. No milling, no printing, no shipping, so every hour goes into the file you send to your own mill, printer or production partner.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURED CASE ============ -->
+  <section class="section white-band" id="case" aria-labelledby="fcTitle">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow" data-i="fc.eyebrow">Featured case</span>
+        <h2 id="fcTitle" data-i="fc.h">Full-mouth wax-up, 28 units</h2>
+        <p class="serif" lang="en" data-i="fc.serif">Designed from the patient's smile</p>
+      </div>
+      <dl class="specs reveal">
+        <div><dt>28</dt><dd data-i="fc.f1">units: upper 17–27, lower 37–47</dd></div>
+        <div><dt>5</dt><dd data-i="fc.f2">multi-unit abutments in the upper arch</dd></div>
+        <div><dt>3.1</dt><dd data-i="fc.f3">exocad DentalCAD, NTP_F6 tooth library</dd></div>
+      </dl>
+      <div class="zig reveal">
+        <div class="zrow">
+          <figure class="zpic"><img src="/site/about/case-upper-front.webp" width="1400" height="552" alt="Upper arch wax-up from the front, teeth 17 to 27" loading="lazy"></figure>
+          <div class="ztxt"><span class="zn">01</span><h3 data-i="fc.1.t">Upper arch, 17 to 27</h3>
+            <p data-i="fc.1.p">Fourteen units, set up from the patient's smile photo first: midline, incisal edge and tooth proportions, then the detail of each tooth.</p></div>
+        </div>
+        <div class="zrow flip">
+          <figure class="zpic tall"><img src="/site/about/case-upper-occlusal.webp" width="1100" height="1048" alt="Upper arch from the biting surface, with the screw access holes" loading="lazy"></figure>
+          <div class="ztxt"><span class="zn">02</span><h3 data-i="fc.2.t">Screw access off the cusps</h3>
+            <p data-i="fc.2.p">Seen from the biting surface, each screw channel comes out away from the cusp tips, so the chewing surfaces stay whole.</p></div>
+        </div>
+        <div class="zrow">
+          <figure class="zpic"><img src="/site/about/case-upper-intaglio.webp" width="1200" height="719" alt="Underside of the upper bridge with five multi-unit abutment seats" loading="lazy"></figure>
+          <div class="ztxt"><span class="zn">03</span><h3 data-i="fc.3.t">Five multi-unit seats</h3>
+            <p data-i="fc.3.p">The underside sits directly on five multi-unit abutments, built from the OPTISPLINT direct-to-MUA library so each seat matches its abutment.</p></div>
+        </div>
+        <div class="zrow flip">
+          <figure class="zpic"><img src="/site/about/case-lower-front.webp" width="1300" height="672" alt="Lower arch wax-up from the front, teeth 37 to 47" loading="lazy"></figure>
+          <div class="ztxt"><span class="zn">04</span><h3 data-i="fc.4.t">Lower arch, 37 to 47</h3>
+            <p data-i="fc.4.p">The same tooth library and the same smile line as the upper arch, with the gingiva shaped in the same wax-up.</p></div>
+        </div>
+        <div class="zrow">
+          <figure class="zpic shot"><img src="/site/about/case-occlusion.webp" width="1080" height="745" alt="Both arches in occlusion in exocad" loading="lazy"></figure>
+          <div class="ztxt"><span class="zn">05</span><h3 data-i="fc.5.t">Both arches together</h3>
+            <p data-i="fc.5.p">The bite is checked on the full set in exocad before any file is exported, not one tooth at a time.</p></div>
+        </div>
+      </div>
+      <p class="consent"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3.5" y="8" width="11" height="8" rx="2"/><path d="M6 8V5.8a3 3 0 0 1 6 0V8"/></svg>
+        <span data-i="fc.note">Shown with the consent of the treating doctor and the patient. Patient names and photos are never published.</span></p>
+    </div>
+  </section>
+
+  <!-- ============ CAD SCREENS ============ -->
+  <section class="section paper-band" id="screens" aria-labelledby="scTitle">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow" data-i="sc.eyebrow">From our CAD screens</span>
+        <h2 id="scTitle" data-i="sc.h">Inside the design software</h2>
+        <p class="serif" lang="en" data-i="sc.serif">Real screenshots, not renders</p>
+        <p class="intro" data-i="sc.intro">Every image here is a screenshot from exocad or 3Shape, taken while we worked on real cases. Tap one to see it larger.</p>
+      </div>
+      <div class="filters reveal" role="group" aria-label="Show" data-i-attr="aria-label:f.label">
+        <button type="button" data-f="all" aria-pressed="true"><span data-i="f.all">All</span><span class="n">17</span></button>
+        <button type="button" data-f="arch" aria-pressed="false"><span data-i="f.arch">Full arch &amp; implant</span><span class="n">9</span></button>
+        <button type="button" data-f="crown" aria-pressed="false"><span data-i="f.crown">Crowns &amp; margins</span><span class="n">5</span></button>
+        <button type="button" data-f="other" aria-pressed="false"><span data-i="f.other">Guides &amp; dentures</span><span class="n">3</span></button>
+      </div>
+      <div class="gal" id="gal" data-lb="screens">
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-fullmouth.webp" width="1200" height="767" alt="" loading="lazy"></button><figcaption data-i="s1">Full-mouth wax-up, front view</figcaption></figure>
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-waxup.webp" width="1200" height="768" alt="" loading="lazy"></button><figcaption data-i="s2">Transparent wax-up over preps and abutments</figcaption></figure>
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-fullarch-side.webp" width="760" height="486" alt="" loading="lazy"></button><figcaption data-i="s3">Full-arch restoration, side view</figcaption></figure>
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-implant.webp" width="1200" height="767" alt="" loading="lazy"></button><figcaption data-i="s4">Implant bridge with abutments and screw channels</figcaption></figure>
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-tryin.webp" width="1200" height="768" alt="" loading="lazy"></button><figcaption data-i="s5">Full-arch try-in</figcaption></figure>
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-upper-screw.webp" width="1200" height="766" alt="" loading="lazy"></button><figcaption data-i="s6">Upper arch, screw access on multi-unit abutments</figcaption></figure>
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-lower-screw.webp" width="760" height="486" alt="" loading="lazy"></button><figcaption data-i="s7">Lower arch, screw access on multi-unit abutments</figcaption></figure>
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-implant-pos.webp" width="760" height="447" alt="" loading="lazy"></button><figcaption data-i="s8">Choosing the implant position</figcaption></figure>
+        <figure class="shot-card" data-cat="arch"><button type="button" class="zoom"><img src="/site/about/s-c-scanbody.webp" width="640" height="376" alt="" loading="lazy"></button><figcaption data-i="s9">Abutment positions on the scan</figcaption></figure>
+        <figure class="shot-card" data-cat="crown"><button type="button" class="zoom"><img src="/site/about/s-margin.webp" width="1200" height="591" alt="" loading="lazy"></button><figcaption data-i="s10">Margin checked in cross-section, 0.542 mm</figcaption></figure>
+        <figure class="shot-card" data-cat="crown"><button type="button" class="zoom"><img src="/site/about/s-z-crowns-front.webp" width="640" height="344" alt="" loading="lazy"></button><figcaption data-i="s11">All-ceramic crowns on preps, front view</figcaption></figure>
+        <figure class="shot-card" data-cat="crown"><button type="button" class="zoom"><img src="/site/about/s-z-crowns-clear.webp" width="640" height="347" alt="" loading="lazy"></button><figcaption data-i="s12">Crowns shown transparent over the dies</figcaption></figure>
+        <figure class="shot-card" data-cat="crown"><button type="button" class="zoom"><img src="/site/about/s-z-crowns-side.webp" width="640" height="344" alt="" loading="lazy"></button><figcaption data-i="s13">All-ceramic crowns, side view</figcaption></figure>
+        <figure class="shot-card" data-cat="crown"><button type="button" class="zoom"><img src="/site/about/s-z-crowns-occl.webp" width="640" height="346" alt="" loading="lazy"></button><figcaption data-i="s14">All-ceramic crowns, occlusal view</figcaption></figure>
+        <figure class="shot-card" data-cat="other"><button type="button" class="zoom"><img src="/site/about/s-z-denture.webp" width="640" height="369" alt="" loading="lazy"></button><figcaption data-i="s15">Complete denture with the occlusal plane</figcaption></figure>
+        <figure class="shot-card" data-cat="other"><button type="button" class="zoom"><img src="/site/about/s-z-guide-occl.webp" width="640" height="482" alt="" loading="lazy"></button><figcaption data-i="s16">Surgical guide for site 37 (3Shape)</figcaption></figure>
+        <figure class="shot-card" data-cat="other"><button type="button" class="zoom"><img src="/site/about/s-z-guide-side.webp" width="640" height="388" alt="" loading="lazy"></button><figcaption data-i="s17">Surgical guide, drill axis</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RECORDINGS ============ -->
+  <section class="section navy-band" id="clips" aria-labelledby="clTitle">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow" data-i="cl.eyebrow">Screen recordings</span>
+        <h2 id="clTitle" data-i="cl.h">Watch a design take shape</h2>
+        <p class="serif" lang="en" data-i="cl.serif">Recorded while we design</p>
+        <p class="intro" data-i="cl.intro">Short clips cut from our own screen recordings. Only the 3D view is kept, with no sound.</p>
+      </div>
+      <div class="clips reveal">
+        <figure class="clip"><div class="clip-media">
+            <video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-crowns.webp" aria-label="Full-arch crowns on the articulated model" data-i-attr="aria-label:cl.1.t">
+              <source src="/site/about/clip-crowns.mp4" type="video/mp4"><source src="/site/about/clip-crowns.webm" type="video/webm"></video>
+            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
+          </div><figcaption><b data-i="cl.1.t">Full-arch crowns on the articulated model</b><span data-i="cl.1.d">Recorded 13 July 2026</span></figcaption></figure>
+        <figure class="clip"><div class="clip-media">
+            <video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-closeup.webp" aria-label="Shaping the front teeth, close up" data-i-attr="aria-label:cl.2.t">
+              <source src="/site/about/clip-closeup.mp4" type="video/mp4"><source src="/site/about/clip-closeup.webm" type="video/webm"></video>
+            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
+          </div><figcaption><b data-i="cl.2.t">Shaping the front teeth, close up</b><span data-i="cl.2.d">Recorded 14 August 2026</span></figcaption></figure>
+        <figure class="clip"><div class="clip-media">
+            <video muted loop playsinline preload="none" width="720" height="382" poster="/site/about/clip-anterior.webp" aria-label="Placing and comparing front crowns on the arch" data-i-attr="aria-label:cl.3.t">
+              <source src="/site/about/clip-anterior.mp4" type="video/mp4"><source src="/site/about/clip-anterior.webm" type="video/webm"></video>
+            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
+          </div><figcaption><b data-i="cl.3.t">Placing and comparing front crowns on the arch</b><span data-i="cl.3.d">Recorded 5 September 2026</span></figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MORE CASES ============ -->
+  <section class="section white-band" id="cases" aria-labelledby="mcTitle">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow" data-i="mc.eyebrow">More cases</span>
+        <h2 id="mcTitle" data-i="mc.h">More from recent cases</h2>
+        <p class="serif" lang="en" data-i="mc.serif">From our exocad design reports</p>
+      </div>
+      <div class="cards reveal" data-lb="cases">
+        <figure class="case-card"><button type="button" class="zoom"><img src="/site/about/case-1.webp" width="1160" height="800" alt="" loading="lazy"></button><figcaption><b data-i="mc.1.t">Both arches</b><span data-i="mc.1.p">17–27 and 37–47</span></figcaption></figure>
+        <figure class="case-card"><button type="button" class="zoom"><img src="/site/about/case-3.webp" width="1160" height="800" alt="" loading="lazy"></button><figcaption><b data-i="mc.2.t">Full arch on implants</b><span data-i="mc.2.p">With abutments and screw channels, 17–28 and 38–48</span></figcaption></figure>
+        <figure class="case-card"><button type="button" class="zoom"><img src="/site/about/case-2.webp" width="1160" height="800" alt="" loading="lazy"></button><figcaption><b data-i="mc.3.t">Ten upper front teeth</b><span data-i="mc.3.p">15–25</span></figcaption></figure>
+        <figure class="case-card"><button type="button" class="zoom"><img src="/site/about/case-0.webp" width="1160" height="800" alt="" loading="lazy"></button><figcaption><b data-i="mc.4.t">Front teeth, both arches</b><span data-i="mc.4.p">14–24 and 33–43</span></figcaption></figure>
+        <figure class="case-card"><button type="button" class="zoom"><img src="/site/about/case-4.webp" width="1160" height="800" alt="" loading="lazy"></button><figcaption><b data-i="mc.5.t">Lower front teeth</b><span data-i="mc.5.p">35–45, with the minimum-thickness check layer</span></figcaption></figure>
+        <figure class="case-card"><button type="button" class="zoom"><img src="/site/about/s-margin3s.webp" width="570" height="318" alt="" loading="lazy"></button><figcaption><b data-i="mc.6.t">Margin line in 3Shape</b><span data-i="mc.6.p">Tooth 37, marked on the scan</span></figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CALL TO ACTION ============ -->
+  <section class="section paper-band" id="start" aria-labelledby="ctaTitle">
+    <div class="wrap">
+      <div class="cta reveal">
+        <div>
+          <span class="eyebrow" data-i="cta.eyebrow">Free trial</span>
+          <h2 id="ctaTitle" data-i="cta.h">Send your first case</h2>
+          <p data-i="cta.p">Your first two cases are free, up to US$50 in total, whatever the case type. Sign in with Google and upload your scans.</p>
+        </div>
+        <div class="btns">
+          <a class="btn btn-cream cta-shine" href="/portal#/new" data-i="cta.b">Start your free trial</a>
+          <a class="btn btn-light wa-link" href="https://wa.me/84703233263" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 2.2a7.8 7.8 0 0 0-6.7 11.8L2.2 17.8l3.9-1.1A7.8 7.8 0 1 0 10 2.2Z"/><path d="M7.1 6.3c.3-.3.8-.3 1 .1l.7 1.4c.1.3 0 .6-.2.8l-.5.5a5 5 0 0 0 2.8 2.8l.5-.5c.2-.2.5-.3.8-.2l1.4.7c.4.2.4.7.1 1-.6.7-1.5 1-2.4.7a7.4 7.4 0 0 1-4.9-4.9c-.3-.9 0-1.8.7-2.4Z"/></svg><span data-i="cta.wa">Ask on WhatsApp</span></a>
+        </div>
+        <img class="mark" src="/brand/symbol-reversed.svg" alt="" width="220" height="199">
+      </div>
+    </div>
+  </section>
+</main>
+
+<a class="fab wa-link cta-ring hide" id="fab" href="https://wa.me/84703233263" target="_blank" rel="noopener" tabindex="-1" data-i-attr="aria-label:fab,title:fab" aria-label="Chat with Danny Do on WhatsApp" title="Chat with Danny Do on WhatsApp">
+  <svg width="26" height="26" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2.2a7.8 7.8 0 0 0-6.7 11.8L2.2 17.8l3.9-1.1A7.8 7.8 0 1 0 10 2.2Z"/><path d="M7.1 6.3c.3-.3.8-.3 1 .1l.7 1.4c.1.3 0 .6-.2.8l-.5.5a5 5 0 0 0 2.8 2.8l.5-.5c.2-.2.5-.3.8-.2l1.4.7c.4.2.4.7.1 1-.6.7-1.5 1-2.4.7a7.4 7.4 0 0 1-4.9-4.9c-.3-.9 0-1.8.7-2.4Z"/></svg>
+</a>
+
+<dialog class="lb" id="lb" aria-labelledby="lbCap">
+  <div class="lb-in">
+    <figure><img id="lbImg" alt=""><figcaption id="lbCap"></figcaption><span class="lb-n" id="lbN"></span></figure>
+    <button type="button" class="lb-x" id="lbX" aria-label="Close" data-i-attr="aria-label:lb.close"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4l10 10M14 4 4 14"/></svg></button>
+    <button type="button" class="lb-prev" id="lbPrev" aria-label="Previous image" data-i-attr="aria-label:lb.prev"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+    <button type="button" class="lb-next" id="lbNext" aria-label="Next image" data-i-attr="aria-label:lb.next"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
+  </div>
+</dialog>
+
+<div id="d8-footer"></div>
+<script src="/site/about.js?v=2026-10-25.1" defer></script>
+</body>
+</html>

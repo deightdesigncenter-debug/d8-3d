@@ -17,7 +17,7 @@ with sync_playwright() as p:
     pg = c.new_page()
     cdp = c.new_cdp_session(pg); cdp.send("Emulation.setCPUThrottlingRate", {"rate": 4})
     pg.goto(B + "/portal"); pg.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "Danny Do"])
-    for name, url, ready in [("home", "/", ".stage-copy h1"), ("portal list", "/portal", ".pt-row, .pt-empty"), ("workspace home", "/admin", "#dash .card .dash-h"),
+    for name, url, ready in [("home", "/", ".stage-copy h1"), ("about", "/about", ".ab-hero h1"), ("portal list", "/portal", ".pt-row, .pt-empty"), ("workspace home", "/admin", "#dash .card .dash-h"),
                              ("workspace cases", "/admin#jobs", "#jobList .pt-row, #jobList .pt-empty"), ("privacy", "/privacy", "article")]:
         t0 = time.time()
         pg.goto(B + url)

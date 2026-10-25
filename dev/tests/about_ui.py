@@ -1,0 +1,184 @@
+"""About page (/about): layout on desktop and phone, light and dark, English and Vietnamese; CAD-screen filter;
+image viewer (open, arrows, Escape, focus back, only the shown images); screen recordings that download and play only
+on screen, stop when scrolled away, stay stopped once paused, never start by themselves with reduced motion;
+nothing about patients or client labs on the page; homepage links to it."""
+import sys, os, re
+from playwright.sync_api import sync_playwright
+B = os.environ.get("D8_BASE", "http://localhost:8788")
+OUT = sys.argv[1] if len(sys.argv) > 1 else "shots-about"
+os.makedirs(OUT, exist_ok=True)
+FAILS, errors = [], []
+def ok(c, m):
+    print(("PASS " if c else "FAIL ") + m)
+    if not c: FAILS.append(m)
+def block(route):
+    u = route.request.url
+    if "fonts.g" in u or "accounts.google" in u or "cdnjs" in u: return route.abort()
+    return route.continue_()
+with sync_playwright() as p:
+    b = p.chromium.launch()
+    def page(vp=None, mobile=False, scheme="light", motion="no-preference", lang=None):
+        c = b.new_context(viewport=vp or {"width": 1366, "height": 900}, is_mobile=mobile, has_touch=mobile, color_scheme=scheme, reduced_motion=motion)
+        c.route("**/*", block)
+        if lang: c.add_init_script("try{localStorage.setItem('d8-lang','%s')}catch(e){}" % lang)
+        pg = c.new_page()
+        pg.on("pageerror", lambda e: errors.append("PAGEERROR " + str(e)))
+        pg.on("console", lambda m: errors.append("console: " + m.text) if m.type == "error" and "ERR_FAILED" not in m.text else None)
+        return c, pg
+    def scroll_all(pg):
+        h = pg.evaluate("document.body.scrollHeight")
+        # the page scrolls smoothly (CSS); tests jump straight there
+        for y in range(0, h, 450): pg.evaluate(f"window.scrollTo({{top: {y}, behavior: 'instant'}})"); pg.wait_for_timeout(40)
+        pg.wait_for_timeout(600)
+    shown = lambda pg: pg.eval_on_selector_all("#gal .shot-card", "e => e.filter(x => !x.hidden).length")
+
+    # ---------- desktop, light, English
+    c, pg = page()
+    media = []
+    pg.on("request", lambda r: media.append(r.url) if re.search(r"\.(mp4|webm)(\?|$)", r.url) else None)
+    pg.goto(B + "/about"); pg.wait_for_timeout(800)
+    ok(pg.inner_text("h1").strip().lower() == "built at the bench", "About page opens with its title")
+    ok(pg.eval_on_selector('.sh-nav a[href="/about"]', "e => e.getAttribute('aria-current')") == "page", "header marks About as the current page")
+    ok(not media, "no recording is downloaded before it is on screen")
+    ok(pg.evaluate("document.documentElement.scrollWidth") <= 1366, "desktop: no sideways scroll")
+    ok(pg.eval_on_selector_all("img", "e => e.every(i => i.getAttribute('width') && i.getAttribute('height') || !i.getAttribute('src'))"), "every image reserves its space (width and height set)")
+    ok(pg.eval_on_selector_all("video", "e => e.every(v => v.getAttribute('width') && v.getAttribute('height') && v.preload === 'none' && v.muted && v.poster)"), "recordings: size set, muted, poster, nothing preloaded")
+    scroll_all(pg)
+    ok(any(re.search(r"\.(mp4|webm)", u) for u in media), "recordings download once they come on screen")
+    broken = pg.eval_on_selector_all("main img", "e => e.filter(i => !(i.complete && i.naturalWidth > 0)).map(i => i.src)")
+    ok(not broken, "every image loads (%s)" % ", ".join(broken[:3]))
+    ok(pg.eval_on_selector_all(".reveal", "e => e.every(x => x.classList.contains('in'))"), "every block revealed after scrolling")
+    # featured case: chequerboard alternates sides on desktop
+    sides = pg.eval_on_selector_all(".zrow", "e => e.map(r => r.querySelector('.zpic').getBoundingClientRect().left < r.querySelector('.ztxt').getBoundingClientRect().left)")
+    ok(sides == [True, False, True, False, True], "featured case: picture and text swap sides row by row (%s)" % sides)
+    ok(pg.eval_on_selector_all(".zrow", "e => e.every(r => Math.abs(r.querySelector('.zpic').getBoundingClientRect().height - r.querySelector('.ztxt').getBoundingClientRect().height) < 2)"), "featured case: picture and text cells are the same height")
+    # filter
+    ok(shown(pg) == 17, "all 17 CAD screens shown")
+    for f, n in [("arch", 9), ("crown", 5), ("other", 3), ("all", 17)]:
+        pg.click(f'.filters [data-f="{f}"]'); pg.wait_for_timeout(120)
+        ok(shown(pg) == n and pg.eval_on_selector(f'.filters [data-f="{f}"]', "e => e.getAttribute('aria-pressed')") == "true", f"filter {f}: {n} screens")
+    tr = pg.eval_on_selector(".filters button", "e => getComputedStyle(e).transitionDuration")
+    ok(all(float(x.strip()[:-1]) <= 0.3 for x in tr.split(",")), "filter transitions <= 300ms (" + tr + ")")
+    # image viewer
+    ok(pg.eval_on_selector_all(".zoom", "e => e.every(z => /: .{4,}/.test(z.getAttribute('aria-label') || ''))"), "every image button is named after its caption")
+    first = pg.query_selector("#gal .zoom")
+    first.click(); pg.wait_for_timeout(350)
+    ok(pg.eval_on_selector("#lb", "e => e.open"), "viewer opens")
+    ok(pg.inner_text("#lbCap") == pg.inner_text("#gal .shot-card figcaption") and pg.inner_text("#lbN") == "1 / 17", "viewer shows the caption and 1 / 17")
+    ok(pg.eval_on_selector("#lbImg", "e => e.complete && e.naturalWidth > 0"), "viewer image loads")
+    ok(pg.evaluate("document.activeElement.id") == "lbX", "focus moves to the close button")
+    pg.keyboard.press("ArrowRight"); pg.wait_for_timeout(150)
+    ok(pg.inner_text("#lbN") == "2 / 17", "arrow key goes to the next image")
+    pg.keyboard.press("ArrowLeft"); pg.keyboard.press("ArrowLeft"); pg.wait_for_timeout(150)
+    ok(pg.inner_text("#lbN") == "17 / 17", "going back from the first wraps to the last")
+    ok(pg.evaluate("getComputedStyle(document.documentElement).overflow") == "hidden", "page behind the viewer does not scroll")
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(250)
+    ok(not pg.eval_on_selector("#lb", "e => e.open") and pg.evaluate("document.activeElement.classList.contains('zoom')"), "Escape closes the viewer and focus returns to the image")
+    ok(pg.evaluate("getComputedStyle(document.documentElement).overflow") != "hidden", "page scrolls again after closing")
+    pg.click('.filters [data-f="other"]'); pg.wait_for_timeout(100)
+    pg.click("#gal .shot-card:not([hidden]) .zoom"); pg.wait_for_timeout(300)
+    ok(pg.inner_text("#lbN") == "1 / 3", "viewer only steps through the screens the filter shows")
+    pg.click("#lbX"); pg.wait_for_timeout(250)
+    ok(not pg.eval_on_selector("#lb", "e => e.open"), "close button closes the viewer")
+    pg.click('.filters [data-f="all"]')
+    pg.click("#cases .zoom"); pg.wait_for_timeout(300)
+    ok(pg.inner_text("#lbN") == "1 / 6", "more cases open in their own set of 6")
+    pg.mouse.click(30, 120); pg.wait_for_timeout(250)
+    ok(not pg.eval_on_selector("#lb", "e => e.open"), "clicking outside the image closes the viewer")
+    # recordings: play on screen, stop off screen, stay paused once paused
+    pg.evaluate("document.getElementById('clips').scrollIntoView({behavior: 'instant'})"); pg.wait_for_timeout(1500)
+    playing = pg.eval_on_selector_all(".clip video", "e => e.map(v => !v.paused)")
+    ok(all(playing), "recordings play while on screen (%s)" % playing)
+    ok(pg.eval_on_selector(".clip .vt", "e => !e.classList.contains('paused') && /pause/i.test(e.getAttribute('aria-label'))"), "button offers to pause a playing recording")
+    pg.evaluate("window.scrollTo({top: 0, behavior: 'instant'})"); pg.wait_for_timeout(500)
+    ok(pg.eval_on_selector_all(".clip video", "e => e.every(v => v.paused)"), "recordings stop when scrolled away")
+    pg.evaluate("document.getElementById('clips').scrollIntoView({behavior: 'instant'})"); pg.wait_for_timeout(800)
+    pg.click(".clip .vt"); pg.wait_for_timeout(200)
+    ok(pg.eval_on_selector(".clip video", "e => e.paused") and pg.eval_on_selector(".clip .vt", "e => /play/i.test(e.getAttribute('aria-label'))"), "pause button stops a recording")
+    pg.evaluate("window.scrollTo({top: 0, behavior: 'instant'})"); pg.wait_for_timeout(300)
+    pg.evaluate("document.getElementById('clips').scrollIntoView({behavior: 'instant'})"); pg.wait_for_timeout(800)
+    ok(pg.eval_on_selector(".clip video", "e => e.paused"), "a paused recording stays paused when it comes back on screen")
+    pg.click(".clip .vt"); pg.wait_for_timeout(500)
+    ok(not pg.eval_on_selector(".clip video", "e => e.paused"), "play button starts it again")
+    # floating chat button: hidden at the top and beside the closing call to action
+    pg.evaluate("window.scrollTo({top: 0, behavior: 'instant'})"); pg.wait_for_timeout(300)
+    ok(pg.eval_on_selector("#fab", "e => e.classList.contains('hide')"), "chat button hidden at the top")
+    pg.evaluate("document.getElementById('screens').scrollIntoView({behavior: 'instant'})"); pg.wait_for_timeout(300)
+    ok(not pg.eval_on_selector("#fab", "e => e.classList.contains('hide')"), "chat button shown further down")
+    pg.evaluate("document.getElementById('start').scrollIntoView({behavior: 'instant'})"); pg.wait_for_timeout(300)
+    ok(pg.eval_on_selector("#fab", "e => e.classList.contains('hide')"), "chat button steps aside at the call to action")
+    # nothing about patients or the labs that sent the cases
+    html = pg.content().lower()
+    names = [w for w in ["susan", "mundorf", "nikkori", "sunrise", "robert", "kayden", "zwolan", "lotus", "fischer"] if w in html]
+    ok(not names, "no patient or client-lab names on the page (%s)" % names)
+    files = pg.eval_on_selector_all("img[src], video source", "e => e.map(x => x.getAttribute('src') || '')")
+    ok(all(re.match(r"^/(site/about|brand)/[a-z0-9-]+\.(webp|mp4|webm|svg)$", f) for f in files), "media files carry neutral names only")
+    ok(not re.search(r"\$\s?\d", re.sub(r"us\$50", "", pg.inner_text("main").lower())), "no prices on the page besides the free-trial amount")
+    ok("consent" in pg.inner_text("#case .consent").lower(), "featured case says it is shown with consent")
+    pg.evaluate("window.scrollTo({top: 0, behavior: 'instant'})"); pg.wait_for_timeout(300)
+    pg.screenshot(path=f"{OUT}/about-light.png", full_page=True)
+    # Vietnamese: headings translated, slogans stay English, the viewer and buttons follow
+    pg.click(".sh-top .sh-lang button[data-lang=vi]"); pg.wait_for_timeout(300)
+    ok(pg.inner_text("h1").strip().lower() == "trưởng thành từ bàn kỹ thuật" and "giới thiệu" in pg.title().lower(), "About page in Vietnamese")
+    ok(pg.inner_text(".ab-hero .serif").strip() == "Dental technicians first" and pg.inner_text("#screens .serif").strip() == "Real screenshots, not renders", "slogans stay in English in Vietnamese")
+    ok("tất cả" in pg.inner_text(".filters").lower() and pg.eval_on_selector(".zoom", "e => e.getAttribute('aria-label').startsWith('Xem lớn hơn')"), "filter and image buttons in Vietnamese")
+    ok("đồng ý" in pg.inner_text("#case .consent").lower() and "gửi ca đầu tiên" in pg.inner_text("#start").lower(), "consent note and call to action in Vietnamese")
+    pg.evaluate("document.getElementById('clips').scrollIntoView({behavior: 'instant'})"); pg.wait_for_timeout(600)
+    ok(pg.eval_on_selector(".clip .vt", "e => /video/i.test(e.getAttribute('aria-label')) && /(tạm dừng|phát)/i.test(e.getAttribute('aria-label'))"), "recording button in Vietnamese")
+    pg.click(".sh-top .sh-lang button[data-lang=en]")
+    c.close()
+
+    # ---------- reduced motion: content visible at once, recordings never start by themselves
+    c, pg = page(motion="reduce"); pg.goto(B + "/about"); pg.wait_for_timeout(500)
+    ok(pg.eval_on_selector(".reveal", "e => getComputedStyle(e).opacity") == "1", "reduced motion: content visible at once")
+    pg.evaluate("document.getElementById('clips').scrollIntoView({behavior: 'instant'})"); pg.wait_for_timeout(900)
+    ok(pg.eval_on_selector_all(".clip video", "e => e.every(v => v.paused)"), "reduced motion: recordings wait for the play button")
+    pg.click(".clip .vt"); pg.wait_for_timeout(600)
+    ok(not pg.eval_on_selector(".clip video", "e => e.paused"), "reduced motion: play button still plays")
+    c.close()
+
+    # ---------- dark, wide
+    c, pg = page({"width": 1920, "height": 1080}, scheme="dark"); pg.goto(B + "/about"); pg.wait_for_timeout(500)
+    scroll_all(pg); pg.evaluate("window.scrollTo({top: 0, behavior: 'instant'})"); pg.wait_for_timeout(200)
+    ok(pg.evaluate("document.documentElement.dataset.theme") == "dark", "dark theme")
+    bg = pg.eval_on_selector(".ztxt", "e => getComputedStyle(e).backgroundColor")
+    ok(bg != "rgb(255, 255, 255)", "dark theme: text cells are not white (%s)" % bg)
+    ok(pg.evaluate("document.documentElement.scrollWidth") <= 1920, "wide: no sideways scroll")
+    pg.screenshot(path=f"{OUT}/about-dark-1920.png", full_page=True)
+    c.close()
+
+    # ---------- phone, light and dark
+    for scheme in ["light", "dark"]:
+        c, pg = page({"width": 390, "height": 844}, True, scheme=scheme, lang="vi" if scheme == "dark" else None)
+        pg.goto(B + "/about"); pg.wait_for_timeout(500); scroll_all(pg)
+        ok(pg.evaluate("document.documentElement.scrollWidth") <= 390, f"phone ({scheme}): no sideways scroll")
+        stacked = pg.eval_on_selector_all(".zrow", "e => e.every(r => r.querySelector('.zpic').getBoundingClientRect().bottom <= r.querySelector('.ztxt').getBoundingClientRect().top + 1)")
+        ok(stacked, f"phone ({scheme}): each featured-case picture sits above its text")
+        cols = pg.eval_on_selector("#gal", "e => getComputedStyle(e).gridTemplateColumns.split(' ').length")
+        ok(cols == 2, f"phone ({scheme}): CAD screens in two columns")
+        pg.click("#gal .zoom"); pg.wait_for_timeout(350)
+        box = pg.eval_on_selector("#lbImg", "e => { const r = e.getBoundingClientRect(); return [r.left, r.right, r.top, r.bottom]; }")
+        ok(box[0] >= 0 and box[1] <= 390 and box[2] >= 0 and box[3] <= 844, f"phone ({scheme}): viewer image fits the screen")
+        nb = pg.eval_on_selector("#lbNext", "e => { const r = e.getBoundingClientRect(); return r.bottom <= 844 && r.right <= 390; }")
+        ok(nb, f"phone ({scheme}): viewer arrows on screen")
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(250)
+        pg.evaluate("window.scrollTo({top: 0, behavior: 'instant'})"); pg.wait_for_timeout(200)
+        pg.screenshot(path=f"{OUT}/about-phone-{scheme}.png", full_page=True)
+        c.close()
+
+    # ---------- homepage links to the About page
+    c, pg = page(); pg.goto(B + "/"); pg.wait_for_timeout(500)
+    ok(pg.eval_on_selector('.sh-nav a[href="/about"]', "e => !!e") and pg.eval_on_selector_all('.sh-nav a[href="/#about"], .sh-nav a[href="#about"]', "e => e.length") == 0, "header About link goes to the About page")
+    ok(pg.eval_on_selector_all('#about a[href="/about"], #about a[href="/about#case"]', "e => e.length") == 2, "homepage About section links to the page and the featured case")
+    ok(pg.eval_on_selector('#work a[href="/about#screens"]', "e => !!e"), "Recent designs links to more work")
+    ok(pg.eval_on_selector("#about .about-art img", "e => e.getAttribute('loading') === 'lazy' && e.getAttribute('width') && e.getAttribute('height')"), "homepage About picture is lazy and sized")
+    with pg.expect_navigation(): pg.click('#about a[href="/about#case"]')
+    pg.wait_for_timeout(1500)
+    top = pg.eval_on_selector("#case", "e => Math.round(e.getBoundingClientRect().top)")
+    ok(pg.url.endswith("/about#case") and 0 <= top <= 140, "featured-case link lands on the case (top %d px)" % top)
+    c.close()
+    b.close()
+for e in errors: print("ERR", e)
+ok(not errors, "no page errors")
+print(("%d FAILED" % len(FAILS)) if FAILS else "ALL PASSED")
+sys.exit(1 if FAILS else 0)

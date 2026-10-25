@@ -58,7 +58,7 @@ with sync_playwright() as p:
     ok(pg.eval_on_selector(".sh-drawer", "e=>!e.hidden && e.classList.contains('open')"), "phone menu opens")
     pg.click(".sh-scrim", position={"x": 200, "y": 780}); pg.wait_for_timeout(450)
     ok(pg.eval_on_selector(".sh-drawer", "e=>e.hidden"), "phone menu closes")
-    for path in ["/", "/privacy", "/terms", "/portal", "/admin", "/stl"]:
+    for path in ["/", "/about", "/privacy", "/terms", "/portal", "/admin", "/stl"]:
         pg.goto(B + path); pg.wait_for_timeout(700)
         w = pg.evaluate("document.documentElement.scrollWidth")
         ok(w <= 390, f"phone width ok on {path} ({w})")

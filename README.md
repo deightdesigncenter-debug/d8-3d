@@ -6,6 +6,7 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - Cổng khách hàng: `/portal`
 - Quản trị: `/admin` (Đơn hàng, Ca cổng khách, Khách hàng, Mã hàng & bảng giá, Báo cáo, Nhập Excel, Nhân sự, Cài đặt, Link xem 3D, Tin nhắn) và `/stl`
 - Link gửi bác sĩ: `/v/<mã>`
+- Giới thiệu: `/about` (ca tiêu biểu toàn hàm, 17 ảnh màn hình CAD có lọc, 3 video quay màn hình, thêm 6 ca; bố cục theo kiểu luminadental.com.au)
 - Pháp lý: `/privacy`, `/terms` (Google yêu cầu khi cho khách đăng nhập)
 
 ## Đăng nhập
@@ -132,6 +133,7 @@ Tách các lớp lưới 3D trong file HTML của exocad thành file STL, xử l
 | `public/admin.html`, `public/admin.js` | Trang quản trị (tiếng Việt) |
 | `public/orders.js`, `public/books.js`, `public/tech.js` | Sổ đơn hàng; khách hàng, mã hàng & bảng giá, báo cáo, nhập/xuất Excel, cài đặt; trang Kỹ thuật viên, Công của tôi, phiếu công |
 | `public/stl.html` | Chuyển HTML exocad sang STL |
+| `public/about.html`, `public/site/about.js`, `public/site/about-dict.js`, `public/site/about/` | Trang Giới thiệu: ca tiêu biểu, ảnh màn hình CAD, video, thêm ca (song ngữ). Ảnh và video đặt tên trung tính, không có tên bệnh nhân hay lab |
 | `public/privacy.html`, `public/terms.html` | Chính sách bảo mật, Điều khoản dịch vụ (song ngữ) |
 | `public/brand.css`, `public/case.css` | Giao diện theo bộ nhận diện; giao diện ca hàng dùng chung cho cổng khách và quản trị |
 | `public/brand/`, `public/site/`, `public/icons/` | Logo SVG, ảnh trang chủ, biểu tượng |

@@ -66,7 +66,8 @@ const KV = {
 
 // ---- ASSETS mock (Pages static asset behaviour incl. .html stripping)
 const TYPES = { ".html": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".js": "text/javascript",
-  ".css": "text/css; charset=utf-8", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".webp": "image/webp", ".jpg": "image/jpeg" };
+  ".css": "text/css; charset=utf-8", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json", ".webp": "image/webp", ".jpg": "image/jpeg",
+  ".mp4": "video/mp4", ".webm": "video/webm" };
 // Like Cloudflare's Fetcher: any unknown property is an RPC method stub (so code must never probe bindings by property).
 const rpcLike = (target) => new Proxy(target, { get: (t, k) => (k in t || typeof k === "symbol" ? t[k] : () => Promise.reject(new Error("RPC stub: no method " + String(k)))) });
 const ASSETS = rpcLike({

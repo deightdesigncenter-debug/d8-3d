@@ -358,6 +358,8 @@ html.sub-pre #d8-header { min-height: 157px; }
   font-family: var(--f-display); font-weight: 600; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: inherit; transition: background .15s, color .15s;
 }
 .sh-nav a:hover { background: var(--steel-100); }
+.sh-nav a[aria-current="page"] { background: var(--steel-200); }
+.sh-drawer nav[aria-label="Mobile"] a[aria-current="page"] { font-weight: 700; }
 .sh-right { display: flex; align-items: center; gap: 10px; }
 .sh-nav + .sh-right { margin-left: 4px; }
 .sh-switch { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--steel-100); border: 1px solid var(--line); }

@@ -57,6 +57,8 @@ ok(!("x-robots-tag" in r.headers) && !/name="robots"/.test(r.body), "homepage at
 ok(r.body.includes(`<link rel="canonical" href="http://localhost:${port}/">`) && r.body.includes(`og:url" content="http://localhost:${port}/"`) && r.body.includes(`og:image" content="http://localhost:${port}/site/og.jpg"`) && !r.body.includes("pages.dev"), "canonical / share tags use the main domain");
 r = await get("localhost", "/privacy");
 ok(r.status === 200 && !("x-robots-tag" in r.headers) && r.body.includes(`rel="canonical" href="http://localhost:${port}/privacy"`), "privacy page indexable, canonical set");
+r = await get("localhost", "/about");
+ok(r.status === 200 && !("x-robots-tag" in r.headers) && !/name="robots"/.test(r.body) && r.body.includes(`rel="canonical" href="http://localhost:${port}/about"`) && r.body.includes(`og:url" content="http://localhost:${port}/about"`) && !r.body.includes("pages.dev"), "About page indexable, canonical / share tags on the main domain");
 r = await get("localhost", "/admin");
 ok(r.status === 200 && /noindex/.test(r.headers["x-robots-tag"] || ""), "the workspace stays out of search");
 r = await get("localhost", "/portal");
@@ -64,7 +66,7 @@ ok(/noindex/.test(r.headers["x-robots-tag"] || ""), "the portal stays out of sea
 r = await get("localhost", "/robots.txt");
 ok(r.status === 200 && /Allow: \//.test(r.body) && /Disallow: \/admin/.test(r.body) && /Disallow: \/portal/.test(r.body) && r.body.includes(`Sitemap: http://localhost:${port}/sitemap.xml`), "robots.txt opens the public pages, closes the private ones, names the sitemap");
 r = await get("localhost", "/sitemap.xml");
-ok(r.status === 200 && /application\/xml/.test(r.headers["content-type"]) && ["/", "/privacy", "/terms"].every((p) => r.body.includes(`<loc>http://localhost:${port}${p}</loc>`)) && !r.body.includes("/admin"), "sitemap lists the homepage and the legal pages only");
+ok(r.status === 200 && /application\/xml/.test(r.headers["content-type"]) && ["/", "/about", "/privacy", "/terms"].every((p) => r.body.includes(`<loc>http://localhost:${port}${p}</loc>`)) && !r.body.includes("/admin"), "sitemap lists the homepage, About and the legal pages only");
 r = await get("wip-antispam.d8-3d.pages.dev", "/");
 ok(/noindex/.test(r.headers["x-robots-tag"] || "") && r.body.includes(`rel="canonical" href="http://localhost:${port}/"`), "a preview points search engines to the main domain and is not indexed itself");
 

@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Lexend+Exa:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-24.1">
+<link rel="stylesheet" href="/brand.css?v=2026-10-25.1">
 <link rel="preload" as="image" href="/site/hero-full-mouth.webp" fetchpriority="high">
 <style>
   /* --wrap (container width) comes from brand.css: wider on large screens */
@@ -195,14 +195,13 @@
   .tile figcaption span { display: block; margin-top: 4px; font-size: 13.5px; color: var(--muted); }
 
   /* ---------- about ---------- */
-  .about { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 64px; align-items: start; }
+  .about { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; align-items: center; }
   .about .copy > p { margin: 0 0 16px; font-size: 16px; line-height: 1.75; }
-  .glance { margin: 0 !important; padding: 32px; background: var(--band); border-color: var(--band); color: var(--on-brand); position: relative; overflow: hidden; }
-  .glance dl { margin: 18px 0 0; position: relative; z-index: 1; }
-  .glance dl > div { padding: 14px 0; border-top: 1px solid rgba(143, 172, 203, .28); }
-  .glance dt { font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--steel); }
-  .glance dd { margin: 4px 0 0; font-size: 15px; color: var(--on-brand); }
-  .glance .mark { position: absolute; right: -40px; bottom: -36px; width: 170px; height: auto; opacity: .1; }
+  .about-art { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 380px; padding: 48px 40px; border-radius: 22px; overflow: hidden;
+               background: radial-gradient(120% 110% at 50% 30%, #0B3F86 0%, var(--brand) 55%, var(--brand-800) 100%); }
+  .about-art img { width: 100%; height: auto; filter: drop-shadow(0 24px 32px rgba(2, 18, 42, .4)); }
+  .about-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; margin-top: 26px; }
+  .rail-foot { margin-top: 28px; display: flex; justify-content: flex-end; }
 
   /* ---------- faq ---------- */
   .faq-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 56px; align-items: start; }
@@ -305,6 +304,7 @@
     .slide-art, .slide-art.narrow { width: 92vw; right: 4vw; top: 30%; }
     .stage-copy { bottom: 110px; }
     .portal-band, .about, .contact { grid-template-columns: 1fr; gap: 40px; }
+    .about-art { min-height: 0; padding: 32px 24px; }
   }
   @media (max-width: 640px) {
     .offer-fig { padding: 30px 26px; gap: 22px; }
@@ -312,6 +312,7 @@
     .facts > div, .turn > div { padding: 16px; }
     .facts dd, .turn span { font-size: 13px; }
     .lf-btns, .lf-btns .btn-line { width: 100%; justify-content: center; }
+    .about-btns .btn, .about-btns .btn-line, .rail-foot .btn-line { width: 100%; justify-content: center; }
     .offer .btns .btn { flex: 1 1 100%; }
     .section { padding: 72px 0; }
     .section.tight { padding: 56px 0; }
@@ -342,8 +343,8 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/home-dict.js?v=2026-10-24.1"></script>
-<script src="/shell.js?v=2026-10-24.1" defer></script>
+<script src="/site/home-dict.js?v=2026-10-25.1"></script>
+<script src="/shell.js?v=2026-10-25.1" defer></script>
 </head>
 <body data-page="home" data-title-key="title">
 <div id="d8-header"></div>
@@ -613,33 +614,29 @@
         <figure class="tile"><img src="/site/work-waxup-gingiva.webp" alt="Digital wax-up with gingiva" width="1200" height="525" loading="lazy"><figcaption><b data-i="w7.t">Digital wax-up with gingiva</b><span data-i="w7.p">Tooth set-up matched to the reference photo</span></figcaption></figure>
         <figure class="tile"><img src="/site/work-occlusion.webp" alt="Occlusion check" width="1200" height="525" loading="lazy"><figcaption><b data-i="w8.t">Occlusion check</b><span data-i="w8.p">Static and dynamic contacts · guided disclusion</span></figcaption></figure>
       </div>
+      <div class="rail-foot"><a class="btn-line" href="/about#screens" data-i="wk.more">See more of our work</a></div>
     </div>
   </section>
 
   <!-- ============ ABOUT ============ -->
   <section class="section paper-band" id="about" aria-labelledby="abTitle">
     <div class="wrap about">
+      <figure class="about-art reveal">
+        <img src="/site/about/case-upper-front.webp" alt="Upper-arch wax-up from our featured full-mouth case" width="1400" height="552" loading="lazy">
+      </figure>
       <div class="copy reveal">
-        <div class="sec-head" style="margin-bottom:28px">
+        <div class="sec-head" style="margin-bottom:26px">
           <span class="eyebrow" data-i="ab.eyebrow">About us</span>
           <h2 id="abTitle" data-i="ab.h">Built at the bench</h2>
           <p class="serif" lang="en" data-i="ab.serif">Dental technicians first</p>
         </div>
         <p data-i="ab.p1">D.EIGHT DESIGN CENTER grew out of nearly five years of hands-on dental design work: first as a technician in a dental lab in Vietnam, then designing directly for clinics and labs in the United States and Australia.</p>
-        <p data-i="ab.p2">Today D.EIGHT is a dedicated design team. Implant work is our core: single implant crowns, custom abutments, All-on-X bridges and bars. Around it we cover crown and bridge, removable and appliance design.</p>
         <p data-i="ab.p3">We only design. No milling, no printing, no shipping, so every hour goes into the file you send to your own mill, printer or production partner.</p>
+        <div class="about-btns">
+          <a class="btn btn-primary" href="/about" data-i="ab.more">More about D.EIGHT</a>
+          <a class="btn-line" href="/about#case" data-i="ab.case">See the featured case</a>
+        </div>
       </div>
-      <aside class="card glance reveal" aria-label="D.EIGHT at a glance">
-        <span class="eyebrow steel" data-i="ab.glance">At a glance</span>
-        <dl>
-          <div><dt data-i="ab.d1">Based in</dt><dd data-i="ab.v1">Vietnam · UTC+7</dd></div>
-          <div><dt data-i="ab.d2">Experience</dt><dd data-i="ab.v2">Nearly 5 years of dental CAD design</dd></div>
-          <div><dt data-i="ab.d3">Clients</dt><dd data-i="ab.v3">Labs and clinics in the US and Australia</dd></div>
-          <div><dt data-i="ab.d4">What we deliver</dt><dd data-i="ab.v4">Design only, as production-ready STL</dd></div>
-          <div><dt data-i="ab.d5">Languages</dt><dd data-i="ab.v5">English · Vietnamese</dd></div>
-        </dl>
-        <img class="mark" src="/brand/symbol-reversed.svg" alt="">
-      </aside>
     </div>
   </section>
 
@@ -753,6 +750,6 @@
 </a>
 
 <div id="d8-footer"></div>
-<script src="/site/home.js?v=2026-10-24.1" defer></script>
+<script src="/site/home.js?v=2026-10-25.1" defer></script>
 </body>
 </html>

@@ -23,6 +23,13 @@ The owner wants the site to run without errors or jank, and every new feature ch
   import, settings), `public/tech.js` (KTV pages `#team`, `#team/<email>`, `#me` "Công của tôi", monthly pay slips),
   `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format),
   `public/viewer3d.js` (own WebGL viewer for STL / PLY / OBJ: order page "Xem trước 3D" from chat files, case design files, any `[data-v3d]` button).
+- `public/about.html` + `site/about.js` + `site/about-dict.js` ("Giới thiệu", `dev/tests/about_ui.py`): layout modelled on
+  luminadental.com.au (centred heads, picture/text chequerboard, card rows, closing call to action). Featured full-mouth case,
+  17 CAD screenshots with a filter, 3 screen recordings (MP4 + WebM, `preload="none"`, play only while on screen, never by
+  themselves with reduced motion), 6 more cases, one image viewer (`<dialog>`). Media in `public/site/about/` with neutral
+  names. The owner has the doctors' and patients' consent for these cases; still never put patient or client-lab names,
+  faces (exocad HTML "2D Images") or prices on the page — the test checks. Header "About" links here; the homepage About
+  section is a short teaser that links to it.
 - Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
   the server; the prefix follows the kind. Price levels: list price (MAX) = prices.customer_id 0, MID = -2, MIN = -3; `customers.tier`
   ('' / mid / min, schema v3). Lookup: customer's own price → their level → list price. `/api/pricelist` imports the owner's Excel layout

@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-24.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-25.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -48,7 +48,7 @@ const AI_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/meta/llama-3.1-8b-instr
 // The site's addresses. Pages carry the Cloudflare address; it is swapped for the main domain (or the address in use) when served.
 const PAGES_ORIGIN = "https://d8-3d.pages.dev";
 const PREVIEW_HOST = /^[^.]+\.[^.]+\.pages\.dev$/; // <branch or deploy>.d8-3d.pages.dev
-const PUBLIC_PAGES = new Set(["/", "/index.html", "/privacy", "/privacy.html", "/terms", "/terms.html"]);
+const PUBLIC_PAGES = new Set(["/", "/index.html", "/about", "/about.html", "/privacy", "/privacy.html", "/terms", "/terms.html"]);
 const isLocal = (h) => h === "localhost" || h === "127.0.0.1";
 function siteOf(settings, url) {
   const main = settings.siteHost || "";
@@ -56,14 +56,14 @@ function siteOf(settings, url) {
   return { main, here: !!main && url.hostname === main, origin };
 }
 function robotsOpen(origin) {
-  return ["# Search engines may read the homepage and the legal pages; the portal, the workspace and the tools stay private.",
+  return ["# Search engines may read the homepage, the About page and the legal pages; the portal, the workspace and the tools stay private.",
     "User-agent: *", "Allow: /", "Disallow: /admin", "Disallow: /portal", "Disallow: /stl", "Disallow: /api/", "Disallow: /raw/", "", `Sitemap: ${origin}/sitemap.xml`, ""].join("\n");
 }
 function sitemap(origin) {
-  const urls = ["/", "/privacy", "/terms"].map((p) => `  <url><loc>${escapeHtml(origin + p)}</loc></url>`).join("\n");
+  const urls = ["/", "/about", "/privacy", "/terms"].map((p) => `  <url><loc>${escapeHtml(origin + p)}</loc></url>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
-// Homepage and legal pages: the right address in canonical / share tags; open to search engines only at the main domain.
+// Homepage, About and legal pages: the right address in canonical / share tags; open to search engines only at the main domain.
 async function publicPage(res, site) {
   let html = await res.text();
   html = html.split(PAGES_ORIGIN).join(site.origin);

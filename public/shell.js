@@ -723,6 +723,7 @@
   function who() { return D8.user || (!meDone ? hint : null); }
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const home = page === "home" ? "" : "/";
+  const aboutCur = page === "about" ? ' aria-current="page"' : "";
   const ICON = {
     menu: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 5h14M2 9h14M2 13h14"/></svg>',
     close: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4l10 10M14 4 4 14"/></svg>',
@@ -875,7 +876,7 @@
           <a href="${home}#services">${L("sh.services")}</a>
           <a href="${home}#process">${L("sh.process")}</a>
           <a href="${home}#work">${L("sh.work")}</a>
-          <a href="${home}#about">${L("sh.about")}</a>
+          <a href="/about"${aboutCur}>${L("sh.about")}</a>
           <a href="${home}#faq">${L("sh.faq")}</a>
           <a href="${home}#contact">${L("sh.contact")}</a>
         </nav>
@@ -896,7 +897,7 @@
             <a href="${home}#services">${L("sh.services")}</a>
             <a href="${home}#process">${L("sh.process")}</a>
             <a href="${home}#work">${L("sh.work")}</a>
-            <a href="${home}#about">${L("sh.about")}</a>
+            <a href="/about"${aboutCur}>${L("sh.about")}</a>
             <a href="${home}#faq">${L("sh.faq")}</a>
             <a href="${home}#contact">${L("sh.contact")}</a>
           </nav>
@@ -1007,7 +1008,7 @@
         </div>
         <div><h4>${L("sh.foot.explore")}</h4>
           <a href="${home}#services">${L("sh.services")}</a><a href="${home}#process">${L("sh.process")}</a>
-          <a href="${home}#work">${L("sh.work")}</a><a href="${home}#about">${L("sh.about")}</a><a href="${home}#faq">${L("sh.faq")}</a></div>
+          <a href="${home}#work">${L("sh.work")}</a><a href="/about"${aboutCur}>${L("sh.about")}</a><a href="${home}#faq">${L("sh.faq")}</a></div>
         <div><h4>${L("sh.foot.customers")}</h4>
           <a href="/portal">${L("sh.portal")}</a><a href="/portal#/new">${L("sh.send")}</a><a href="${home}#contact">${L("sh.contact")}</a>
           <a href="${esc(D8.waLink())}" target="_blank" rel="noopener">${L("sh.wa")}</a>
