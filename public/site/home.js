@@ -103,29 +103,20 @@
     });
   }
 
-  /* ---------------- screen recordings: download and play only while on screen ---------------- */
-  // preload="none": nothing is fetched until a clip is visible; it stops when scrolled away or the tab is hidden.
-  // The button pauses it for good; with reduced motion nothing starts by itself.
-  const clips = [...document.querySelectorAll(".strip video")].map((v) => ({ v, btn: v.parentElement.querySelector(".vt"), held: reduce, seen: false }));
-  const paintClip = (c) => {
-    const p = c.v.paused;
-    c.btn.classList.toggle("paused", p);
-    c.btn.setAttribute("aria-label", t(p ? "rc.play" : "rc.pause", p ? "Play video" : "Pause video"));
-  };
+  /* ---------------- screen recordings: always running while on screen, no buttons (owner's choice 2026-10-26) ---------------- */
+  // preload="none": nothing is fetched until a clip is visible; it rests when scrolled away or the tab is hidden (nobody
+  // sees that; it saves the visitor's data and battery). Paused any other way (browser menu), it starts again.
+  // With reduced motion nothing starts by itself: the browser's own controls let the visitor play a clip.
+  const clips = [...document.querySelectorAll(".strip video")].map((v) => ({ v, seen: false }));
+  const runClip = (c) => !reduce && c.seen && !document.hidden;
   const syncClip = (c) => {
-    if (c.seen && !c.held && !document.hidden) { if (c.v.paused) c.v.play().catch(() => {}); }
-    else if (!c.v.paused) c.v.pause();
+    if (runClip(c)) { if (c.v.paused) c.v.play().catch(() => {}); }
+    else if (!reduce && !c.v.paused) c.v.pause();
   };
   clips.forEach((c) => {
-    c.v.addEventListener("play", () => paintClip(c));
-    c.v.addEventListener("pause", () => paintClip(c));
-    c.btn.addEventListener("click", () => {
-      c.held = !c.v.paused;
-      if (c.held) c.v.pause(); else { c.seen = true; c.v.play().catch(() => {}); }
-    });
-    paintClip(c);
+    if (reduce) c.v.controls = true;
+    c.v.addEventListener("pause", () => { if (runClip(c)) setTimeout(() => syncClip(c), 150); });
   });
-  document.addEventListener("d8:lang", () => clips.forEach(paintClip));
   document.addEventListener("visibilitychange", () => clips.forEach(syncClip));
   if (clips.length && "IntersectionObserver" in window) {
     const vio = new IntersectionObserver((entries) => entries.forEach((en) => {

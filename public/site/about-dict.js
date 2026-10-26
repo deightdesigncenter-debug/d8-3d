@@ -109,8 +109,6 @@ window.D8_DICT = {
   "cl.2.d": ["Recorded 14 August 2026", "Ghi ngày 14/8/2026"],
   "cl.3.t": ["Placing and comparing front crowns on the arch", "Đặt và so mão răng cửa trên cung hàm"],
   "cl.3.d": ["Recorded 5 September 2026", "Ghi ngày 5/9/2026"],
-  "cl.pause": ["Pause video", "Tạm dừng video"],
-  "cl.play": ["Play video", "Phát video"],
 
   "mc.eyebrow": ["More cases", "Thêm ca"],
   "mc.h": ["More from recent cases", "Thêm từ các ca gần đây"],

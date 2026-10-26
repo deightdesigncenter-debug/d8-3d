@@ -162,14 +162,8 @@
   .strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .strip figure { margin: 0; position: relative; overflow: hidden; aspect-ratio: 3 / 2; background: #17131F; }
   .strip video { display: block; width: 100%; height: 100%; object-fit: cover; }
-  .strip .vt { position: absolute; right: 16px; bottom: 16px; z-index: 1; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(252, 253, 246, .5);
-               background: rgba(4, 37, 82, .7); color: var(--c-cream); cursor: pointer; display: flex; align-items: center; justify-content: center;
-               transition: background-color var(--t-fast) var(--ease-out); }
-  .strip .vt:hover { background: rgba(4, 37, 82, .92); }
-  .strip .vt:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
-  .vt .i-play { display: none; } .vt.paused .i-play { display: block; } .vt.paused .i-pause { display: none; }
   .strip-foot { gap: 12px; flex-wrap: wrap; }
-  .strip figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 72px 18px 22px; color: var(--c-cream); font-size: 14px; line-height: 1.45;
+  .strip figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 22px 18px 22px; pointer-events: none; color: var(--c-cream); font-size: 14px; line-height: 1.45;
                       background: linear-gradient(180deg, rgba(4, 18, 40, 0) 0%, rgba(4, 18, 40, .78) 100%); }
   .strip-foot { display: flex; justify-content: center; margin-top: 36px; }
 
@@ -370,7 +364,7 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/home-dict.js?v=2026-10-26.2"></script>
+<script src="/site/home-dict.js?v=2026-10-26.4"></script>
 <script src="/shell.js?v=2026-10-26.2" defer></script>
 </head>
 <body data-page="home" data-title-key="title">
@@ -655,9 +649,9 @@
       </div>
     </div>
     <div class="strip reveal">
-      <figure><video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-crowns.webp" aria-label="Full-arch crowns on the articulated model" data-i-attr="aria-label:rc.1"><source src="/site/about/clip-crowns.mp4" type="video/mp4"><source src="/site/about/clip-crowns.webm" type="video/webm"></video><button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button><figcaption data-i="rc.1">Full-arch crowns on the articulated model</figcaption></figure>
-      <figure><video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-closeup.webp" aria-label="Shaping the front teeth, close up" data-i-attr="aria-label:rc.2"><source src="/site/about/clip-closeup.mp4" type="video/mp4"><source src="/site/about/clip-closeup.webm" type="video/webm"></video><button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button><figcaption data-i="rc.2">Shaping the front teeth, close up</figcaption></figure>
-      <figure><video muted loop playsinline preload="none" width="720" height="382" poster="/site/about/clip-anterior.webp" aria-label="Placing and comparing front crowns on the arch" data-i-attr="aria-label:rc.3"><source src="/site/about/clip-anterior.mp4" type="video/mp4"><source src="/site/about/clip-anterior.webm" type="video/webm"></video><button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button><figcaption data-i="rc.3">Placing and comparing front crowns on the arch</figcaption></figure>
+      <figure><video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-crowns.webp" aria-label="Full-arch crowns on the articulated model" data-i-attr="aria-label:rc.1"><source src="/site/about/clip-crowns.mp4" type="video/mp4"><source src="/site/about/clip-crowns.webm" type="video/webm"></video><figcaption data-i="rc.1">Full-arch crowns on the articulated model</figcaption></figure>
+      <figure><video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-closeup.webp" aria-label="Shaping the front teeth, close up" data-i-attr="aria-label:rc.2"><source src="/site/about/clip-closeup.mp4" type="video/mp4"><source src="/site/about/clip-closeup.webm" type="video/webm"></video><figcaption data-i="rc.2">Shaping the front teeth, close up</figcaption></figure>
+      <figure><video muted loop playsinline preload="none" width="720" height="382" poster="/site/about/clip-anterior.webp" aria-label="Placing and comparing front crowns on the arch" data-i-attr="aria-label:rc.3"><source src="/site/about/clip-anterior.mp4" type="video/mp4"><source src="/site/about/clip-anterior.webm" type="video/webm"></video><figcaption data-i="rc.3">Placing and comparing front crowns on the arch</figcaption></figure>
     </div>
     <div class="wrap strip-foot reveal"><a class="btn-line" href="/about#screens" data-i="rc.more">See our design screens</a><a class="btn-line" href="/about#clips" data-i="rc.all">All recordings</a></div>
   </section>
@@ -794,6 +788,6 @@
 </a>
 
 <div id="d8-footer"></div>
-<script src="/site/home.js?v=2026-10-26.2" defer></script>
+<script src="/site/home.js?v=2026-10-26.4" defer></script>
 </body>
 </html>

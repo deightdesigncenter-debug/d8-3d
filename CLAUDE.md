@@ -26,7 +26,8 @@ The owner wants the site to run without errors or jank, and every new feature ch
 - `public/about.html` + `site/about.js` + `site/about-dict.js` ("Giới thiệu", `dev/tests/about_ui.py`): layout modelled on
   luminadental.com.au (centred heads, picture/text chequerboard, card rows, closing call to action). Featured full-mouth case,
   17 CAD screenshots with a filter, 3 screen recordings (MP4 + WebM, `preload="none"`, play only while on screen, never by
-  themselves with reduced motion), 6 more cases, one image viewer (`<dialog>`). Media in `public/site/about/` with neutral
+  themselves with reduced motion; no pause / play button — owner's rule 2026-10-26: they keep running, a clip paused any other
+  way starts again, and only with reduced motion the browser's own controls appear), 6 more cases, one image viewer (`<dialog>`). Media in `public/site/about/` with neutral
   names. The owner has the doctors' and patients' consent for these cases; still never put patient or client-lab names,
   faces (exocad HTML "2D Images") or prices on the page — the test checks. Header "About" links here; the homepage About
   section is a short teaser that links to it. Order: case → recordings → CAD screens → more cases. No finished-product
@@ -35,8 +36,8 @@ The owner wants the site to run without errors or jank, and every new feature ch
   (home, About, legal / portal bands) are bold, sentence case, slightly negative tracking; small labels, buttons, eyebrows
   stay in spaced caps. Lexend Exa is gone. Noto Serif Display stays only for the serif accent lines (slogans, English in VI).
 - Homepage, Lumina-style: "Why D.EIGHT" is a 4×2 picture/text chequerboard of real CAD screens (2 columns on tablet,
-  stacked on phone); a full-width strip of the 3 screen recordings (`#recordings`, same play-on-screen rules, logic in
-  `site/home.js`) links to `/about#screens` and `/about#clips`.
+  stacked on phone); a full-width strip of the 3 screen recordings (`#recordings`, same play-on-screen and no-button rules, logic in
+  `site/home.js`; captions are `pointer-events: none`) links to `/about#screens` and `/about#clips`.
 - Free revisions (owner's rule 2026-10-26): the owner decides. Settings `freeRevisions` (default 2, 0–20, staff.manage) is public in
   `/api/config` and printed into `.rev-n` spans (home, terms) by `D8.fillRev`; per case `job.revFree` / `job.revUsed` via
   `POST /api/jobs/<id>/revisions` (billing.edit only); review → in_design adds one used. `jobView` sends `rev: {free, used, custom}`

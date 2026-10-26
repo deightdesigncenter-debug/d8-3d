@@ -104,29 +104,20 @@
     if (Math.abs(dx) > 50 && list.length > 1) show(idx + (dx < 0 ? 1 : -1));
   });
 
-  /* ---------------- screen recordings ---------------- */
-  // Nothing downloads until a clip is on screen (preload="none"); it plays while visible and stops when scrolled
-  // away or when the tab is hidden. The button pauses it for good; with reduced motion nothing starts by itself.
-  const clips = [...document.querySelectorAll(".clip video")].map((v) => ({ v, btn: v.parentElement.querySelector(".vt"), held: reduce, seen: false }));
-  const paint = (c) => {
-    const p = c.v.paused;
-    c.btn.classList.toggle("paused", p);
-    c.btn.setAttribute("aria-label", t(p ? "cl.play" : "cl.pause", p ? "Play video" : "Pause video"));
-  };
+  /* ---------------- screen recordings: always running while on screen, no buttons (owner's choice 2026-10-26) ---------------- */
+  // Nothing downloads until a clip is on screen (preload="none"); it rests when scrolled away or the tab is hidden
+  // (nobody sees that; it saves data and battery). Paused any other way (browser menu), it starts again.
+  // With reduced motion nothing starts by itself: the browser's own controls let the visitor play a clip.
+  const clips = [...document.querySelectorAll(".clip video")].map((v) => ({ v, seen: false }));
+  const run = (c) => !reduce && c.seen && !document.hidden;
   const sync = (c) => {
-    if (c.seen && !c.held && !document.hidden) { if (c.v.paused) c.v.play().catch(() => {}); }
-    else if (!c.v.paused) c.v.pause();
+    if (run(c)) { if (c.v.paused) c.v.play().catch(() => {}); }
+    else if (!reduce && !c.v.paused) c.v.pause();
   };
   clips.forEach((c) => {
-    c.v.addEventListener("play", () => paint(c));
-    c.v.addEventListener("pause", () => paint(c));
-    c.btn.addEventListener("click", () => {
-      c.held = !c.v.paused;
-      if (c.held) c.v.pause(); else { c.seen = true; c.v.play().catch(() => {}); }
-    });
-    paint(c);
+    if (reduce) c.v.controls = true;
+    c.v.addEventListener("pause", () => { if (run(c)) setTimeout(() => sync(c), 150); });
   });
-  document.addEventListener("d8:lang", () => clips.forEach(paint));
   document.addEventListener("visibilitychange", () => clips.forEach(sync));
   if (hasIO) {
     const vio = new IntersectionObserver((entries) => entries.forEach((en) => {

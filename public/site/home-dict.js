@@ -132,8 +132,6 @@ window.D8_DICT = {
   "rc.3": ["Placing and comparing front crowns on the arch", "Đặt và so mão răng cửa trên cung hàm"],
   "rc.more": ["See our design screens", "Xem màn hình thiết kế"],
   "rc.all": ["All recordings", "Tất cả video"],
-  "rc.play": ["Play video", "Phát video"],
-  "rc.pause": ["Pause video", "Tạm dừng video"],
   "ab.more": ["More about D.EIGHT", "Tìm hiểu thêm về D.EIGHT"],
   "ab.case": ["See the featured case", "Xem ca tiêu biểu"],
   "wk.more": ["See more of our work", "Xem thêm sản phẩm"],
