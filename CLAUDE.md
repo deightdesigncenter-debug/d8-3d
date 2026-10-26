@@ -85,9 +85,19 @@ The owner wants the site to run without errors or jank, and every new feature ch
   inside the INSERT (`insertNextCode`: MAX(seq)+1 of the day in the same statement — no duplicates, no gaps); never go back to
   reading `nextSeq` first and inserting after. A new customer and its login are one batch and the login is never replaced there
   (no duplicate customers when a new customer's first cases arrive together). A case whose order could not be made gets
-  `needsOrder` (internal, stripped in `jobView`) and `saveJob` tries again. WARN lines = known risks of cases in KV (last write wins on
-  `job:` / `own:`, copies up to 60 s old at other locations, 1,000 writes and 1,000 lists a day on the free plan); waiting on the
-  owner's decision to move portal cases to D1. When that is done, turn the `risk(...)` checks into `check(...)`.
+  `needsOrder` (internal, stripped in `jobView`) and `saveJob` tries again.
+- Portal cases live in D1 (owner's choice 2026-10-26, after the team test showed KV losing customer messages / files when two
+  people saved within a minute): table `jobs` (schema v5: id, owner, designer, qc_by, stage, status, created, updated, `ver`,
+  `meta` = the old KV list metadata, `doc` = the whole case JSON). `saveJob` updates `WHERE ver = ?`; 0 rows → conflict error →
+  `handleJobs` runs the whole case request again on the fresh case (up to 6 times, then 409). Work that must not run twice
+  (payment page, AI calls) goes through `memo`. Outside case requests use `updateJob(env, id, fn)`. `__ver` is a non-enumerable
+  property, never in JSON. Cases the old site saved in KV are copied by `kvJobsLeft` (100 per call, lists stay complete
+  meanwhile; meta `jobs_kv` = when nothing was left; re-checked once a minute for 15 minutes, then never), or one by one when
+  opened (`loadJob`). The KV `job:` / `own:` copies are left as a backup of the day of the move; never write cases to KV while
+  D1 is bound. Without D1 (`NO_DB=1`) cases stay in KV as before. Never turn on D1 read replication for `jobs` without the
+  Sessions API. Never roll the deployment back to before 2026-10-26: that code reads cases from KV only.
+  Tests: `dev/tests/move.test.mjs` (old KV cases → D1, needs a fresh server) and the team test, both in run.sh with
+  `KV_RATE=1`. Settings › file storage shows `cases` (store, count, left).
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.
 - Motion rules: 200–300 ms, ease-out curves, transform/opacity only, off under `prefers-reduced-motion`.

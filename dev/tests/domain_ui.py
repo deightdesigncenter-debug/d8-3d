@@ -41,6 +41,7 @@ with sync_playwright() as p:
         pg.goto(B + "/"); pg.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "D.EIGHT"])
         pg.goto(B + "/admin#settings"); pg.wait_for_selector("#domCard", timeout=8000)
         ok("Chưa đặt tên miền chính" in pg.inner_text("#domCard") and pg.locator("#domSet").count() == 1, tag + ": not set yet, offers the address in use")
+        ok("cơ sở dữ liệu D1" in pg.inner_text("#caseStore"), tag + ": settings say the cases are kept in D1")
         pg.locator("#domCard").scroll_into_view_if_needed()
         pg.screenshot(path=f"{OUT}/settings-unset-{tag}.png", full_page=True)
         pg.click("#domSet"); pg.wait_for_selector("#domOff", timeout=6000)

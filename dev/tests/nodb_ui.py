@@ -26,6 +26,7 @@ with sync_playwright() as p:
     t = pg.inner_text("#p-settings")
     ok("Chưa kết nối" in t and "d8-db" in t and "DB" in t, "settings show how to connect D1")
     ok("Máy chủ đang thấy" in t and "CASES (KV)" in t and "chưa có D1" in t, "settings show which bindings the server has")
+    ok("đang lưu trong KV" in pg.inner_text("#caseStore"), "settings say the cases are in KV until D1 is connected")
     ok("Production" in t and "Retry deployment" in t, "settings explain the Production binding and the redeploy")
     pg.screenshot(path=f"{OUT}/settings.png", full_page=True)
     pg.goto(B + "/admin#customers"); pg.wait_for_timeout(1500)

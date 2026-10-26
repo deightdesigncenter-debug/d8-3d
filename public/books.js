@@ -1011,7 +1011,13 @@
             <li>Workers &amp; Pages › <b>d8-3d</b> › Settings › chọn <b>Production</b> › Bindings › Add › <b>R2 bucket</b>: tên biến <code>FILES</code>, chọn bucket vừa tạo › Save.</li>
             <li>Deployments › bản Production mới nhất › <b>⋯</b> › <b>Retry deployment</b>.</li></ol>
           File mới từ đó lưu ở R2 (10 GB miễn phí, vượt mức khoảng 0,015 USD/GB/tháng); file cũ trong KV vẫn tải được đến hạn.</div></div>`;
-    return `<section class="card" id="storeCard"><h2 class="h-caps">Lưu trữ file ca</h2>${body}</section>`;
+    // case data itself (details, messages, notes, file list): D1 when the database is bound
+    const c = s.cases || { store: "kv" };
+    const data = c.store === "d1"
+      ? `<p class="muted" id="caseStore" style="margin:14px 0 0">Thông tin ca, tin nhắn, ghi chú và danh sách file lưu trong cơ sở dữ liệu D1${typeof c.count === "number" ? ` (${esc(c.count)} ca${c.left ? `, còn ${esc(c.left)} ca cũ đang được chép từ KV` : ""})` : ""}.
+          Nhiều người lưu cùng một ca cùng lúc thì không ai mất thay đổi của ai.</p>`
+      : `<p class="muted" id="caseStore" style="margin:14px 0 0">Thông tin ca đang lưu trong KV vì chưa nối cơ sở dữ liệu D1 (xem mục Cơ sở dữ liệu ở trên). Khi nối D1, các ca tự chép sang.</p>`;
+    return `<section class="card" id="storeCard"><h2 class="h-caps">Lưu trữ file ca</h2>${body}${data}</section>`;
   }
 
   // Contact-form anti-spam: what is on, Turnstile status, and the owner's own block lists.

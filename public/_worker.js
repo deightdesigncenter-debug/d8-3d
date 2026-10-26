@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-26.2"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-26.3"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -1028,16 +1028,153 @@ function jobMeta(job) {
     p: typeof job.price === "number" ? job.price : null, py: job.pay || "",
     d: String(job.designer || "").slice(0, 120), q: String(job.qcBy || "").slice(0, 120), g: job.stage || "", oc: normCode(job.order), oi: job.orderId || 0 };
 }
+// ---- Where portal cases live: D1 (table jobs) when the database is bound, else Workers KV ("job:<id>").
+// Owner's choice 2026-10-26, after the team test: in KV the last save wins and every Cloudflare location keeps its own
+// copy for up to 60 s, so a KTV's save could wipe a message or file the customer had just sent. D1 has one primary copy
+// and every save checks the version it read (ver): a save that lost the race throws a conflict and the request runs
+// again on the fresh case (handleJobs). Cases saved in KV before the move are copied into D1 a batch at a time
+// (kvJobsLeft); one not copied yet is copied the first time it is opened. The KV copies are left as they were.
+// Never switch on D1 read replication for this table without the Sessions API: replicas can be behind.
+const jobsInD1 = (env) => !!env.DB;
+const JOB_DOC_MAX = 600000;            // characters; the D1 row limit is 2 MB (Vietnamese text can take 3 bytes a character)
+const conflictErr = () => Object.assign(new Error("Ca vừa được người khác cập nhật, vui lòng thử lại. / This case was just updated by someone else, please try again."), { conflict: true });
+const withVer = (job, v) => { Object.defineProperty(job, "__ver", { value: v, writable: true, configurable: true, enumerable: false }); return job; };
+function jobDoc(job) {
+  let doc = JSON.stringify(job);
+  if (doc.length <= JOB_DOC_MAX) return doc;
+  // only a case with years of chat can get here: the oldest messages and notes go first
+  const j = { ...job, thread: [...(job.thread || [])], team: [...(job.team || [])] };
+  while (doc.length > JOB_DOC_MAX && (j.thread.length > 40 || j.team.length > 40)) {
+    if (j.thread.length > 40) j.thread.splice(0, Math.ceil(j.thread.length / 10));
+    if (j.team.length > 40) j.team.splice(0, Math.ceil(j.team.length / 10));
+    doc = JSON.stringify(j);
+  }
+  return doc;
+}
+const JOB_COLS = ["id", "owner", "designer", "qc_by", "stage", "status", "created", "updated", "meta", "doc"];
+function jobRow(job, doc) {
+  return { id: job.id, owner: String(job.owner || ""), designer: job.designer || "", qc_by: job.qcBy || "", stage: job.stage || "", status: job.status || "",
+    created: job.created || 0, updated: job.updated || 0, meta: JSON.stringify(jobMeta(job)), doc: doc || jobDoc(job) };
+}
+const jobInsertSql = (ignore) => `INSERT ${ignore ? "OR IGNORE " : ""}INTO jobs (${JOB_COLS.join(", ")}, ver) SELECT ${JOB_COLS.map((c) => `json_extract(value, '$.${c}')`).join(", ")}, 1 FROM json_each(?)`;
+
 async function saveJob(env, job, heal = true) {
   if (heal && job.needsOrder && !job.orderId && env.DB) await orderForNewJob(env, job);
-  await env.CASES.put("job:" + job.id, JSON.stringify(job), { metadata: jobMeta(job) });
+  if (!jobsInD1(env)) return env.CASES.put("job:" + job.id, JSON.stringify(job), { metadata: jobMeta(job) });
+  const DB = await bookDb(env), r = jobRow(job);
+  if (job.__ver === undefined) { // a new case
+    try { await DB.prepare(jobInsertSql(false)).bind(JSON.stringify([r])).run(); }
+    catch (err) { if (/UNIQUE/i.test(String(err && err.message))) throw conflictErr(); throw err; }
+    withVer(job, 1);
+    return;
+  }
+  const res = await DB.prepare("UPDATE jobs SET owner = ?, designer = ?, qc_by = ?, stage = ?, status = ?, updated = ?, meta = ?, doc = ?, ver = ver + 1 WHERE id = ? AND ver = ?")
+    .bind(r.owner, r.designer, r.qc_by, r.stage, r.status, r.updated, r.meta, r.doc, r.id, job.__ver).run();
+  if (!(res && res.meta && res.meta.changes)) throw conflictErr(); // someone saved this case after it was read
+  job.__ver++;
 }
 async function loadJob(env, id) {
   if (!JOB_ID_RE.test(id)) return null;
-  return env.CASES.get("job:" + id, "json");
+  if (!jobsInD1(env)) return env.CASES.get("job:" + id, "json");
+  const DB = await bookDb(env), one = () => DB.prepare("SELECT ver, doc FROM jobs WHERE id = ?").bind(id).first();
+  let r = await one();
+  if (!r) { // saved in KV before the move and not copied yet
+    const text = await env.CASES.get("job:" + id);
+    if (!text) return null;
+    let j; try { j = JSON.parse(text); } catch { return null; }
+    if (!j || j.id !== id) return null;
+    await DB.prepare(jobInsertSql(true)).bind(JSON.stringify([jobRow(j)])).run();
+    r = await one();
+    if (!r) return null;
+  }
+  return withVer(JSON.parse(r.doc), r.ver);
 }
+// Change one case outside a case request (e.g. the order book): read, change, save; again if someone saved in between.
+// fn returns false when nothing needs saving.
+async function updateJob(env, id, fn) {
+  for (let i = 0; i < 6; i++) {
+    const job = await loadJob(env, id);
+    if (!job || fn(job) === false) return job;
+    try { await saveJob(env, job); return job; }
+    catch (err) { if (!err.conflict) throw err; await sleep(10 + Math.random() * 50 * (i + 1)); }
+  }
+  throw conflictErr();
+}
+// Cases still only in KV (saved before the move). Copies up to 100 of them into D1 on each call and returns the rest
+// ({ id, m } with the KV metadata) so lists stay complete meanwhile. Once nothing is left, the time is written in
+// meta 'jobs_kv'; for 15 minutes after that (old copies of the site may still be answering during a deploy) the check
+// runs at most once a minute, then never again.
+let JOBS_KV_DONE = false, JOBS_KV_AT = 0;
+async function kvJobsLeft(env, DB) {
+  if (JOBS_KV_DONE) return [];
+  const now = Date.now();
+  if (now - JOBS_KV_AT < 60000) return [];
+  const flag = await DB.prepare("SELECT v FROM meta WHERE k = 'jobs_kv'").first();
+  const doneAt = flag ? +flag.v || 0 : 0;
+  if (doneAt && now - doneAt > 15 * 60000) { JOBS_KV_DONE = true; return []; }
+  const keys = [];
+  let cursor;
+  do {
+    const page = await env.CASES.list({ prefix: "job:", cursor });
+    keys.push(...page.keys);
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  const have = new Map();
+  for (let i = 0; i < keys.length; i += 500) {
+    const ids = keys.slice(i, i + 500).map((k) => k.name.slice(4));
+    for (const x of await rows(DB.prepare("SELECT id, updated, ver FROM jobs WHERE id IN (SELECT value FROM json_each(?))").bind(JSON.stringify(ids)))) have.set(x.id, x);
+  }
+  // saved in KV by the old site after it was copied (a request still served by the old code during the deploy) and not
+  // changed in D1 since the copy: the newer KV copy wins
+  const newer = keys.filter((k) => { const h = have.get(k.name.slice(4)); return h && h.ver === 1 && ((k.metadata || {}).u || 0) > h.updated; }).slice(0, 20);
+  for (const k of newer) {
+    const text = await env.CASES.get(k.name);
+    let j; try { j = JSON.parse(text); } catch { continue; }
+    if (!j || j.id !== k.name.slice(4)) continue;
+    const r = jobRow(j);
+    await DB.prepare("UPDATE jobs SET owner = ?, designer = ?, qc_by = ?, stage = ?, status = ?, updated = ?, meta = ?, doc = ? WHERE id = ? AND ver = 1")
+      .bind(r.owner, r.designer, r.qc_by, r.stage, r.status, r.updated, r.meta, r.doc, r.id).run();
+  }
+  const missing = keys.filter((k) => !have.has(k.name.slice(4)));
+  const batch = missing.slice(0, 100), texts = await Promise.all(batch.map((k) => env.CASES.get(k.name)));
+  const list = [];
+  batch.forEach((k, i) => {
+    if (!texts[i]) return;
+    const m = k.metadata || {};
+    if (m.o && texts[i].length <= JOB_DOC_MAX) list.push({ id: k.name.slice(4), owner: m.o, designer: m.d || "", qc_by: m.q || "", stage: m.g || "", status: m.s || "", created: m.c || 0, updated: m.u || 0, meta: JSON.stringify(m), doc: texts[i] });
+    else { try { const j = JSON.parse(texts[i]); if (j && j.id === k.name.slice(4)) list.push(jobRow(j)); } catch {} } // jobRow trims a very long case
+  });
+  // in parts of at most JOB_DOC_MAX characters (one bound value must stay under D1's 2 MB)
+  for (let i = 0, size = 0, part = []; i <= list.length; i++) {
+    const x = list[i];
+    if (part.length && (!x || size + x.doc.length > JOB_DOC_MAX)) {
+      try { await DB.prepare(jobInsertSql(true)).bind(JSON.stringify(part)).run(); }
+      catch (err) { console.error("copy cases to D1", err && err.message); }
+      part = []; size = 0;
+    }
+    if (x) { part.push(x); size += x.doc.length; }
+  }
+  const left = missing.slice(batch.length).map((k) => ({ id: k.name.slice(4), m: k.metadata || {} }));
+  if (!left.length && !doneAt) await DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('jobs_kv', ?)").bind(String(now)).run();
+  if (!left.length) JOBS_KV_AT = now;
+  return left;
+}
+// for Settings: where the cases are and how many (never fails the settings page)
+async function caseStoreInfo(env) {
+  if (!jobsInD1(env)) return { store: "kv" };
+  try {
+    const DB = await bookDb(env), left = (await kvJobsLeft(env, DB)).length;
+    const r = await DB.prepare("SELECT COUNT(*) AS n FROM jobs").first();
+    return { store: "d1", count: r ? r.n : 0, left };
+  } catch (err) { return { store: "d1", error: String(err && err.message || err).slice(0, 200) }; }
+}
+const jobItem = (id, m) => ({ id, owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
+  service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "",
+  designer: m.d || "", qcBy: m.q || "", stage: m.g || "", order: normCode(m.oc), orderId: m.oi || 0 });
+const ownItem = (id, m) => ({ id, owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
+  service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, pay: m.py || "", order: normCode(m.oc) });
 
-// Each customer's case ids are kept in "own:<email>" so their list needs no KV "list" request
+// KV only: each customer's case ids are kept in "own:<email>" so their list needs no KV "list" request
 // (the free plan allows 1,000 list requests a day but 100,000 reads).
 async function ownerIds(env, email, rebuild) {
   const ids = await env.CASES.get("own:" + email, "json");
@@ -1053,33 +1190,56 @@ async function ownerIds(env, email, rebuild) {
   await env.CASES.put("own:" + email, JSON.stringify(list)); // also stored when empty, so the scan runs once per customer
   return list;
 }
+// how many cases this customer has sent (for the free trial)
+async function ownJobCount(env, email) {
+  if (!jobsInD1(env)) return (await ownerIds(env, email, true)).length;
+  const DB = await bookDb(env), left = (await kvJobsLeft(env, DB)).filter((k) => k.m.o === email).length;
+  const r = await DB.prepare("SELECT COUNT(*) AS n FROM jobs WHERE owner = ?").bind(email).first();
+  return (r ? r.n : 0) + left;
+}
 async function listOwnJobs(env, email) {
-  const ids = (await ownerIds(env, email, true)).slice(0, 500);
-  const rows = await Promise.all(ids.map((id) => env.CASES.getWithMetadata("job:" + id)));
-  const items = [];
-  rows.forEach((r, i) => {
-    const m = r && r.metadata;
-    if (m) items.push({ id: ids[i], owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
-      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, pay: m.py || "", order: normCode(m.oc) });
-  });
+  let items = [];
+  if (jobsInD1(env)) {
+    const DB = await bookDb(env), left = (await kvJobsLeft(env, DB)).filter((k) => k.m.o === email);
+    items = (await rows(DB.prepare("SELECT id, meta FROM jobs WHERE owner = ? ORDER BY updated DESC LIMIT 500").bind(email))).map((r) => ownItem(r.id, JSON.parse(r.meta)));
+    for (const k of left) items.push(ownItem(k.id, k.m));
+  } else {
+    const ids = (await ownerIds(env, email, true)).slice(0, 500);
+    const got = await Promise.all(ids.map((id) => env.CASES.getWithMetadata("job:" + id)));
+    got.forEach((r, i) => { if (r && r.metadata) items.push(ownItem(ids[i], r.metadata)); });
+  }
   items.sort((a, b) => b.updated - a.updated);
   return json({ items });
 }
 
 async function listJobs(env, owner, who) {
   let items = [];
-  let cursor;
-  do {
-    const page = await env.CASES.list({ prefix: "job:", cursor });
-    for (const k of page.keys) {
-      const m = k.metadata || {};
-      if (owner && m.o !== owner) continue;
-      items.push({ id: k.name.slice(4), owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
-      service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "",
-      designer: m.d || "", qcBy: m.q || "", stage: m.g || "", order: normCode(m.oc), orderId: m.oi || 0 });
+  if (jobsInD1(env)) {
+    // only the rows this person may see are read (a KTV: their own cases and, for QC, cases waiting for any QC)
+    const DB = await bookDb(env), left = await kvJobsLeft(env, DB);
+    const w = [], a = [];
+    if (owner) { w.push("owner = ?"); a.push(owner); }
+    if (who && !(who.viaKey || who.can("cases.all") || who.can("cases.assign"))) {
+      const me = who.email || "\u0000", or = ["designer = ?", "qc_by = ?"];
+      a.push(me, me);
+      if (who.can("cases.qc")) or.push("(stage = 'qc' AND qc_by = '')");
+      w.push("(" + or.join(" OR ") + ")");
     }
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor);
+    items = (await rows(DB.prepare(`SELECT id, meta FROM jobs ${w.length ? "WHERE " + w.join(" AND ") : ""} ORDER BY updated DESC LIMIT 5000`).bind(...a)))
+      .map((r) => jobItem(r.id, JSON.parse(r.meta)));
+    for (const k of left) if (!owner || k.m.o === owner) items.push(jobItem(k.id, k.m));
+  } else {
+    let cursor;
+    do {
+      const page = await env.CASES.list({ prefix: "job:", cursor });
+      for (const k of page.keys) {
+        const m = k.metadata || {};
+        if (owner && m.o !== owner) continue;
+        items.push(jobItem(k.name.slice(4), m));
+      }
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+  }
   if (who) {
     // each staff member sees the cases their permissions allow, without fields they may not see
     items = items.filter((j) => staffSees(who, j)).map((j) => {
@@ -1150,12 +1310,15 @@ async function handleJobs(request, env, url, who) {
       status: "received", created: now, updated: now, lastBy: "client", approvedAt: 0,
       files: [], previews: [], thread: [], price: null, pay: "",
     };
-    while (await env.CASES.get("job:" + job.id)) job.id = newJobId();
-    const own = await ownerIds(env, who.email, true);
-    if (own.length < TRIAL_CASES && (await loadSettings(env)).autoTrial) { job.trial = true; job.pay = "trial"; }
+    const taken = async (id) => (jobsInD1(env) && !!(await (await bookDb(env)).prepare("SELECT 1 AS x FROM jobs WHERE id = ?").bind(id).first())) || !!(await env.CASES.get("job:" + id));
+    while (await taken(job.id)) job.id = newJobId();
+    if ((await ownJobCount(env, who.email)) < TRIAL_CASES && (await loadSettings(env)).autoTrial) { job.trial = true; job.pay = "trial"; }
     await orderForNewJob(env, job);
     await saveJob(env, job, false);
-    await env.CASES.put("own:" + who.email, JSON.stringify([job.id, ...own.filter((x) => x !== job.id)].slice(0, 2000)));
+    if (!jobsInD1(env)) { // KV only: the customer's list of case ids
+      const own = await ownerIds(env, who.email, false);
+      await env.CASES.put("own:" + who.email, JSON.stringify([job.id, ...own.filter((x) => x !== job.id)].slice(0, 2000)));
+    }
     return json({ job: await jobView(env, job) }, 201);
   }
 
@@ -1175,6 +1338,22 @@ async function handleJobs(request, env, url, who) {
   // /api/jobs/<id>[/...]
   m = path.match(/^\/api\/jobs\/([^/]+)(\/.*)?$/);
   if (!m) return json({ error: "Not found." }, 404);
+  // A save that lost the race with someone else's save of the same case (D1 version check) is done again on the
+  // fresh case, so both changes are kept. Work that must not run twice (a payment page, an AI call) is kept in memo.
+  if (method !== "POST" && method !== "DELETE") return caseRequest(request, env, url, who, m, {});
+  const raw = method === "POST" ? await request.text() : undefined, memo = {};
+  for (let attempt = 0; ; attempt++) {
+    try { return await caseRequest(new Request(request.url, { method, headers: request.headers, body: raw }), env, url, who, m, memo); }
+    catch (err) {
+      if (!(err && err.conflict)) throw err;
+      if (attempt >= 5) return json({ error: err.message }, 409);
+      await sleep(10 + Math.random() * 50 * (attempt + 1));
+    }
+  }
+}
+
+async function caseRequest(request, env, url, who, m, memo) {
+  const method = request.method;
   const job = await loadJob(env, m[1]);
   // The owner always acts as the customer; staff act as D.EIGHT on the cases their permissions show them.
   // Requests from the admin tools (password header) always act as D.EIGHT.
@@ -1217,7 +1396,7 @@ async function handleJobs(request, env, url, who) {
       "Trình bày đúng 3 phần, mỗi ý một dòng bắt đầu bằng \"- \":\nTÓM TẮT: loại ca, răng, vật liệu, hạn giao.\nYÊU CẦU THIẾT KẾ: mọi yêu cầu cụ thể của bác sĩ (thông số, hệ implant, kênh vít, tiếp xúc, khớp cắn, thẩm mỹ), kể cả yêu cầu chỉnh sửa trong tin nhắn; ghi rõ yêu cầu mới nhất nếu có thay đổi.\n" +
       "CẦN HỎI LẠI: thông tin còn thiếu hoặc mâu thuẫn (ghi \"- Không có\" nếu đủ).\nGiữ nguyên số răng, số đo, tên hãng. Không bịa thông tin không có trong ca. Viết ngắn gọn.";
     let text;
-    try { text = await aiChat(env, [{ role: "system", content: system }, { role: "user", content: caseContext(job) }], { maxTokens: 1200, vi: true }); }
+    try { text = await (memo.ai ||= aiChat(env, [{ role: "system", content: system }, { role: "user", content: caseContext(job) }], { maxTokens: 1200, vi: true })); }
     catch (err) { return json({ error: err.message, code: err.code || "" }, err.status || 502); }
     job.ai = { ...(job.ai || {}), sum: text.slice(0, 6000), sumAt: Date.now(), sumUpd: job.updated };
     await saveJob(env, job);
@@ -1249,7 +1428,7 @@ async function handleJobs(request, env, url, who) {
     const msg = (job.thread || []).find((x) => x.at === b.at && x.by !== "system");
     if (!msg) return json({ error: "Message not found." }, 404);
     if (!(msg.tr && msg.tr[to])) {
-      try { msg.tr = { ...(msg.tr || {}), [to]: await translateText(env, msg.text, to) }; }
+      try { msg.tr = { ...(msg.tr || {}), [to]: await (memo.tr ||= translateText(env, msg.text, to)) }; }
       catch (err) { return json({ error: err.message, code: err.code || "" }, err.status || 502); }
       await saveJob(env, job);
     }
@@ -1289,7 +1468,7 @@ async function handleJobs(request, env, url, who) {
     const recent = (job.payTries || []).filter((t) => Date.now() - t.at < 10 * 60 * 1000).length;
     if (recent >= PAY_TRIES_MAX) return json({ error: "Too many payment attempts. Please wait a few minutes and try again." }, 429);
     let out;
-    try { out = await startPayment(env, job, via, url.origin, amount); }
+    try { out = await (memo.pay ||= startPayment(env, job, via, url.origin, amount)); }
     catch (err) { return json({ error: err.message }, err.status || 502); }
     job.payTries = [{ via, id: out.id, amount, at: Date.now(), state: "open" }, ...(job.payTries || []).filter((t) => t.state !== "dead")].slice(0, PAY_TRIES_MAX);
     await saveJob(env, job);
@@ -1590,7 +1769,7 @@ async function handleJobs(request, env, url, who) {
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
@@ -1708,6 +1887,15 @@ const SCHEMA_V4 = [`CREATE TABLE IF NOT EXISTS spam_log (id INTEGER PRIMARY KEY 
   country TEXT NOT NULL DEFAULT '', service TEXT NOT NULL DEFAULT '', message TEXT NOT NULL DEFAULT '', ip_country TEXT NOT NULL DEFAULT '')`,
   `CREATE INDEX IF NOT EXISTS spam_day ON spam_log (day)`];
 async function migrateV4(DB) { for (const sql of SCHEMA_V4) await DB.prepare(sql).run(); }
+// v5: portal cases (the whole case as JSON in doc, the list fields in meta, ver = version checked on every save)
+const SCHEMA_V5 = [`CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, owner TEXT NOT NULL, designer TEXT NOT NULL DEFAULT '', qc_by TEXT NOT NULL DEFAULT '',
+  stage TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL DEFAULT 0,
+  ver INTEGER NOT NULL DEFAULT 1, meta TEXT NOT NULL, doc TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS j_owner ON jobs (owner, updated)`,
+  `CREATE INDEX IF NOT EXISTS j_designer ON jobs (designer)`,
+  `CREATE INDEX IF NOT EXISTS j_qc ON jobs (qc_by)`,
+  `CREATE INDEX IF NOT EXISTS j_updated ON jobs (updated)`];
+async function migrateV5(DB) { await DB.batch(SCHEMA_V5.map((s) => DB.prepare(s))); }
 async function migrateV3(DB) {
   for (const sql of SCHEMA_V3) {
     try { await DB.prepare(sql).run(); }
@@ -1740,6 +1928,7 @@ async function bookDb(env) {
     if (v < 2) await migrateV2(env.DB);
     if (v < 3) await migrateV3(env.DB);
     if (v < 4) await migrateV4(env.DB);
+    if (v < 5) await migrateV5(env.DB);
     if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }
@@ -2031,7 +2220,7 @@ async function handleBook(request, env, url, who) {
   // settings work without the database
   if (path === "/api/settings") {
     if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB, turnstile: turnstileOn(env), spam: { minSec: CONTACT_MIN_MS / 1000, perIp: CONTACT_PER_IP, daily: MSG_DAILY_CAP }, host: url.hostname,
-      files: { store: activeStore(env), keepDays: FILE_KEEP_DAYS } }) : deny();
+      files: { store: activeStore(env), keepDays: FILE_KEEP_DAYS }, cases: await caseStoreInfo(env) }) : deny();
     if (method === "POST") {
       if (!who.can("staff.manage")) return deny();
       const b = await body(), cur = await loadSettings(env);
@@ -2974,8 +3163,7 @@ async function updateOrder(env, DB, o, b, who, now) {
   await reallocate(DB, [merged.customer_id, o.customer_id]);
   // a portal case keeps its price in step (used only if online payment is switched back on)
   if (o.job_id && canPrice && cur === "USD") {
-    const job = await loadJob(env, o.job_id);
-    if (job && job.price !== t.total) { job.price = t.total; await saveJob(env, job); }
+    await updateJob(env, o.job_id, (job) => { if (job.price === t.total) return false; job.price = t.total; });
   }
   return orderOut(await DB.prepare(ORDER_SELECT + " WHERE o.id = ?").bind(o.id).first(), who);
 }

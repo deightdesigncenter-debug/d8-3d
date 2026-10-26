@@ -30,7 +30,8 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - Khách xem link 3D, bấm **Duyệt thiết kế**, nhắn tin, tải file hoàn chỉnh (từng file hoặc cả ca dạng ZIP). Mỗi ca gửi qua cổng khách tự thành một đơn trong sổ đơn hàng và khách thấy **mã đơn** `yymmddxx`, ví dụ `26102101` (mã nội bộ của ca vẫn là `D8-YYMMDD-XXXX`, dùng trong đường dẫn).
 - Phiếu chỉ định có thêm ô riêng theo dịch vụ (implant, All-on-X, máng, hàm tháo lắp…), lưu ở `rx` của ca.
 - **Dùng thử miễn phí:** trang web giới thiệu 2 ca đầu miễn phí (tổng đến 50 USD). Việc tự đánh dấu 2 ca đầu là `trial` **tắt mặc định** (bạn tự thương lượng, đặt "Miễn phí" trong đơn); bật lại ở **Cài đặt**.
-- Danh sách ca của khách đọc từ chỉ mục `own:<email>` (không tốn lượt "list" của KV).
+- **Dữ liệu ca lưu trong D1** (bảng `jobs`, từ 26/10/2026): thông tin ca, tin nhắn, ghi chú, danh sách file. Mỗi lần lưu có kiểm tra phiên bản, nên nhiều người (khách ở nước ngoài, KTV, QC, quản trị) lưu cùng một ca cùng lúc thì không ai mất thay đổi của ai. Các ca cũ trong KV tự được chép sang D1 (bản cũ trong KV giữ nguyên làm dự phòng). Không nối D1 thì ca vẫn lưu trong KV như trước, danh sách ca của khách đọc từ chỉ mục `own:<email>`.
+- Không quay lại (rollback) bản triển khai trước ngày 26/10/2026: bản cũ chỉ đọc ca trong KV nên sẽ không thấy các ca mới.
 
 ## Workspace – khu làm việc (`/admin`)
 
@@ -194,10 +195,11 @@ node server.mjs ../public 8788 mat-khau-thu
 dev/tests/run.sh /tmp/d8-shots    # API + trình duyệt (máy tính, điện thoại, sáng/tối), tốc độ, không có lỗi trang
 ```
 
-Gồm: phân quyền và quy trình KTV → QC → giao khách (`rbac.test.mjs`), sổ đơn hàng: mã đơn R/C, quyền KTV, thanh toán, báo cáo, nhập Excel, ảnh xem trước (`orders.test.mjs`, `orders_ui.py`), khu làm việc khi chưa có D1 (`nodb_ui.py`), ai thấy gì: khách vãng lai / khách hàng / được cấp quyền (`access_ui.py`), thanh toán (`pay.test.mjs`), Workspace (`workspace_ui.py`), cổng khách hàng (`portal_ui.py`), trang web và giao diện chung (`site_ui.py`), tốc độ và độ ổn định bố cục trên điện thoại chậm (`perf.py`). Chạy hai lần: có và không có PayPal/Stripe/AI.
+Gồm: phân quyền và quy trình KTV → QC → giao khách (`rbac.test.mjs`), sổ đơn hàng: mã đơn R/C, quyền KTV, thanh toán, báo cáo, nhập Excel, ảnh xem trước (`orders.test.mjs`, `orders_ui.py`), khu làm việc khi chưa có D1 (`nodb_ui.py`), ai thấy gì: khách vãng lai / khách hàng / được cấp quyền (`access_ui.py`), thanh toán (`pay.test.mjs`), Workspace (`workspace_ui.py`), cổng khách hàng (`portal_ui.py`), trang web và giao diện chung (`site_ui.py`), tốc độ và độ ổn định bố cục trên điện thoại chậm (`perf.py`), chuyển ca cũ từ KV sang D1 (`move.test.mjs`), 4 KTV + 1 QC làm cùng lúc với độ trễ mạng giống Cloudflare (`team.test.mjs`). Chạy hai lần: có và không có PayPal/Stripe/AI.
 
 ## Giới hạn gói miễn phí (Cloudflare KV)
 
 - 1 GB lưu trữ tổng (file ca hàng tự xóa sau 60 ngày, link 3D sau 7–30 ngày)
-- 1.000 lượt ghi mỗi ngày (mỗi phần file 20 MB, mỗi tin nhắn, mỗi lần đổi trạng thái là 1 lượt), 100.000 lượt đọc mỗi ngày
+- 1.000 lượt ghi mỗi ngày (mỗi phần file 20 MB là 1 lượt khi chưa bật R2; tin nhắn, đổi trạng thái của ca lưu ở D1 nên không tốn lượt KV), 100.000 lượt đọc mỗi ngày
+- D1 (gói miễn phí): 100.000 dòng ghi và 5 triệu dòng đọc mỗi ngày, 5 GB
 - Tối đa 25 MB mỗi giá trị (vì vậy file lớn được chia phần 20 MB)

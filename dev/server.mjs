@@ -159,7 +159,7 @@ const AI = {
 };
 // ---- D1 mock (order book) on SQLite (node:sqlite). Set NO_DB=1 to run without a database.
 // Like D1 it refuses undefined values and counts queries: more than 50 in one request fails, as on the free plan
-// (each statement of a batch counted, to stay on the safe side).
+// (a batch counts as one query, as Cloudflare documents; /__test/ops "d1" still counts every statement).
 import { DatabaseSync } from "node:sqlite";
 const sdb = new DatabaseSync(process.env.D1_FILE || ":memory:"); // D1_FILE: keep the local database between runs
 const D1_LIMIT = 50;
@@ -189,7 +189,8 @@ function d1(counter) {
   return {
     prepare: (sql) => new Stmt(sql),
     async batch(list) {
-      tick(list.length);
+      tick(1); // Cloudflare: "a db.batch() call counts as a single query" against the 50 per request (D1 limits page)
+      ops.d1 = (ops.d1 || 0) + list.length - 1;
       if (NET_MS) await net();
       sdb.exec("BEGIN");
       try { const out = list.map((st) => exec1(st.sql, st.args)); sdb.exec("COMMIT"); return out; }
@@ -292,6 +293,17 @@ http.createServer(async (req, res) => {
     catch (e) { res.writeHead(400); res.end(String(e)); return; }
     res.writeHead(200, { "Content-Type": "application/json" }); res.end(out);
     return;
+  }
+  // test hook: write a KV value as an older version of the site did (cases saved before they moved to D1)
+  if (req.url === "/__test/kv" && req.method === "POST") {
+    const chunks = []; for await (const c of req) chunks.push(c);
+    const b = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+    store.set(b.key, { buf: Buffer.from(b.value), metadata: b.metadata ?? null, expiration: b.expiration, t: Date.now() - 120000 });
+    res.end("ok"); return;
+  }
+  if (req.url.startsWith("/__test/kv?")) { // test hook: read a KV value
+    const r = store.get(new URL(req.url, "http://x").searchParams.get("key"));
+    res.writeHead(r ? 200 : 404); res.end(r ? r.buf : ""); return;
   }
   if (req.url === "/__test/ops") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(ops)); for (const k in ops) ops[k] = 0; return; }
   if (req.url.startsWith("/__mock/")) return payMock(req, res);

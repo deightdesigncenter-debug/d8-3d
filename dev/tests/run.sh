@@ -53,9 +53,11 @@ run nodb-ui      python3 dev/tests/nodb_ui.py "$OUT/nodb"
 run access-plain python3 dev/tests/access_ui.py "$OUT/access-plain"
 stop
 
-# a team working at the same moment (4 KTVs + QC), with Cloudflare-like latency and per-location KV copies
-start PAY=1 NET_MS=25 KV_EDGE_MS=60000
-run team      node dev/tests/team.test.mjs
+# cases saved in KV by the old site move into D1 (fresh server: nothing listed yet), then a team working at the
+# same moment (4 KTVs + QC), with Cloudflare-like latency, per-location KV copies and the 1 write / s per key limit
+start PAY=1 NET_MS=25 KV_EDGE_MS=60000 KV_RATE=1
+run move      node dev/tests/move.test.mjs
+run team      env KV_RATE=1 node dev/tests/team.test.mjs
 stop
 
 # Cloudflare Turnstile switched on (keys set; the check is answered by the emulator's mock)
