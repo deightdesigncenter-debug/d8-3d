@@ -103,6 +103,38 @@
     });
   }
 
+  /* ---------------- screen recordings: download and play only while on screen ---------------- */
+  // preload="none": nothing is fetched until a clip is visible; it stops when scrolled away or the tab is hidden.
+  // The button pauses it for good; with reduced motion nothing starts by itself.
+  const clips = [...document.querySelectorAll(".strip video")].map((v) => ({ v, btn: v.parentElement.querySelector(".vt"), held: reduce, seen: false }));
+  const paintClip = (c) => {
+    const p = c.v.paused;
+    c.btn.classList.toggle("paused", p);
+    c.btn.setAttribute("aria-label", t(p ? "rc.play" : "rc.pause", p ? "Play video" : "Pause video"));
+  };
+  const syncClip = (c) => {
+    if (c.seen && !c.held && !document.hidden) { if (c.v.paused) c.v.play().catch(() => {}); }
+    else if (!c.v.paused) c.v.pause();
+  };
+  clips.forEach((c) => {
+    c.v.addEventListener("play", () => paintClip(c));
+    c.v.addEventListener("pause", () => paintClip(c));
+    c.btn.addEventListener("click", () => {
+      c.held = !c.v.paused;
+      if (c.held) c.v.pause(); else { c.seen = true; c.v.play().catch(() => {}); }
+    });
+    paintClip(c);
+  });
+  document.addEventListener("d8:lang", () => clips.forEach(paintClip));
+  document.addEventListener("visibilitychange", () => clips.forEach(syncClip));
+  if (clips.length && "IntersectionObserver" in window) {
+    const vio = new IntersectionObserver((entries) => entries.forEach((en) => {
+      const c = clips.find((x) => x.v === en.target);
+      if (c) { c.seen = en.isIntersecting; syncClip(c); }
+    }), { threshold: 0.35 });
+    clips.forEach((c) => vio.observe(c.v));
+  }
+
   /* ---------------- reveal on scroll + floating button ---------------- */
   const fab = $("fab"), contact = $("contact");
   let nearTop = true, contactOn = false;

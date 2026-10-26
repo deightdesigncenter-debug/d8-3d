@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-26.1">
+<link rel="stylesheet" href="/brand.css?v=2026-10-26.2">
 <link rel="preload" as="image" href="/site/hero-full-mouth.webp" fetchpriority="high">
 <style>
   /* --wrap (container width) comes from brand.css: wider on large screens */
@@ -160,10 +160,16 @@
   h1, h2, .h1 { text-wrap: balance; } /* no single word left alone on the last line */
   .sec-head.center p.intro { margin-left: auto; margin-right: auto; }
   .strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .strip figure { margin: 0; position: relative; overflow: hidden; aspect-ratio: 3 / 2; background: #0B0D12; }
-  .strip img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--t-slow) var(--ease-out); }
-  .strip figure:hover img { transform: scale(1.03); }
-  .strip figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 22px 18px; color: var(--c-cream); font-size: 14px; line-height: 1.45;
+  .strip figure { margin: 0; position: relative; overflow: hidden; aspect-ratio: 3 / 2; background: #17131F; }
+  .strip video { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .strip .vt { position: absolute; right: 16px; bottom: 16px; z-index: 1; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(252, 253, 246, .5);
+               background: rgba(4, 37, 82, .7); color: var(--c-cream); cursor: pointer; display: flex; align-items: center; justify-content: center;
+               transition: background-color var(--t-fast) var(--ease-out); }
+  .strip .vt:hover { background: rgba(4, 37, 82, .92); }
+  .strip .vt:focus-visible { outline: 2px solid var(--steel); outline-offset: 2px; }
+  .vt .i-play { display: none; } .vt.paused .i-play { display: block; } .vt.paused .i-pause { display: none; }
+  .strip-foot { gap: 12px; flex-wrap: wrap; }
+  .strip figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 72px 18px 22px; color: var(--c-cream); font-size: 14px; line-height: 1.45;
                       background: linear-gradient(180deg, rgba(4, 18, 40, 0) 0%, rgba(4, 18, 40, .78) 100%); }
   .strip-foot { display: flex; justify-content: center; margin-top: 36px; }
 
@@ -364,8 +370,8 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/home-dict.js?v=2026-10-26.1"></script>
-<script src="/shell.js?v=2026-10-26.1" defer></script>
+<script src="/site/home-dict.js?v=2026-10-26.2"></script>
+<script src="/shell.js?v=2026-10-26.2" defer></script>
 </head>
 <body data-page="home" data-title-key="title">
 <div id="d8-header"></div>
@@ -639,21 +645,21 @@
     </div>
   </section>
 
-  <!-- ============ FINISHED WORK ============ -->
-  <section class="section white-band" id="finished" aria-labelledby="fwTitle">
+  <!-- ============ SCREEN RECORDINGS ============ -->
+  <section class="section white-band" id="recordings" aria-labelledby="rcTitle">
     <div class="wrap">
       <div class="sec-head center reveal">
-        <span class="eyebrow" data-i="fw.eyebrow">Finished work</span>
-        <h2 id="fwTitle" data-i="fw.h">From our files to the finished piece</h2>
-        <p class="intro" data-i="fw.p">Bars, bridges and try-ins milled and printed by our clients' labs from D.EIGHT design files.</p>
+        <span class="eyebrow" data-i="rc.eyebrow">Screen recordings</span>
+        <h2 id="rcTitle" data-i="rc.h">Watch a design take shape</h2>
+        <p class="intro" data-i="rc.p">Short clips from our own exocad sessions on real cases. Only the 3D view is kept, with no sound.</p>
       </div>
     </div>
     <div class="strip reveal">
-      <figure><img src="/site/about/p-hybrid-bar.webp" alt="" width="1200" height="798" loading="lazy"><figcaption data-i="fw.1">Lower bridge on its titanium bar</figcaption></figure>
-      <figure><img src="/site/about/p-crowns-model.webp" alt="" width="1200" height="798" loading="lazy"><figcaption data-i="fw.2">Crowns on the model, shade A2</figcaption></figure>
-      <figure><img src="/site/about/p-bar-cyl.webp" alt="" width="1200" height="798" loading="lazy"><figcaption data-i="fw.3">Milled titanium bar with its cylinders</figcaption></figure>
+      <figure><video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-crowns.webp" aria-label="Full-arch crowns on the articulated model" data-i-attr="aria-label:rc.1"><source src="/site/about/clip-crowns.mp4" type="video/mp4"><source src="/site/about/clip-crowns.webm" type="video/webm"></video><button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button><figcaption data-i="rc.1">Full-arch crowns on the articulated model</figcaption></figure>
+      <figure><video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-closeup.webp" aria-label="Shaping the front teeth, close up" data-i-attr="aria-label:rc.2"><source src="/site/about/clip-closeup.mp4" type="video/mp4"><source src="/site/about/clip-closeup.webm" type="video/webm"></video><button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button><figcaption data-i="rc.2">Shaping the front teeth, close up</figcaption></figure>
+      <figure><video muted loop playsinline preload="none" width="720" height="382" poster="/site/about/clip-anterior.webp" aria-label="Placing and comparing front crowns on the arch" data-i-attr="aria-label:rc.3"><source src="/site/about/clip-anterior.mp4" type="video/mp4"><source src="/site/about/clip-anterior.webm" type="video/webm"></video><button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button><figcaption data-i="rc.3">Placing and comparing front crowns on the arch</figcaption></figure>
     </div>
-    <div class="wrap strip-foot reveal"><a class="btn-line" href="/about#finished" data-i="fw.more">See all finished work</a></div>
+    <div class="wrap strip-foot reveal"><a class="btn-line" href="/about#screens" data-i="rc.more">See our design screens</a><a class="btn-line" href="/about#clips" data-i="rc.all">All recordings</a></div>
   </section>
 
   <!-- ============ ABOUT ============ -->
@@ -788,6 +794,6 @@
 </a>
 
 <div id="d8-footer"></div>
-<script src="/site/home.js?v=2026-10-26.1" defer></script>
+<script src="/site/home.js?v=2026-10-26.2" defer></script>
 </body>
 </html>

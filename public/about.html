@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-26.1">
+<link rel="stylesheet" href="/brand.css?v=2026-10-26.2">
 <link rel="preload" as="image" href="/site/about/case-upper-34.webp" fetchpriority="high">
 <style>
   html { scroll-behavior: smooth; scroll-padding-top: 104px; } /* sections start just under the sticky header */
@@ -138,8 +138,6 @@
   .zoom:hover::after, .zoom:focus-visible::after { opacity: 1; transform: none; }
   .zoom:focus-visible { outline: 2px solid var(--navy); outline-offset: 3px; }
   .shot-card figcaption { margin-top: 12px; font-size: 14px; line-height: 1.5; color: var(--muted); }
-  .photos .zoom { background: #0B0D12; }
-  .photos .zoom img { aspect-ratio: 3 / 2; }
 
   /* ---------- recordings ---------- */
   .clips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
@@ -246,8 +244,8 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/about-dict.js?v=2026-10-26.1"></script>
-<script src="/shell.js?v=2026-10-26.1" defer></script>
+<script src="/site/about-dict.js?v=2026-10-26.2"></script>
+<script src="/shell.js?v=2026-10-26.2" defer></script>
 </head>
 <body data-page="about" data-title-key="title">
 <div id="d8-header"></div>
@@ -274,9 +272,8 @@
     </div>
     <nav class="ab-jump" aria-label="On this page"><div class="wrap">
       <a href="#case" data-i="nav.case">Featured case</a>
-      <a href="#finished" data-i="nav.finished">Finished work</a>
-      <a href="#screens" data-i="nav.screens">CAD screens</a>
       <a href="#clips" data-i="nav.clips">Recordings</a>
+      <a href="#screens" data-i="nav.screens">CAD screens</a>
       <a href="#cases" data-i="nav.cases">More cases</a>
     </div></nav>
   </section>
@@ -379,25 +376,31 @@
     </div>
   </section>
 
-  <!-- ============ FINISHED WORK ============ -->
-  <section class="section white-band" id="finished" aria-labelledby="fwTitle">
+  <!-- ============ RECORDINGS ============ -->
+  <section class="section navy-band" id="clips" aria-labelledby="clTitle">
     <div class="wrap">
       <div class="sec-head reveal">
-        <span class="eyebrow" data-i="fw.eyebrow">Finished work</span>
-        <h2 id="fwTitle" data-i="fw.h">From our files to the finished piece</h2>
-        <p class="serif" lang="en" data-i="fw.serif">Designed here, made by our clients</p>
-        <p class="intro" data-i="fw.p">Bars, bridges and try-ins milled and printed by our clients' labs from D.EIGHT design files. Tap a photo to see it larger.</p>
+        <span class="eyebrow" data-i="cl.eyebrow">Screen recordings</span>
+        <h2 id="clTitle" data-i="cl.h">Watch a design take shape</h2>
+        <p class="serif" lang="en" data-i="cl.serif">Recorded while we design</p>
+        <p class="intro" data-i="cl.intro">Short clips cut from our own screen recordings. Only the 3D view is kept, with no sound.</p>
       </div>
-      <div class="gal photos reveal" data-lb="finished">
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-hybrid.webp" width="1200" height="800" alt="" loading="lazy"></button><figcaption data-i="fw.1">Finished hybrid bridge</figcaption></figure>
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-hybrid-bar.webp" width="1200" height="798" alt="" loading="lazy"></button><figcaption data-i="fw.2">Lower bridge on its titanium bar, occlusal view</figcaption></figure>
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-bar-cyl.webp" width="1200" height="798" alt="" loading="lazy"></button><figcaption data-i="fw.3">Milled titanium bar with its cylinders</figcaption></figure>
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-bar.webp" width="1200" height="798" alt="" loading="lazy"></button><figcaption data-i="fw.4">Titanium bar, milled</figcaption></figure>
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-bars.webp" width="1200" height="600" alt="" loading="lazy"></button><figcaption data-i="fw.5">Upper and lower titanium bars</figcaption></figure>
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-denture.webp" width="1200" height="800" alt="" loading="lazy"></button><figcaption data-i="fw.6">Denture with pink gingiva</figcaption></figure>
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-crowns-model.webp" width="1200" height="798" alt="" loading="lazy"></button><figcaption data-i="fw.7">Crowns on the model, shade A2</figcaption></figure>
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-tryin-print.webp" width="1200" height="823" alt="" loading="lazy"></button><figcaption data-i="fw.8">3D-printed try-in, straight off the printer</figcaption></figure>
-        <figure class="shot-card photo"><button type="button" class="zoom"><img src="/site/about/p-model-tryin.webp" width="753" height="655" alt="" loading="lazy"></button><figcaption data-i="fw.9">Try-in on the printed model</figcaption></figure>
+      <div class="clips reveal">
+        <figure class="clip"><div class="clip-media">
+            <video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-crowns.webp" aria-label="Full-arch crowns on the articulated model" data-i-attr="aria-label:cl.1.t">
+              <source src="/site/about/clip-crowns.mp4" type="video/mp4"><source src="/site/about/clip-crowns.webm" type="video/webm"></video>
+            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
+          </div><figcaption><b data-i="cl.1.t">Full-arch crowns on the articulated model</b><span data-i="cl.1.d">Recorded 13 July 2026</span></figcaption></figure>
+        <figure class="clip"><div class="clip-media">
+            <video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-closeup.webp" aria-label="Shaping the front teeth, close up" data-i-attr="aria-label:cl.2.t">
+              <source src="/site/about/clip-closeup.mp4" type="video/mp4"><source src="/site/about/clip-closeup.webm" type="video/webm"></video>
+            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
+          </div><figcaption><b data-i="cl.2.t">Shaping the front teeth, close up</b><span data-i="cl.2.d">Recorded 14 August 2026</span></figcaption></figure>
+        <figure class="clip"><div class="clip-media">
+            <video muted loop playsinline preload="none" width="720" height="382" poster="/site/about/clip-anterior.webp" aria-label="Placing and comparing front crowns on the arch" data-i-attr="aria-label:cl.3.t">
+              <source src="/site/about/clip-anterior.mp4" type="video/mp4"><source src="/site/about/clip-anterior.webm" type="video/webm"></video>
+            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
+          </div><figcaption><b data-i="cl.3.t">Placing and comparing front crowns on the arch</b><span data-i="cl.3.d">Recorded 5 September 2026</span></figcaption></figure>
       </div>
     </div>
   </section>
@@ -435,35 +438,6 @@
         <figure class="shot-card" data-cat="other"><button type="button" class="zoom"><img src="/site/about/s-z-denture.webp" width="640" height="369" alt="" loading="lazy"></button><figcaption data-i="s15">Complete denture with the occlusal plane</figcaption></figure>
         <figure class="shot-card" data-cat="other"><button type="button" class="zoom"><img src="/site/about/s-z-guide-occl.webp" width="640" height="482" alt="" loading="lazy"></button><figcaption data-i="s16">Surgical guide for site 37 (3Shape)</figcaption></figure>
         <figure class="shot-card" data-cat="other"><button type="button" class="zoom"><img src="/site/about/s-z-guide-side.webp" width="640" height="388" alt="" loading="lazy"></button><figcaption data-i="s17">Surgical guide, drill axis</figcaption></figure>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ RECORDINGS ============ -->
-  <section class="section navy-band" id="clips" aria-labelledby="clTitle">
-    <div class="wrap">
-      <div class="sec-head reveal">
-        <span class="eyebrow" data-i="cl.eyebrow">Screen recordings</span>
-        <h2 id="clTitle" data-i="cl.h">Watch a design take shape</h2>
-        <p class="serif" lang="en" data-i="cl.serif">Recorded while we design</p>
-        <p class="intro" data-i="cl.intro">Short clips cut from our own screen recordings. Only the 3D view is kept, with no sound.</p>
-      </div>
-      <div class="clips reveal">
-        <figure class="clip"><div class="clip-media">
-            <video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-crowns.webp" aria-label="Full-arch crowns on the articulated model" data-i-attr="aria-label:cl.1.t">
-              <source src="/site/about/clip-crowns.mp4" type="video/mp4"><source src="/site/about/clip-crowns.webm" type="video/webm"></video>
-            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
-          </div><figcaption><b data-i="cl.1.t">Full-arch crowns on the articulated model</b><span data-i="cl.1.d">Recorded 13 July 2026</span></figcaption></figure>
-        <figure class="clip"><div class="clip-media">
-            <video muted loop playsinline preload="none" width="720" height="498" poster="/site/about/clip-closeup.webp" aria-label="Shaping the front teeth, close up" data-i-attr="aria-label:cl.2.t">
-              <source src="/site/about/clip-closeup.mp4" type="video/mp4"><source src="/site/about/clip-closeup.webm" type="video/webm"></video>
-            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
-          </div><figcaption><b data-i="cl.2.t">Shaping the front teeth, close up</b><span data-i="cl.2.d">Recorded 14 August 2026</span></figcaption></figure>
-        <figure class="clip"><div class="clip-media">
-            <video muted loop playsinline preload="none" width="720" height="382" poster="/site/about/clip-anterior.webp" aria-label="Placing and comparing front crowns on the arch" data-i-attr="aria-label:cl.3.t">
-              <source src="/site/about/clip-anterior.mp4" type="video/mp4"><source src="/site/about/clip-anterior.webm" type="video/webm"></video>
-            <button type="button" class="vt paused" aria-label="Play video"><svg class="i-pause" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="i-play" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"/></svg></button>
-          </div><figcaption><b data-i="cl.3.t">Placing and comparing front crowns on the arch</b><span data-i="cl.3.d">Recorded 5 September 2026</span></figcaption></figure>
       </div>
     </div>
   </section>
@@ -520,6 +494,6 @@
 </dialog>
 
 <div id="d8-footer"></div>
-<script src="/site/about.js?v=2026-10-26.1" defer></script>
+<script src="/site/about.js?v=2026-10-26.2" defer></script>
 </body>
 </html>
