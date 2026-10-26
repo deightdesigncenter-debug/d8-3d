@@ -141,6 +141,9 @@ with sync_playwright() as p:
     op.reload(); op.wait_for_timeout(1500)
     op.check("#p-case [data-pick]"); op.click("#prBtn"); op.wait_for_timeout(1200)
     ok("đã giao" in op.inner_text(".pt-band").lower(), "owner delivered")
+    ok("đã dùng 0 / 2" in op.inner_text("#revBox").lower(), "case shows free revisions (0 of the usual 2)")
+    op.fill("#revFree", "3"); op.click("#revForm [type=submit]"); op.wait_for_timeout(900)
+    ok("đã dùng 0 / 3" in op.inner_text("#revBox").lower() and "riêng ca này" in op.inner_text("#revBox").lower(), "owner gives this case 3 free revisions")
     op.fill("#billPrice", "36"); op.select_option("#billPay", "due"); op.click("#billForm [type=submit]"); op.wait_for_timeout(1000)
 
     # customer pays with PayPal (mock) -> confirming

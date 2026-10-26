@@ -242,7 +242,9 @@
     const previews = (j.previews || []).map((p) => `<div class="pv"><span class="ic">${ICON.cube}</span><div class="tx"><b>${esc(p.label || j.title)}</b>
       <small>${esc(T("p.pv.exp").replace("{d}", D8.fmtDate(p.expires)))}</small></div>
       <a class="btn btn-primary small" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(T("p.pv.open"))}</a></div>`).join("");
-    const approveBox = st === "review" ? `<div class="approve"><p>${T("p.ap.p")}</p><div class="btns">
+    const rv = j.rev || { free: 2, used: 0 }, revLeft = Math.max(0, rv.free - rv.used);
+    const revLine = `<p class="rev-left">${esc(revLeft ? T("p.ap.rev").replace("{l}", revLeft).replace("{n}", rv.free) : T("p.ap.rev0"))}</p>`;
+    const approveBox = st === "review" ? `<div class="approve"><p>${T("p.ap.p")}</p>${revLine}<div class="btns">
       <button class="btn small" type="button" id="askChanges">${esc(T("p.ap.change"))}</button>
       <button class="btn btn-ok small" type="button" id="approve">${ICON.check}${esc(T("p.ap.ok"))}</button></div></div>` : "";
 
@@ -252,7 +254,7 @@
       const ext = (f.name.split(".").pop() || "").slice(0, 4);
       const canDel = f.kind !== "output" && CLIENT_DELETE.includes(st);
       return `<li class="${f.kind === "output" ? "out" : ""}"><span class="ext">${esc(ext)}</span><div class="nm"><b title="${esc(f.name)}">${esc(f.name)}</b>
-        <small>${esc(D8.size(f.size))} · ${esc(D8.fmtDate(f.at))} · ${esc(T("p.fl.exp").replace("{d}", D8.fmtDate(f.exp)))}</small></div>
+        <small>${esc(D8.size(f.size))} · ${esc(D8.fmtDate(f.at))} · ${esc(f.exp ? T("p.fl.exp").replace("{d}", D8.fmtDate(f.exp)) : T("p.fl.keep"))}</small></div>
         <a class="iconbtn" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}" download="${esc(f.name)}" aria-label="${esc(T("p.fl.dl"))} ${esc(f.name)}" title="${esc(T("p.fl.dl"))}">${ICON.dl}</a>
         ${canDel ? `<button class="iconbtn del" type="button" data-del="${esc(f.fid)}" aria-label="${esc(T("p.fl.del"))} ${esc(f.name)}" title="${esc(T("p.fl.del"))}">${ICON.trash}</button>` : ""}</li>`;
     };
@@ -266,6 +268,7 @@
       ["p.dt.material", j.material], ["p.dt.shade", j.shade], ["p.dt.needed", j.neededBy ? D8.fmtDate(Date.parse(j.neededBy + "T12:00:00")) : ""],
       ...(j.order ? [["p.dt.order", j.order]] : []),
       ["p.dt.sent", D8.fmtDate(j.created, true)],
+      ["p.dt.rev", T("p.dt.revv").replace("{u}", rv.used).replace("{n}", rv.free)],
     ].filter((r) => r[1]).map(([k, v]) => [T(k), v]).concat(D8.rxRows(j.rx))
       .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
     // Customers never see a price list or the case price, only a free trial or the amount they are asked to pay.

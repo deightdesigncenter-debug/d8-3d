@@ -35,6 +35,14 @@ The owner wants the site to run without errors or jank, and every new feature ch
   stay in spaced caps. Lexend Exa is gone. Noto Serif Display stays only for the serif accent lines (slogans, English in VI).
 - Homepage, Lumina-style: "Why D.EIGHT" is a 4×2 picture/text chequerboard of real CAD screens (2 columns on tablet,
   stacked on phone); a full-width "Finished work" strip of 3 product photos links to `/about#finished`.
+- Free revisions (owner's rule 2026-10-26): the owner decides. Settings `freeRevisions` (default 2, 0–20, staff.manage) is public in
+  `/api/config` and printed into `.rev-n` spans (home, terms) by `D8.fillRev`; per case `job.revFree` / `job.revUsed` via
+  `POST /api/jobs/<id>/revisions` (billing.edit only); review → in_design adds one used. `jobView` sends `rev: {free, used, custom}`
+  to staff and the customer (raw fields stay internal). Tests: `dev/tests/revisions.test.mjs` (also with `R2=1`).
+- Case files: in R2 (`FILES`) they are kept with the case (`exp: 0`, shown "lưu cùng ca"); in KV they expire after 60 days.
+  privacy / terms carry both texts in `<!--store:r2-->` / `<!--store:kv-->` blocks; `publicPage` keeps the one that matches.
+  Never add an R2 lifecycle rule for `jf:`.
+- People on the site: Danny Do = client contact (WhatsApp, email, contact form); Nhut Hoa = design technician (About › team).
 - Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
   the server; the prefix follows the kind. Price levels: list price (MAX) = prices.customer_id 0, MID = -2, MIN = -3; `customers.tier`
   ('' / mid / min, schema v3). Lookup: customer's own price → their level → list price. `/api/pricelist` imports the owner's Excel layout

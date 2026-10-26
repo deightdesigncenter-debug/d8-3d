@@ -29,6 +29,7 @@ run orders    node dev/tests/orders.test.mjs
 run privacy   node dev/tests/privacy.test.mjs
 run pay       node dev/tests/pay.test.mjs
 run contact   node dev/tests/contact.test.mjs
+run revisions node dev/tests/revisions.test.mjs
 run contact-ui python3 dev/tests/contact_ui.py "$OUT/contact"
 run domain    node dev/tests/domain.test.mjs
 run domain-ui python3 dev/tests/domain_ui.py "$OUT/domain"
@@ -56,6 +57,11 @@ stop
 start TS=1
 run contact-ts    node dev/tests/contact.test.mjs
 run contact-ui-ts python3 dev/tests/contact_ui.py "$OUT/contact-ts"
+stop
+
+# case files in an R2 bucket (FILES): kept with the case, legal pages say so
+start R2=1
+run revisions-r2 node dev/tests/revisions.test.mjs
 stop
 
 # the database bound under another variable name still works

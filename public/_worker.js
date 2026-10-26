@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-25.2"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-26.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -36,7 +36,7 @@ const JOB_STATUSES = ["received", "needs_info", "in_design", "review", "approved
 const CHUNK_MAX = 20 * 1024 * 1024;                // bytes per stored file chunk (KV value limit is 25 MiB)
 const FILE_MAX_PARTS = 15;                         // 300 MB per file after compression
 const JOB_FILES_MAX = 300 * 1024 * 1024;           // stored bytes per job
-const FILE_KEEP_DAYS = 60;                         // uploaded files expire after this
+const FILE_KEEP_DAYS = 60;                         // files in KV expire after this; files in R2 stay with the case
 const THREAD_MAX = 400;
 const TRIAL_CASES = 2;                             // a new customer's first cases are a free trial
 const TRIAL_CREDIT_USD = 50;                       // ...worth up to this much in total
@@ -64,9 +64,12 @@ function sitemap(origin) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 // Homepage, About and legal pages: the right address in canonical / share tags; open to search engines only at the main domain.
-async function publicPage(res, site) {
+async function publicPage(res, site, env) {
   let html = await res.text();
   html = html.split(PAGES_ORIGIN).join(site.origin);
+  // legal pages say how long files are kept: with the case in R2, 60 days in KV
+  const keep = env && env.FILES ? "r2" : "kv";
+  html = html.replace(/<!--store:(r2|kv)-->([\s\S]*?)<!--\/store:\1-->/g, (m, k, inner) => (k === keep ? inner : ""));
   if (site.here) html = html.replace(/<meta name="robots" content="noindex[^"]*">\n?/, "");
   const headers = new Headers(res.headers);
   headers.delete("Content-Length"); headers.delete("ETag");
@@ -152,7 +155,7 @@ export default {
       if (m) return await ogImage(request, env, m[1]);
 
       const res = await env.ASSETS.fetch(request);
-      if (site && PUBLIC_PAGES.has(path) && request.method === "GET" && res.status === 200) return publicPage(res, site);
+      if (site && PUBLIC_PAGES.has(path) && request.method === "GET" && res.status === 200) return publicPage(res, site, env);
       return withHeaders(res, PRIVATE_HEADERS);
     } catch (err) {
       console.error(err && err.stack ? err.stack : err);
@@ -186,6 +189,7 @@ async function handleApi(request, env, url) {
   if (path === "/api/config" && method === "GET") {
     const pc = payConf(env), on = (await loadSettings(env)).onlinePay;
     return json({ googleClientId: conf(env).clientId, trialCases: TRIAL_CASES, trialCredit: TRIAL_CREDIT_USD, translate: !!env.AI, fileStore: activeStore(env),
+      freeRevisions: (await loadSettings(env)).freeRevisions,
       ...(turnstileOn(env) ? { turnstile: env.TURNSTILE_SITE_KEY } : {}),
       pay: { paypal: on && !!pc.paypal, stripe: on && !!pc.stripe }, db: !!env.DB },
       200, { "Cache-Control": "public, max-age=300" });
@@ -1096,8 +1100,12 @@ async function jobView(env, job, who = null) {
     const m = await env.CASES.get("meta:" + pid, "json");
     if (m && m.e > Date.now()) previews.push({ id: pid, label: m.l || "", expires: m.e, url: "/v/" + pid });
   }
-  const { ai, payTries, price, due, team, designer, qcBy, stage, qc, ...rest } = job;
+  const { ai, payTries, price, due, team, designer, qcBy, stage, qc, revFree, revUsed, ...rest } = job;
   if (rest.order) rest.order = normCode(rest.order);
+  // free revisions: the number set for this case, else the usual number from Settings; used = times sent back to design
+  const custom = typeof revFree === "number";
+  rest.rev = { free: custom ? revFree : (await loadSettings(env)).freeRevisions, used: revUsed || 0, custom };
+  rest.files = (rest.files || []).map((f) => (f.st === "r2" && f.exp ? { ...f, exp: 0 } : f)); // R2 files are kept with the case
   const num = (v) => (typeof v === "number" ? v : null);
   if (who) {
     const v = { ...rest, designer: designer || "", qcBy: qcBy || "", stage: stage || "", qc: qc || null, previews,
@@ -1411,12 +1419,34 @@ async function handleJobs(request, env, url, who) {
     return json({ job: await jobView(env, job, viewer) });
   }
 
+  // free revisions for this case (the owner decides): { free: number | null (= the usual number), used: number }
+  if (sub === "/revisions" && method === "POST") {
+    if (!(who.viaKey || need("billing.edit"))) return nope();
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const ok = (n) => Number.isInteger(n) && n >= 0 && n <= REV_MAX;
+    if (b.free !== undefined) {
+      if (b.free === null || b.free === "") delete job.revFree;
+      else if (ok(Number(b.free))) job.revFree = Number(b.free);
+      else return json({ error: "Số lần sửa miễn phí phải từ 0 đến " + REV_MAX + "." }, 400);
+    }
+    if (b.used !== undefined) {
+      if (!ok(Number(b.used))) return json({ error: "Số lần đã sửa phải từ 0 đến " + REV_MAX + "." }, 400);
+      job.revUsed = Number(b.used);
+    }
+    teamNote("Sửa miễn phí: " + (typeof job.revFree === "number" ? job.revFree + " lần (riêng ca này)" : "theo mặc định") + ", đã dùng " + (job.revUsed || 0), "rev");
+    job.updated = Date.now();
+    await saveJob(env, job);
+    return json({ job: await jobView(env, job, viewer) });
+  }
+
   if (sub === "/status" && method === "POST") {
     if (!need("cases.status")) return nope();
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     if (!JOB_STATUSES.includes(b.status)) return json({ error: "Trạng thái không hợp lệ." }, 400);
     if (b.status !== job.status) {
       const now = Date.now();
+      // sent back to design from review = the customer asked for changes: one revision used
+      if (job.status === "review" && b.status === "in_design") job.revUsed = Math.min(REV_MAX, (job.revUsed || 0) + 1);
       job.status = b.status; job.updated = now; job.lastBy = "admin";
       if (b.status === "approved" && !job.approvedAt) job.approvedAt = now;
       job.thread.push({ by: "system", name: "", text: "status:" + b.status, at: now });
@@ -1480,7 +1510,7 @@ async function handleJobs(request, env, url, who) {
       const st = activeStore(env);
       if (!(await partStore(env, st).exists(partKey(job.id, x.fid, parts - 1)))) continue;
       job.files.push({ fid: x.fid, name: clip(x.name, 160) || "file", size: Math.max(0, +x.size || 0), stored: Math.max(0, +x.stored || 0),
-        parts, gz: x.gz ? 1 : 0, st, kind, at: now, exp: now + FILE_KEEP_DAYS * DAY_MS, ...(by === "admin" ? { by: actor } : {}) });
+        parts, gz: x.gz ? 1 : 0, st, kind, at: now, exp: st === "r2" ? 0 : now + FILE_KEEP_DAYS * DAY_MS, ...(by === "admin" ? { by: actor } : {}) });
       added++;
     }
     if (added || (by === "admin" && b.deliver)) {
@@ -1723,7 +1753,8 @@ function jsonInsert(DB, table, cols, list, tail = "") {
 }
 
 /* ---- settings (KV, work without the database) */
-const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false, spamWords: "", blockEmails: "", siteHost: "" };
+const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false, spamWords: "", blockEmails: "", siteHost: "", freeRevisions: 2 };
+const REV_MAX = 20; // free revisions: the owner sets the usual number (Settings) and can change it per case
 async function loadSettings(env) {
   const c = cacheGet("@settings");
   if (c) return c.v;
@@ -1965,7 +1996,8 @@ async function handleBook(request, env, url, who) {
 
   // settings work without the database
   if (path === "/api/settings") {
-    if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB, turnstile: turnstileOn(env), spam: { minSec: CONTACT_MIN_MS / 1000, perIp: CONTACT_PER_IP, daily: MSG_DAILY_CAP }, host: url.hostname }) : deny();
+    if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB, turnstile: turnstileOn(env), spam: { minSec: CONTACT_MIN_MS / 1000, perIp: CONTACT_PER_IP, daily: MSG_DAILY_CAP }, host: url.hostname,
+      files: { store: activeStore(env), keepDays: FILE_KEEP_DAYS } }) : deny();
     if (method === "POST") {
       if (!who.can("staff.manage")) return deny();
       const b = await body(), cur = await loadSettings(env);
@@ -1975,6 +2007,11 @@ async function handleBook(request, env, url, who) {
         const h = b.siteHost.trim().toLowerCase();
         if (h && (h !== url.hostname || /\.pages\.dev$/.test(h))) return json({ error: "Chỉ đặt được tên miền đang mở trang này (không phải địa chỉ .pages.dev). Mở Cài đặt ngay tại tên miền mới rồi bấm lại." }, 400);
         next.siteHost = h;
+      }
+      if (b.freeRevisions !== undefined) {
+        const n = Number(b.freeRevisions);
+        if (!Number.isInteger(n) || n < 0 || n > REV_MAX) return json({ error: "Số lần sửa miễn phí phải từ 0 đến " + REV_MAX + "." }, 400);
+        next.freeRevisions = n;
       }
       for (const k of ["spamWords", "blockEmails"]) if (typeof b[k] === "string") next[k] = b[k].split(/[\n,;]+/).map((x) => x.trim().toLowerCase().slice(0, 80)).filter(Boolean).slice(0, 300).join("\n");
       await env.CASES.put("cfg:settings", JSON.stringify(next));

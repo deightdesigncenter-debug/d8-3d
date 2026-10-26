@@ -293,6 +293,7 @@
       const [d, q] = t.replace(/^assign:/, "").split("|");
       return "Phân công: KTV " + (d && d !== "-" ? teamName(d) : "chưa giao") + " · QC " + (q && q !== "-" ? teamName(q) : "chưa giao");
     }
+    if (n.kind === "rev") return t;
     if (n.kind === "upload") return "Tải lên " + t.replace(/^upload:/, "") + " file thiết kế";
     if (n.kind === "deliver") { const k = +t.replace(/^deliver:/, "") || 0; return k ? "Giao " + k + " file thiết kế cho khách" : "Chuyển ca sang Đã giao"; }
     const head = { submit: "Gửi QC", qc_pass: "QC đạt", qc_fail: "QC không đạt, trả KTV sửa", reopen: "Mở lại để sửa" }[n.kind];
@@ -324,7 +325,7 @@
       const del = can("cases.delete") || (f.kind === "design" && f.by && f.by === me && canDesign);
       const html = /\.html?$/i.test(f.name);
       return `<li class="${f.kind === "output" ? "out" : ""}">${opt.select ? `<input type="checkbox" class="sel" data-pick="${esc(f.fid)}" aria-label="Chọn ${esc(f.name)}">` : ""}<span class="ext">${esc(ext)}</span><div class="nm"><b title="${esc(f.name)}">${esc(f.name)}</b>
-        <small>${esc(D8.size(f.size))}${f.gz ? " (lưu nén " + esc(D8.size(f.stored)) + ")" : ""} · ${esc(D8.fmtDate(f.at, true))}${f.by ? " · " + esc(teamName(f.by)) : ""} · lưu đến ${esc(D8.fmtDate(f.exp))}</small></div>
+        <small>${esc(D8.size(f.size))}${f.gz ? " (lưu nén " + esc(D8.size(f.stored)) + ")" : ""} · ${esc(D8.fmtDate(f.at, true))}${f.by ? " · " + esc(teamName(f.by)) : ""} · ${f.exp ? "lưu đến " + esc(D8.fmtDate(f.exp)) : "lưu cùng ca"}</small></div>
         ${html && f.kind === "design" ? `<a class="btn small" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}?view=1" target="_blank" rel="noopener">Xem 3D</a>` : ""}
         ${dl && D8.view3d && D8.view3d.is(f.name) ? `<button class="btn small" type="button" data-v3d="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}" data-name="${esc(f.name)}" data-size="${f.size}">Xem 3D</button>` : ""}
         ${opt.publish && html ? `<button class="btn small" type="button" data-publish="${esc(f.fid)}">Gửi khách xem 3D</button>` : ""}
@@ -456,6 +457,15 @@
       </section>`;
     }
 
+    // free revisions: the usual number comes from Settings; the owner can set another number for this case
+    const rv = j.rev || { free: 2, used: 0, custom: false };
+    const revBlock = `<div class="rev-box" id="revBox"><p class="grp" style="margin:20px 0 6px">Sửa miễn phí</p>
+      <p style="margin:0">Đã dùng <b>${rv.used}</b> / ${rv.free} lần ${rv.custom ? "(riêng ca này)" : "(theo mặc định)"}${rv.used >= rv.free ? '<br><span class="hint" style="margin:0">Hết lượt miễn phí: chỉnh sửa tiếp báo giá theo mức độ.</span>' : ""}</p>
+      ${can("billing.edit") ? `<form id="revForm" class="rev-form">
+        <div><label class="field-label" for="revFree">Số lần miễn phí</label><input class="input" id="revFree" type="number" min="0" max="20" step="1" inputmode="numeric" value="${rv.custom ? rv.free : ""}" placeholder="Mặc định"></div>
+        <div><label class="field-label" for="revUsed">Đã dùng</label><input class="input" id="revUsed" type="number" min="0" max="20" step="1" inputmode="numeric" value="${rv.used}"></div>
+        <button class="btn small" type="submit">Lưu</button></form>
+        <p class="hint" style="margin:6px 0 0">Để trống ô đầu là theo mặc định ở Cài đặt. Chuyển ca từ "Chờ duyệt" về "Đang thiết kế" tự tính thêm 1 lần.</p>` : ""}</div>`;
     show("p-case");
     $("p-case").innerHTML = `
       <div class="adm-head">
@@ -475,7 +485,7 @@
         <aside>${can("ai.use") ? `<section class="card" id="aiSumCard" hidden><div class="card-head-row"><h2 class="h-caps" style="display:flex;align-items:center;gap:8px">Tóm tắt cho KTV <span class="ai-tag">AI</span></h2>
             <button class="btn small" type="button" id="aiSumBtn">${j.ai && j.ai.sum ? "Làm mới" : "Tạo tóm tắt"}</button></div>
           <div id="aiSumBody">${j.ai && j.ai.sum ? `<p class="ai-sum">${esc(j.ai.sum)}</p><p class="ai-meta">Tạo lúc ${esc(D8.fmtDate(j.ai.sumAt, true))}${j.ai.sumUpd < j.updated ? " · <b>ca đã có cập nhật sau bản tóm tắt này</b>" : ""}. AI có thể sai, đối chiếu lại phiếu gốc.</p>` : '<p class="muted" style="margin:0">AI đọc phiếu chỉ định và tin nhắn của khách rồi tóm tắt bằng tiếng Việt.</p>'}</div></section>` : ""}
-          <section class="card"><h2 class="h-caps" style="margin-bottom:16px">Thông tin ca</h2><dl class="dl">${det}</dl>
+          <section class="card"><h2 class="h-caps" style="margin-bottom:16px">Thông tin ca</h2><dl class="dl">${det}</dl>${revBlock}
           ${j.notes ? `<p class="grp" style="margin-top:20px">Yêu cầu của khách</p><p class="notes">${esc(j.notes)}</p>` : ""}</section>
           ${orderCard}${billing}</aside>
       </div>`;
@@ -601,6 +611,14 @@
     }));
 
     // billing and payment confirmation
+    const rf = $("revForm");
+    if (rf) rf.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const b = rf.querySelector("[type=submit]"), f = $("revFree").value.trim();
+      D8.busy(b, true);
+      try { redraw((await post("/revisions", { free: f === "" ? null : Number(f), used: Number($("revUsed").value || 0) })).job); D8.done($("revForm").querySelector("[type=submit]"), "Đã lưu"); }
+      catch (err) { D8.busy(b, false); D8.toast(err.message); }
+    });
     const bf = $("billForm");
     if (bf) {
       bf.addEventListener("submit", async (e) => {

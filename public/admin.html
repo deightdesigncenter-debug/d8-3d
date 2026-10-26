@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-25.2">
-<link rel="stylesheet" href="/case.css?v=2026-10-25.2">
+<link rel="stylesheet" href="/brand.css?v=2026-10-26.1">
+<link rel="stylesheet" href="/case.css?v=2026-10-26.1">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
 <style>
   body { background: var(--paper); }
@@ -48,6 +48,11 @@
   .adm-cust b { display: block; color: var(--navy); }
   .adm-cust a { color: var(--muted); font-size: 14px; word-break: break-all; }
   .stat-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .rev-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 12px; align-items: end; margin-top: 12px; }
+  .rev-form .input { height: 40px; }
+  .rev-form .btn { grid-column: 1 / -1; justify-self: start; }
+  .rev-num { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; margin-top: 14px; }
+  .rev-num > div { width: 240px; }
   .stat-form select { width: auto; min-width: 200px; height: 42px; }
   .tpl { display: flex; gap: 6px; flex-wrap: wrap; }
   .tpl button { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--white); color: var(--navy); cursor: pointer;
@@ -582,14 +587,14 @@
     .stat-form select { flex: 1; min-width: 0; }
   }
 </style>
-<script src="/shell.js?v=2026-10-25.2" defer></script>
-<script src="/xlsx.js?v=2026-10-25.2" defer></script>
-<script src="/orders.js?v=2026-10-25.2" defer></script>
-<script src="/books.js?v=2026-10-25.2" defer></script>
-<script src="/tech.js?v=2026-10-25.2" defer></script>
-<script src="/viewer3d.js?v=2026-10-25.2" defer></script>
-<script src="/snap.js?v=2026-10-25.2" defer></script>
-<script src="/admin.js?v=2026-10-25.2" defer></script>
+<script src="/shell.js?v=2026-10-26.1" defer></script>
+<script src="/xlsx.js?v=2026-10-26.1" defer></script>
+<script src="/orders.js?v=2026-10-26.1" defer></script>
+<script src="/books.js?v=2026-10-26.1" defer></script>
+<script src="/tech.js?v=2026-10-26.1" defer></script>
+<script src="/viewer3d.js?v=2026-10-26.1" defer></script>
+<script src="/snap.js?v=2026-10-26.1" defer></script>
+<script src="/admin.js?v=2026-10-26.1" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>

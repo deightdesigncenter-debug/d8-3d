@@ -942,6 +942,8 @@
               <li>Cơ sở dữ liệu tạo ở một tài khoản Cloudflare khác với tài khoản chứa d8-3d.</li></ol>
             <p style="margin:6px 0 0">Chưa tạo thì: Storage &amp; Databases › D1 SQL Database › <b>Create</b>, tên <code>d8-db</code>, rồi làm bước 1 và 2 ở trên. Bảng dữ liệu tự tạo ở lần mở đầu tiên.</p></div></div>`}</section>
       ${domainCard(s)}
+      ${revCard(s)}
+      ${storeCard(s)}
       <section class="card"><h2 class="h-caps">Thanh toán của khách</h2>
         <label class="switch"><input type="checkbox" id="setPay"${s.settings.onlinePay ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Thanh toán online trên cổng khách hàng (PayPal / Stripe)</b></label>
         <label class="switch" style="margin-top:18px"><input type="checkbox" id="setTrial"${s.settings.autoTrial ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Tự đánh dấu 2 ca đầu của khách mới là dùng thử</b></label></section>
@@ -954,6 +956,12 @@
         catch (err) { D8.busy(btn, false); D8.toast(err.message); }
       });
     }
+    const rs = $("revSave");
+    if (rs) rs.addEventListener("click", async () => {
+      D8.busy(rs, true);
+      try { const r = await api("/api/settings", { method: "POST", body: { freeRevisions: Number($("revDefault").value) } }); $("revDefault").value = r.settings.freeRevisions; D8.done(rs, "Đã lưu"); }
+      catch (err) { D8.toast(err.message); } finally { D8.busy(rs, false); }
+    });
     const save = $("asSave");
     if (save) save.addEventListener("click", async () => {
       D8.busy(save, true);
@@ -980,6 +988,30 @@
       : `<p style="margin:10px 0 0">Chưa đặt tên miền chính. Web đang mở ở <code>${esc(here)}</code>.${pagesDev ? " Sau khi gắn tên miền ở Cloudflare, mở trang này ngay tại tên miền mới để đặt." : ""}</p>
         ${edit && !pagesDev ? `<div style="margin-top:14px"><button class="btn btn-primary small" id="domSet">Đặt ${esc(here)} làm tên miền chính</button></div>` : ""}`;
     return `<section class="card" id="domCard"><h2 class="h-caps">Tên miền</h2>${body}</section>`;
+  }
+
+  // Free revisions per case: the usual number (shown on the website and in the portal); each case can have its own.
+  function revCard(s) {
+    const n = s.settings.freeRevisions ?? 2, edit = can("staff.manage");
+    return `<section class="card" id="revCard"><h2 class="h-caps">Sửa file miễn phí</h2>
+      <p style="margin:10px 0 0">Số lần sửa miễn phí thường lệ cho mỗi ca. Con số này hiện trên trang web, trong Điều khoản và trong cổng khách hàng. Ở trang từng ca, bạn đặt được số lần khác cho riêng ca đó.</p>
+      <div class="rev-num"><div><label class="field-label" for="revDefault">Mỗi ca được sửa miễn phí</label>
+        <input class="input" id="revDefault" type="number" min="0" max="20" step="1" inputmode="numeric" value="${esc(n)}"${edit ? "" : " disabled"}></div>
+        ${edit ? '<button class="btn btn-primary small" type="button" id="revSave">Lưu</button>' : ""}</div></section>`;
+  }
+
+  // Where case files live: R2 keeps them with the case; KV deletes them after 60 days.
+  function storeCard(s) {
+    const f = s.files || { store: "kv", keepDays: 60 };
+    const body = f.store === "r2"
+      ? `<div class="pt-alert ok"><div><b>File ca lưu ở Cloudflare R2</b> (binding <code>FILES</code>) và được giữ cùng ca, kể cả ca đã hoàn thành, cho đến khi bạn xóa. Gói miễn phí có 10 GB; vượt mức thì Cloudflare tính khoảng 0,015 USD mỗi GB mỗi tháng.
+          Xem dung lượng đã dùng ở Cloudflare › R2 › bucket của web. Nếu trước đây đã đặt Lifecycle rule xóa tiền tố <code>jf:</code> sau 60 ngày thì hãy xóa rule đó.</div></div>`
+      : `<div class="pt-alert warn"><div><b>File ca đang lưu tạm trong KV và tự xóa sau ${esc(f.keepDays)} ngày.</b> Để giữ file của các ca đã hoàn thành lâu dài:
+          <ol style="margin:8px 0 0"><li>Cloudflare › R2 Object Storage › <b>Create bucket</b> (ví dụ <code>d8-3d-files</code>).</li>
+            <li>Workers &amp; Pages › <b>d8-3d</b> › Settings › chọn <b>Production</b> › Bindings › Add › <b>R2 bucket</b>: tên biến <code>FILES</code>, chọn bucket vừa tạo › Save.</li>
+            <li>Deployments › bản Production mới nhất › <b>⋯</b> › <b>Retry deployment</b>.</li></ol>
+          File mới từ đó lưu ở R2 (10 GB miễn phí, vượt mức khoảng 0,015 USD/GB/tháng); file cũ trong KV vẫn tải được đến hạn.</div></div>`;
+    return `<section class="card" id="storeCard"><h2 class="h-caps">Lưu trữ file ca</h2>${body}</section>`;
   }
 
   // Contact-form anti-spam: what is on, Turnstile status, and the owner's own block lists.

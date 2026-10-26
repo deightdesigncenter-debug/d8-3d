@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Noto+Serif+Display:wdth,wght@75..85,300..400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/brand.css?v=2026-10-25.2">
+<link rel="stylesheet" href="/brand.css?v=2026-10-26.1">
 <link rel="preload" as="image" href="/site/about/case-upper-34.webp" fetchpriority="high">
 <style>
   html { scroll-behavior: smooth; scroll-padding-top: 104px; } /* sections start just under the sticky header */
@@ -83,6 +83,16 @@
   .intro-copy .eyebrow { color: var(--steel); margin-bottom: 14px; }
   .intro-copy p.body { margin: 22px 0 0; font-size: 16px; line-height: 1.8; color: var(--ink); }
   .intro-copy p.body + p.body { margin-top: 14px; color: var(--muted); }
+
+  /* ---------- team ---------- */
+  .team-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 980px; margin: 0 auto; }
+  .person { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 36px; border-radius: 22px; background: var(--paper); border: 1px solid var(--line); }
+  .person .mono { width: 88px; height: 88px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--band); color: var(--on-brand);
+                  font-family: var(--f-display); font-weight: 700; font-size: 26px; letter-spacing: .04em; }
+  .person h3 { margin: 20px 0 0; font-family: var(--f-display); font-weight: 700; font-size: 24px; letter-spacing: -.01em; color: var(--navy); }
+  .person .role { margin: 6px 0 0; font-family: var(--f-display); font-weight: 600; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--steel); }
+  .person .bio { margin: 16px 0 0; max-width: 380px; font-size: 15px; line-height: 1.75; color: var(--muted); }
+  .person-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 22px; }
 
   /* ---------- featured case: facts + chequerboard ---------- */
   .specs { margin: 0 auto 56px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 920px; }
@@ -204,6 +214,7 @@
     .gal { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
     .clips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .team-grid { grid-template-columns: 1fr; max-width: 560px; }
   }
   @media (max-width: 640px) {
     .section { padding: 72px 0; }
@@ -235,8 +246,8 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/about-dict.js?v=2026-10-25.2"></script>
-<script src="/shell.js?v=2026-10-25.2" defer></script>
+<script src="/site/about-dict.js?v=2026-10-26.1"></script>
+<script src="/shell.js?v=2026-10-26.1" defer></script>
 </head>
 <body data-page="about" data-title-key="title">
 <div id="d8-header"></div>
@@ -294,8 +305,37 @@
     </div>
   </section>
 
+  <!-- ============ TEAM ============ -->
+  <section class="section white-band" id="team" aria-labelledby="tmTitle">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <span class="eyebrow" data-i="tm.eyebrow">Our team</span>
+        <h2 id="tmTitle" data-i="tm.h">The people behind your cases</h2>
+        <p class="serif" lang="en" data-i="tm.serif">One contact, one designer</p>
+      </div>
+      <div class="team-grid reveal">
+        <article class="person">
+          <span class="mono" aria-hidden="true">DD</span>
+          <h3>Danny Do</h3>
+          <p class="role" data-i="tm.dd.r">Client contact</p>
+          <p class="bio" data-i="tm.dd.p">Your first point of contact: quotes, new accounts, case intake and delivery times. Message Danny on WhatsApp or by email.</p>
+          <div class="person-btns">
+            <a class="btn btn-primary small wa-link" href="https://wa.me/84703233263" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 2.2a7.8 7.8 0 0 0-6.7 11.8L2.2 17.8l3.9-1.1A7.8 7.8 0 1 0 10 2.2Z"/><path d="M7.1 6.3c.3-.3.8-.3 1 .1l.7 1.4c.1.3 0 .6-.2.8l-.5.5a5 5 0 0 0 2.8 2.8l.5-.5c.2-.2.5-.3.8-.2l1.4.7c.4.2.4.7.1 1-.6.7-1.5 1-2.4.7a7.4 7.4 0 0 1-4.9-4.9c-.3-.9 0-1.8.7-2.4Z"/></svg><span>WhatsApp</span></a>
+            <a class="btn small" href="mailto:d.eightdesigncenter@gmail.com"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M2.5 5l6.5 5 6.5-5"/></svg><span>Email</span></a>
+          </div>
+        </article>
+        <article class="person">
+          <span class="mono" aria-hidden="true">NH</span>
+          <h3>Nhut Hoa</h3>
+          <p class="role" data-i="tm.nh.r">Design technician</p>
+          <p class="bio" data-i="tm.nh.p">Designs your cases in exocad and 3Shape: implant crowns and abutments, All-on-X bridges and bars, crown and bridge, guides and dentures.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ FEATURED CASE ============ -->
-  <section class="section white-band" id="case" aria-labelledby="fcTitle">
+  <section class="section paper-band" id="case" aria-labelledby="fcTitle">
     <div class="wrap">
       <div class="sec-head reveal">
         <span class="eyebrow" data-i="fc.eyebrow">Featured case</span>
@@ -340,7 +380,7 @@
   </section>
 
   <!-- ============ FINISHED WORK ============ -->
-  <section class="section paper-band" id="finished" aria-labelledby="fwTitle">
+  <section class="section white-band" id="finished" aria-labelledby="fwTitle">
     <div class="wrap">
       <div class="sec-head reveal">
         <span class="eyebrow" data-i="fw.eyebrow">Finished work</span>
@@ -363,7 +403,7 @@
   </section>
 
   <!-- ============ CAD SCREENS ============ -->
-  <section class="section white-band" id="screens" aria-labelledby="scTitle">
+  <section class="section paper-band" id="screens" aria-labelledby="scTitle">
     <div class="wrap">
       <div class="sec-head reveal">
         <span class="eyebrow" data-i="sc.eyebrow">From our CAD screens</span>
@@ -480,6 +520,6 @@
 </dialog>
 
 <div id="d8-footer"></div>
-<script src="/site/about.js?v=2026-10-25.2" defer></script>
+<script src="/site/about.js?v=2026-10-26.1" defer></script>
 </body>
 </html>

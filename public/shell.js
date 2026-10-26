@@ -83,6 +83,7 @@
     store.set(LANG_KEY, D8.lang);
     renderHeader(); renderFooter();
     D8.applyLang();
+    D8.fillRev();
     document.dispatchEvent(new CustomEvent("d8:lang", { detail: D8.lang }));
   };
 
@@ -585,6 +586,11 @@
 
   let configP = null;
   D8.config = () => (configP = configP || fetch("/api/config").then((r) => r.json()).catch(() => ({})));
+  // The usual number of free revisions is the owner's choice (Settings); pages print it in .rev-n
+  D8.fillRev = () => {
+    if (!document.querySelector(".rev-n")) return;
+    D8.config().then((c) => { if (Number.isInteger(c.freeRevisions)) document.querySelectorAll(".rev-n").forEach((e) => { e.textContent = c.freeRevisions; }); });
+  };
   D8.aiOn = false;
   D8.config().then((c) => { D8.aiOn = !!(c && c.translate); document.dispatchEvent(new CustomEvent("d8:config", { detail: c })); });
 
@@ -1029,6 +1035,7 @@
     renderHeader();
     renderFooter();
     D8.applyLang();
+    D8.fillRev();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
