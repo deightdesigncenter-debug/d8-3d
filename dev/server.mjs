@@ -30,10 +30,22 @@ function asType(buf, type) {
   if (type === "stream") return new Response(buf).body;
   return buf.toString("utf8");
 }
-const ops = { read: 0, write: 0, list: 0, delete: 0 }; // compare with the free plan: 100k reads, 1k writes/lists/deletes a day
+const ops = { read: 0, write: 0, list: 0, delete: 0, limited: 0 }; // compare with the free plan: 100k reads, 1k writes/lists/deletes a day
+// KV_RATE=1: like real Workers KV, a second write to the same key within one second fails with 429
+const KV_RATE = !!process.env.KV_RATE, lastPut = new Map();
+// NET_MS=20: every KV / D1 / R2 call waits about that long (30–130 %), like the network round trip on Cloudflare,
+// so requests that arrive together really overlap (without it each request runs to the end before the next starts)
+const NET_MS = +process.env.NET_MS || 0;
+const net = () => (NET_MS ? new Promise((r) => setTimeout(r, NET_MS * (0.3 + Math.random()))) : null);
 const KV = {
   async put(key, value, opts = {}) {
+    if (NET_MS) await net();
     ops.write++;
+    if (KV_RATE) {
+      const t = Date.now(), prev = lastPut.get(key) || 0;
+      if (t - prev < 1000) { ops.limited++; throw new Error("KV PUT failed: 429 Too Many Requests (same key written within 1 s)"); }
+      lastPut.set(key, t);
+    }
     const buf = await toBuffer(value);
     if (buf.length > KV_MAX_VALUE) throw new Error("KV put failed: 413 Value length exceeds limit");
     if (opts.metadata && Buffer.byteLength(JSON.stringify(opts.metadata)) > KV_MAX_META) throw new Error("KV put failed: metadata too large");
@@ -43,26 +55,54 @@ const KV = {
     store.set(key, { buf, metadata: opts.metadata ?? null, expiration, t: Date.now() });
   },
   async get(key, opt) {
+    if (NET_MS) await net();
     ops.read++;
     const type = typeof opt === "string" ? opt : opt?.type || "text";
     const rec = store.get(key);
     return alive(rec) ? asType(rec.buf, type) : null;
   },
   async getWithMetadata(key, opt) {
+    if (NET_MS) await net();
     ops.read++;
     const type = typeof opt === "string" ? opt : opt?.type || "text";
     const rec = store.get(key);
     return alive(rec) ? { value: asType(rec.buf, type), metadata: rec.metadata } : { value: null, metadata: null };
   },
   async list({ prefix = "", limit = 1000 } = {}) {
+    if (NET_MS) await net();
     ops.list++;
     const now = Date.now(); const all = [...store.entries(), ...[...tomb.entries()].filter(([, r]) => now - r.d < LAG_MS)];
     const keys = all.filter(([k, r]) => k.startsWith(prefix) && alive(r) && now - r.t >= LAG_MS).sort(([a],[b]) => a < b ? -1 : 1)
       .slice(0, limit).map(([name, r]) => ({ name, expiration: r.expiration, metadata: r.metadata }));
     return { keys, list_complete: true, cursor: "" };
   },
-  async delete(key) { ops.delete++; const r = store.get(key); if (r) tomb.set(key, { ...r, d: Date.now() }); store.delete(key); },
+  async delete(key) { if (NET_MS) await net(); ops.delete++; const r = store.get(key); if (r) tomb.set(key, { ...r, d: Date.now() }); store.delete(key); },
 };
+
+// KV_EDGE_MS=60000: like Workers KV across Cloudflare locations. A read is cached at the reader's location for that long;
+// a write updates the writer's location at once, other locations keep their copy until it times out.
+// The location is the request's x-test-colo header (no header = always fresh).
+const KV_EDGE_MS = +process.env.KV_EDGE_MS || 0, edges = new Map();
+function kvAt(colo) {
+  if (!KV_EDGE_MS || !colo) return KV;
+  if (!edges.has(colo)) edges.set(colo, new Map());
+  const cache = edges.get(colo);
+  const look = async (key) => {
+    const c = cache.get(key);
+    if (c && Date.now() - c.at < KV_EDGE_MS) { if (NET_MS) await net(); ops.read++; return c.rec; }
+    await KV.get(key);                       // counts the read (and waits like one)
+    const rec = store.get(key) || null;
+    cache.set(key, { rec, at: Date.now() });
+    return rec;
+  };
+  return {
+    ...KV,
+    async get(key, opt) { const rec = await look(key); return alive(rec) ? asType(rec.buf, typeof opt === "string" ? opt : opt?.type || "text") : null; },
+    async getWithMetadata(key, opt) { const rec = await look(key); return alive(rec) ? { value: asType(rec.buf, typeof opt === "string" ? opt : opt?.type || "text"), metadata: rec.metadata } : { value: null, metadata: null }; },
+    async put(key, value, opts) { await KV.put(key, value, opts); cache.set(key, { rec: store.get(key), at: Date.now() }); },
+    async delete(key) { await KV.delete(key); cache.set(key, { rec: null, at: Date.now() }); },
+  };
+}
 
 // ---- ASSETS mock (Pages static asset behaviour incl. .html stripping)
 const TYPES = { ".html": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".js": "text/javascript",
@@ -141,15 +181,16 @@ function d1(counter) {
   class Stmt {
     constructor(sql, args) { this.sql = sql; this.args = args || []; }
     bind(...a) { return new Stmt(this.sql, a); }
-    async all() { tick(); return exec1(this.sql, this.args); }
-    async run() { tick(); return exec1(this.sql, this.args); }
-    async first(col) { tick(); const r = exec1(this.sql, this.args).results[0]; return r === undefined ? null : col ? r[col] : r; }
-    async raw() { tick(); return exec1(this.sql, this.args).results.map((r) => Object.values(r)); }
+    async all() { tick(); if (NET_MS) await net(); return exec1(this.sql, this.args); }
+    async run() { tick(); if (NET_MS) await net(); return exec1(this.sql, this.args); }
+    async first(col) { tick(); if (NET_MS) await net(); const r = exec1(this.sql, this.args).results[0]; return r === undefined ? null : col ? r[col] : r; }
+    async raw() { tick(); if (NET_MS) await net(); return exec1(this.sql, this.args).results.map((r) => Object.values(r)); }
   }
   return {
     prepare: (sql) => new Stmt(sql),
     async batch(list) {
       tick(list.length);
+      if (NET_MS) await net();
       sdb.exec("BEGIN");
       try { const out = list.map((st) => exec1(st.sql, st.args)); sdb.exec("COMMIT"); return out; }
       catch (e) { sdb.exec("ROLLBACK"); throw e; }
@@ -160,9 +201,9 @@ function d1(counter) {
 // ---- R2 mock (case files): set R2=1 to store case files in a bucket instead of KV
 const r2 = new Map();
 const FILES = {
-  async put(k, v) { r2.set(k, await toBuffer(v)); return {}; },
-  async get(k) { const b = r2.get(k); return b ? { body: new Response(b).body } : null; },
-  async head(k) { return r2.has(k) ? { key: k, size: r2.get(k).length } : null; },
+  async put(k, v) { if (NET_MS) await net(); r2.set(k, await toBuffer(v)); return {}; },
+  async get(k) { if (NET_MS) await net(); const b = r2.get(k); return b ? { body: new Response(b).body } : null; },
+  async head(k) { if (NET_MS) await net(); return r2.has(k) ? { key: k, size: r2.get(k).length } : null; },
   async delete(k) { r2.delete(k); },
 };
 // ---- PayPal / Stripe mocks: PAY=1 (both), PAY=paypal or PAY=stripe (one provider)
@@ -246,8 +287,10 @@ const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TE
 http.createServer(async (req, res) => {
   if (req.url.startsWith("/__test/sql?")) { // test hook: read-only look into the database
     const q = new URL(req.url, "http://x").searchParams.get("q") || "";
-    try { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(/^\s*select/i.test(q) ? sdb.prepare(q).all().map((r) => ({ ...r })) : [])); }
-    catch (e) { res.writeHead(400); res.end(String(e)); }
+    let out;
+    try { out = JSON.stringify(/^\s*select/i.test(q) ? sdb.prepare(q).all().map((r) => ({ ...r })) : []); }
+    catch (e) { res.writeHead(400); res.end(String(e)); return; }
+    res.writeHead(200, { "Content-Type": "application/json" }); res.end(out);
     return;
   }
   if (req.url === "/__test/ops") { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify(ops)); for (const k in ops) ops[k] = 0; return; }
@@ -270,7 +313,8 @@ http.createServer(async (req, res) => {
   });
   try {
     // NO_DB=1: no database; DB_AS=name: the database bound under another variable name (a dashboard typo)
-    const out = await worker.fetch(request, process.env.NO_DB ? env : { ...env, [process.env.DB_AS || "DB"]: d1({ n: 0 }) }, {});
+    const kv = kvAt(req.headers["x-test-colo"]), base = kv === KV ? env : { ...env, CASES: kv };
+    const out = await worker.fetch(request, process.env.NO_DB ? base : { ...base, [process.env.DB_AS || "DB"]: d1({ n: 0 }) }, {});
     const headers = {}; out.headers.forEach((v, k) => { headers[k] = v; });
     res.writeHead(out.status, headers);
     if (out.body && req.method !== "HEAD") { for await (const c of out.body) res.write(c); }

@@ -77,6 +77,17 @@ The owner wants the site to run without errors or jank, and every new feature ch
   not branch previews `<x>.d8-3d.pages.dev`); `/admin?stay=1` sets cookie `d8stay` to stay on the old host for a day. Pages carry
   `https://d8-3d.pages.dev` in canonical / og tags; `publicPage` swaps in the right origin and, at the main domain only, drops noindex
   for `/`, `/about`, `/privacy`, `/terms`; `/robots.txt` opens and `/sitemap.xml` is served there.
+- Team at work (`dev/tests/team.test.mjs`, owner's request 2026-10-26): 4 KTVs + 1 QC at the same moment on portal cases and the
+  order book (receive files, design, send to QC / not done, QC pass / fail with note, fix, deliver, privacy, to-do counts, KV use).
+  run.sh starts it with `NET_MS=25 KV_EDGE_MS=60000`: every KV / D1 / R2 call waits like a network call and KV keeps a copy per
+  location (`x-test-colo` header, 60 s like Workers KV). Without NET_MS the emulator answers at once, requests never overlap and
+  races stay hidden; `KV_RATE=1` adds the 1 write / s per key limit (429). New order codes (staff orders and portal cases) are taken
+  inside the INSERT (`insertNextCode`: MAX(seq)+1 of the day in the same statement — no duplicates, no gaps); never go back to
+  reading `nextSeq` first and inserting after. A new customer and its login are one batch and the login is never replaced there
+  (no duplicate customers when a new customer's first cases arrive together). A case whose order could not be made gets
+  `needsOrder` (internal, stripped in `jobView`) and `saveJob` tries again. WARN lines = known risks of cases in KV (last write wins on
+  `job:` / `own:`, copies up to 60 s old at other locations, 1,000 writes and 1,000 lists a day on the free plan); waiting on the
+  owner's decision to move portal cases to D1. When that is done, turn the `risk(...)` checks into `check(...)`.
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.
 - Motion rules: 200–300 ms, ease-out curves, transform/opacity only, off under `prefers-reduced-motion`.

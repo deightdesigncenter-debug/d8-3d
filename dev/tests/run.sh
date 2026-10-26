@@ -20,7 +20,7 @@ stop() { kill "$SERVER" 2>/dev/null; wait "$SERVER" 2>/dev/null; }
 run() { # name, command...
   local name="$1"; shift
   echo "=== $name"
-  if "$@" > "$OUT/$name.log" 2>&1; then echo "    ok ($(grep -c '^PASS' "$OUT/$name.log") checks)"; else echo "    FAILED"; grep -E '^(FAIL|ERR)|Error' "$OUT/$name.log" | head -20; FAILED+=("$name"); fi
+  if "$@" > "$OUT/$name.log" 2>&1; then echo "    ok ($(grep -c '^PASS' "$OUT/$name.log") checks)"; grep '^WARN' "$OUT/$name.log" | sed 's/^/    /'; else echo "    FAILED"; grep -E '^(FAIL|ERR)|Error' "$OUT/$name.log" | head -20; FAILED+=("$name"); fi
 }
 
 start PAY=1
@@ -51,6 +51,11 @@ run site-plain   python3 dev/tests/site_ui.py "$OUT/site-plain"
 run about-plain  python3 dev/tests/about_ui.py "$OUT/about-plain"
 run nodb-ui      python3 dev/tests/nodb_ui.py "$OUT/nodb"
 run access-plain python3 dev/tests/access_ui.py "$OUT/access-plain"
+stop
+
+# a team working at the same moment (4 KTVs + QC), with Cloudflare-like latency and per-location KV copies
+start PAY=1 NET_MS=25 KV_EDGE_MS=60000
+run team      node dev/tests/team.test.mjs
 stop
 
 # Cloudflare Turnstile switched on (keys set; the check is answered by the emulator's mock)

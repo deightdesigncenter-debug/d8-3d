@@ -1028,7 +1028,8 @@ function jobMeta(job) {
     p: typeof job.price === "number" ? job.price : null, py: job.pay || "",
     d: String(job.designer || "").slice(0, 120), q: String(job.qcBy || "").slice(0, 120), g: job.stage || "", oc: normCode(job.order), oi: job.orderId || 0 };
 }
-async function saveJob(env, job) {
+async function saveJob(env, job, heal = true) {
+  if (heal && job.needsOrder && !job.orderId && env.DB) await orderForNewJob(env, job);
   await env.CASES.put("job:" + job.id, JSON.stringify(job), { metadata: jobMeta(job) });
 }
 async function loadJob(env, id) {
@@ -1100,7 +1101,7 @@ async function jobView(env, job, who = null) {
     const m = await env.CASES.get("meta:" + pid, "json");
     if (m && m.e > Date.now()) previews.push({ id: pid, label: m.l || "", expires: m.e, url: "/v/" + pid });
   }
-  const { ai, payTries, price, due, team, designer, qcBy, stage, qc, revFree, revUsed, ...rest } = job;
+  const { ai, payTries, price, due, team, designer, qcBy, stage, qc, revFree, revUsed, needsOrder, ...rest } = job;
   if (rest.order) rest.order = normCode(rest.order);
   // free revisions: the number set for this case, else the usual number from Settings; used = times sent back to design
   const custom = typeof revFree === "number";
@@ -1153,7 +1154,7 @@ async function handleJobs(request, env, url, who) {
     const own = await ownerIds(env, who.email, true);
     if (own.length < TRIAL_CASES && (await loadSettings(env)).autoTrial) { job.trial = true; job.pay = "trial"; }
     await orderForNewJob(env, job);
-    await saveJob(env, job);
+    await saveJob(env, job, false);
     await env.CASES.put("own:" + who.email, JSON.stringify([job.id, ...own.filter((x) => x !== job.id)].slice(0, 2000)));
     return json({ job: await jobView(env, job) }, 201);
   }
@@ -1751,6 +1752,19 @@ function jsonInsert(DB, table, cols, list, tail = "") {
   const sel = cols.map((c) => `json_extract(value, '$.${c}')`).join(", ");
   return DB.prepare(`INSERT INTO ${table} (${cols.join(", ")}) SELECT ${sel} FROM json_each(?) ${tail}`).bind(JSON.stringify(list));
 }
+// One new order with the next number of its day (yymmdd + 01, 02…), worked out inside the INSERT itself: the database runs
+// one write at a time, so orders saved at the same moment (several staff, portal cases arriving together) never get the
+// same code and no number is skipped. o carries every column; code, base and seq are filled in here, o.search holds the
+// searchable text without the code. Use "RETURNING id, code".
+function insertNextCode(DB, cols, o, tail = "") {
+  const pre = o.cday.slice(2, 4) + o.cday.slice(5, 7) + o.cday.slice(8, 10);
+  const x = (c) => (c === "seq" ? "n.s" : c === "code" || c === "base" ? "n.code"
+    : c === "search" ? "n.code || CASE WHEN json_extract(value, '$.search') = '' THEN '' ELSE ' ' || json_extract(value, '$.search') END"
+    : `json_extract(value, '$.${c}')`);
+  return DB.prepare(`INSERT INTO orders (${cols.join(", ")}) SELECT ${cols.map(x).join(", ")} FROM json_each(?)
+    JOIN (SELECT s, ? || CASE WHEN s < 10 THEN '0' ELSE '' END || s AS code FROM (SELECT COALESCE(MAX(seq), 0) + 1 AS s FROM orders WHERE cday = ? AND kind = 'new')) n ${tail}`)
+    .bind(JSON.stringify([o]), pre, o.cday);
+}
 
 /* ---- settings (KV, work without the database) */
 const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false, spamWords: "", blockEmails: "", siteHost: "", freeRevisions: 2 };
@@ -1921,19 +1935,34 @@ async function freeCustomerCode(DB, want) {
   for (let i = 2; i < 999; i++) if (!taken.has(base + i)) return base + i;
   return base + Date.now().toString(36).toUpperCase();
 }
+// Several first cases from new customers can arrive at the same moment. The customer and its login are written in one
+// transaction and the login is never replaced here: when two requests race, one creates the customer and the other
+// (its transaction rolled back by the UNIQUE email or code) picks up that customer, or tries the next free code.
 async function customerForLogin(env, DB, email) {
-  const r = await DB.prepare("SELECT customer_id FROM customer_logins WHERE email = ?").bind(email).first();
-  if (r) return r.customer_id;
+  const find = async () => { const r = await DB.prepare("SELECT customer_id FROM customer_logins WHERE email = ?").bind(email).first(); return r ? r.customer_id : 0; };
+  const have = await find();
+  if (have) return have;
   const u = (await env.CASES.get("user:" + email, "json")) || {};
   const name = clip(u.practice || u.name || email.split("@")[0], 120);
   const now = Date.now(), year = vnDay(now).slice(0, 4);
-  let code = autoCustomerCode("doctor", year, (await customerSeq(DB, year)) + 1);
-  if (await DB.prepare("SELECT 1 FROM customers WHERE code = ?").bind(code).first()) code = await freeCustomerCode(DB, codeFromName(name));
-  const c = { code, name, country: clip(u.country, 60), email, phone: clip(u.phone, 40), contact: clip(u.name, 100) };
-  const ins = await DB.prepare(`INSERT INTO customers (code, name, kind, country, currency, contact, email, phone, auto, search, created_at, updated_at)
-    VALUES (?, ?, 'doctor', ?, 'USD', ?, ?, ?, 1, ?, ?, ?) RETURNING id`).bind(c.code, c.name, c.country, c.contact, c.email, c.phone, custSearch(c), now, now).first();
-  await DB.prepare("INSERT OR REPLACE INTO customer_logins (email, customer_id, at) VALUES (?, ?, ?)").bind(email, ins.id, now).run();
-  return ins.id;
+  for (let tries = 0; tries < 4; tries++) {
+    let code = autoCustomerCode("doctor", year, (await customerSeq(DB, year)) + 1);
+    if (await DB.prepare("SELECT 1 FROM customers WHERE code = ?").bind(code).first()) code = await freeCustomerCode(DB, codeFromName(name));
+    const c = { code, name, country: clip(u.country, 60), email, phone: clip(u.phone, 40), contact: clip(u.name, 100) };
+    try {
+      await DB.batch([
+        DB.prepare(`INSERT INTO customers (code, name, kind, country, currency, contact, email, phone, auto, search, created_at, updated_at)
+          VALUES (?, ?, 'doctor', ?, 'USD', ?, ?, ?, 1, ?, ?, ?)`).bind(c.code, c.name, c.country, c.contact, c.email, c.phone, custSearch(c), now, now),
+        DB.prepare("INSERT INTO customer_logins (email, customer_id, at) SELECT ?, id, ? FROM customers WHERE code = ?").bind(email, now, c.code),
+      ]);
+    } catch (err) {
+      if (!/UNIQUE/i.test(String(err && err.message))) throw err;
+    }
+    const got = await find();
+    if (got) return got;
+    await sleep(20 + Math.random() * 60);
+  }
+  throw new Error("no free customer code");
 }
 
 /* ---- portal cases become orders, and their workflow is copied into the order */
@@ -1946,27 +1975,32 @@ function jobOrderStatus(job) {
   return { qc: "qc", fix: "fix", ready: "ready", design: "design" }[job.stage] || (job.designer ? "design" : "new");
 }
 // New portal case: create its order (before the case is first saved, so the case carries the order code).
+// If that fails (database busy or down), the case is marked needsOrder and saveJob tries again on its next change.
 async function orderForNewJob(env, job) {
   if (!env.DB) return;
   try {
     const DB = await bookDb(env);
+    if (job.needsOrder) { // a later try: the first one may have gone through after all
+      const had = await DB.prepare("SELECT id, code FROM orders WHERE job_id = ?").bind(job.id).first();
+      if (had) { job.orderId = had.id; job.order = had.code; delete job.needsOrder; return; }
+    }
     const cid = await customerForLogin(env, DB, job.owner);
     const cust = await DB.prepare("SELECT currency FROM customers WHERE id = ?").bind(cid).first();
     const day = vnDay(job.created);
-    for (let tries = 0; tries < 4; tries++) {
-      const seq = (await nextSeq(DB, day)) + tries;
-      const code = codeOf(day, seq);
-      const o = { code, base: code, cday: day, seq, kind: "new", customer_id: cid, ref: job.title, service: job.service, teeth: job.teeth,
-        material: job.material, shade: job.shade, notes: job.notes, status: "new", received_at: job.created, day, currency: (cust && cust.currency) || "USD",
-        charge: job.trial ? "free" : "charge", source: "portal", job_id: job.id, login: job.owner, created_by: job.owner, created_at: job.created, updated_at: job.created };
-      o.search = searchText({ ...o, patient: "", doctor: "", clinic: "" });
+    const o = { code: "", base: "", cday: day, seq: 0, kind: "new", customer_id: cid, ref: job.title, service: job.service, teeth: job.teeth,
+      material: job.material, shade: job.shade, notes: job.notes, status: "new", received_at: job.created, day, currency: (cust && cust.currency) || "USD",
+      charge: job.trial ? "free" : "charge", source: "portal", job_id: job.id, login: job.owner, created_by: job.owner, created_at: job.created, updated_at: job.created };
+    o.search = searchText({ ...o, patient: "", doctor: "", clinic: "" });
+    // the number is taken inside the INSERT (cases arriving together never share it); one more try only for a typed-in clash
+    for (let tries = 0; tries < 2; tries++) {
       try {
-        const r = await jsonInsert(DB, "orders", Object.keys(o), [o], "RETURNING id").first();
-        job.orderId = r.id; job.order = code;
+        const r = await insertNextCode(DB, Object.keys(o), o, "RETURNING id, code").first();
+        job.orderId = r.id; job.order = r.code; delete job.needsOrder;
         return;
       } catch (err) { if (!/UNIQUE/i.test(String(err && err.message))) throw err; }
     }
   } catch (err) { console.error("order for job", err && err.message); }
+  job.needsOrder = 1;
 }
 // After a portal case changes: copy status / assignment into the order; ev = a line for the team chat.
 async function syncJobOrder(env, job, ev) {
@@ -2842,15 +2876,13 @@ async function createOrder(env, DB, b, who, now) {
   } else if (parent) {
     const code = await childCode(DB, parent, kind);
     codes = [{ code, base: (parseCode(code) || {}).root || parent.base, cday: parent.cday, seq: parent.seq }];
-  } else {
-    const seq = await nextSeq(DB, day);
-    codes = [0, 1, 2].map((k) => ({ code: codeOf(day, seq + k), cday: day, seq: seq + k })).map((c) => ({ ...c, base: c.code }));
-  }
-  for (const c of codes) {
+  } else codes = null; // the next number of the day, taken inside the INSERT (orders saved at the same moment never share it)
+  for (let tries = 0; tries < (codes ? codes.length : 2); tries++) {
+    const c = codes ? codes[tries] : { code: "", base: "", cday: day, seq: 0 };
     const o = { ...base, ...c };
     o.search = searchText(o);
     try {
-      const ins = await jsonInsert(DB, "orders", ORDER_COLS, [o], "RETURNING id").first();
+      const ins = await (codes ? jsonInsert(DB, "orders", ORDER_COLS, [o], "RETURNING id") : insertNextCode(DB, ORDER_COLS, o, "RETURNING id")).first();
       const q = [];
       if (items.length) q.push(jsonInsert(DB, "order_items", ITEM_COLS, items.map((x) => ({ ...x, order_id: ins.id }))));
       q.push(DB.prepare(TECH_COST_SQL + "id = ?").bind(ins.id));
@@ -2861,7 +2893,7 @@ async function createOrder(env, DB, b, who, now) {
       return orderOut(await DB.prepare(ORDER_SELECT + " WHERE o.id = ?").bind(ins.id).first(), who);
     } catch (err) {
       if (!/UNIQUE/i.test(String(err && err.message))) throw err;
-      if (codes.length === 1) throw bookErr("Mã đơn " + c.code + " đã có.", 409);
+      if (codes && codes.length === 1) throw bookErr("Mã đơn " + c.code + " đã có.", 409);
     }
   }
   throw bookErr("Không tạo được mã đơn, thử lại.", 409);
