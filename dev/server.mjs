@@ -288,6 +288,12 @@ async function payMock(req, res) {
 const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` , ...(process.env.NO_AI ? {} : { AI }), ...(process.env.R2 ? { FILES } : {}), ...payEnv };
 
 http.createServer(async (req, res) => {
+  if (req.url === "/__test/exec" && req.method === "POST") { // test hook: change one row to set up a state (local emulator only)
+    const chunks = []; for await (const c of req) chunks.push(c);
+    try { const b = JSON.parse(Buffer.concat(chunks).toString() || "{}"); const r = sdb.prepare(b.sql).run(...(b.params || [])); sendJson(res, 200, { changes: Number(r.changes) }); }
+    catch (e) { sendJson(res, 400, { error: String(e) }); }
+    return;
+  }
   if (req.url.startsWith("/__test/sql?")) { // test hook: read-only look into the database
     const q = new URL(req.url, "http://x").searchParams.get("q") || "";
     let out;

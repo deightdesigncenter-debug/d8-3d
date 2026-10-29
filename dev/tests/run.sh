@@ -69,6 +69,8 @@ stop
 # case files in an R2 bucket (FILES): kept with the case, legal pages say so
 start R2=1
 run revisions-r2 node dev/tests/revisions.test.mjs
+run filecopy-r2 node dev/tests/filecopy.test.mjs
+run filecopy-ui python3 dev/tests/filecopy_ui.py "$OUT/filecopy"
 stop
 
 # the database bound under another variable name still works

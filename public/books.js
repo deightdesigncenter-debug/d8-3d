@@ -971,6 +971,23 @@
         D8.done(save, "Đã lưu");
       } catch (err) { D8.toast(err.message); } finally { D8.busy(save, false); }
     });
+    const cf = $("copyKvFiles");
+    if (cf) cf.addEventListener("click", async () => {
+      D8.busy(cf, true);
+      const note = $("copyKvNote");
+      let copied = 0, lost = [], left = 1;
+      try {
+        // each call copies a few cases; repeat until none is left (or a call makes no progress)
+        while (left > 0) {
+          const r = await api("/api/settings/files", { method: "POST", body: {} });
+          copied += r.copied; lost = lost.concat(r.lost || []); left = r.left;
+          if (note) note.textContent = `Đã chép ${copied} file${lost.length ? `, ${lost.length} file đã hết hạn trong KV nên không chép được` : ""}. Còn ${left} ca.`;
+          if (!r.copied && !(r.lost || []).length) break;
+        }
+        D8.toast(left ? "Chưa chép hết, bấm lại để chép tiếp." : "Đã chép xong file cũ sang R2.");
+      } catch (err) { D8.toast(err.message); }
+      finally { D8.busy(cf, false); drawSettings(); }
+    });
     for (const [id, k] of [["setPay", "onlinePay"], ["setTrial", "autoTrial"]]) {
       const el = $(id);
       el.addEventListener("change", async () => {
@@ -1017,7 +1034,13 @@
       ? `<p class="muted" id="caseStore" style="margin:14px 0 0">Thông tin ca, tin nhắn, ghi chú và danh sách file lưu trong cơ sở dữ liệu D1${typeof c.count === "number" ? ` (${esc(c.count)} ca${c.left ? `, còn ${esc(c.left)} ca cũ đang được chép từ KV` : ""})` : ""}.
           Nhiều người lưu cùng một ca cùng lúc thì không ai mất thay đổi của ai.</p>`
       : `<p class="muted" id="caseStore" style="margin:14px 0 0">Thông tin ca đang lưu trong KV vì chưa nối cơ sở dữ liệu D1 (xem mục Cơ sở dữ liệu ở trên). Khi nối D1, các ca tự chép sang.</p>`;
-    return `<section class="card" id="storeCard"><h2 class="h-caps">Lưu trữ file ca</h2>${body}${data}</section>`;
+    // files still in KV (kept 60 days) move into R2 with this button; nothing is deleted
+    const copy = f.store === "r2" && typeof c.kvCases === "number"
+      ? (c.kvCases
+        ? `<div style="margin-top:14px"><button class="btn btn-primary small" type="button" id="copyKvFiles"${can("staff.manage") ? "" : " disabled"}>Chép file cũ từ KV sang R2 (còn ${esc(c.kvCases)} ca)</button> <span class="muted" id="copyKvNote"></span></div>`
+        : `<p class="muted" style="margin:14px 0 0">Không còn file cũ nào trong KV; mọi file đều ở R2.</p>`)
+      : "";
+    return `<section class="card" id="storeCard"><h2 class="h-caps">Lưu trữ file ca</h2>${body}${data}${copy}</section>`;
   }
 
   // Contact-form anti-spam: what is on, Turnstile status, and the owner's own block lists.

@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-26.4"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-29.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -1174,8 +1174,60 @@ async function caseStoreInfo(env) {
   try {
     const DB = await bookDb(env), left = (await kvJobsLeft(env, DB)).length;
     const r = await DB.prepare("SELECT COUNT(*) AS n FROM jobs").first();
-    return { store: "d1", count: r ? r.n : 0, left };
+    return { store: "d1", count: r ? r.n : 0, left, kvCases: await kvFileCount(DB) };
   } catch (err) { return { store: "d1", error: String(err && err.message || err).slice(0, 200) }; }
+}
+// Case files still in KV: a file record with st "kv" (not "kv-lost", which KV had already dropped). Counted per case.
+const KV_FILE_LIKE = '%"st":"kv"%';
+async function kvFileCount(DB) {
+  const r = await DB.prepare("SELECT COUNT(*) AS n FROM jobs WHERE doc LIKE ?").bind(KV_FILE_LIKE).first();
+  return r ? r.n : 0;
+}
+// "Chép file cũ sang R2": the files still in KV are copied into R2 under the same keys, the file record says "r2" with
+// no expiry, so they are kept with the case. A call does a few cases and stops before the Workers limit of subrequests
+// per request (each part is one KV read and one R2 write); the settings page calls it again until nothing is left.
+// A file whose parts KV has already dropped (after 60 days) is marked "kv-lost" and not tried again.
+const KV_COPY_OPS = 36; // of the 50 subrequests a request may make
+async function copyKvFiles(env) {
+  if (!env.FILES) throw Object.assign(new Error("Chưa gắn R2 (biến FILES) nên chưa chép được file."), { status: 409 });
+  if (!jobsInD1(env)) throw Object.assign(new Error("Chưa nối cơ sở dữ liệu D1."), { status: 409 });
+  const DB = await bookDb(env);
+  const ids = (await DB.prepare("SELECT id FROM jobs WHERE doc LIKE ? LIMIT 50").bind(KV_FILE_LIKE).all()).results.map((x) => x.id);
+  const out = { copied: 0, lost: [] }, ctx = { ops: 1 }; // ctx.ops counts the subrequests of this call
+  let made = 0; // a call always makes progress, even when the first file is large
+  for (const id of ids) {
+    const job = await loadJob(env, id); ctx.ops++;
+    for (const f of (job && job.files) || []) {
+      if (f.st !== "kv") continue;
+      if (made && ctx.ops + 2 * (f.parts || 1) + 2 > KV_COPY_OPS) return copyKvReport(DB, out);
+      const r = await copyKvFile(env, id, f.fid, ctx);
+      made++;
+      if (r === "r2") out.copied++;
+      else if (r === "lost") out.lost.push(f.name);
+    }
+  }
+  return copyKvReport(DB, out);
+}
+async function copyKvReport(DB, out) {
+  return { copied: out.copied, lost: out.lost, left: await kvFileCount(DB) };
+}
+async function copyKvFile(env, id, fid, ctx) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const job = await loadJob(env, id); ctx.ops++;
+    const f = job && (job.files || []).find((x) => x.fid === fid);
+    if (!f || f.st !== "kv") return "gone"; // changed since it was listed
+    const to = partStore(env, "r2");
+    let complete = true;
+    for (let n = 0; n < (f.parts || 1); n++) {
+      const data = await env.CASES.get(partKey(id, fid, n), "arrayBuffer"); ctx.ops++;
+      if (!data) { complete = false; break; }
+      await to.put(partKey(id, fid, n), data); ctx.ops++;
+    }
+    if (complete) { f.st = "r2"; f.exp = 0; } else f.st = "kv-lost";
+    try { await saveJob(env, job, false); ctx.ops++; return complete ? "r2" : "lost"; }
+    catch (err) { if (!err.conflict) throw err; await sleep(10 + Math.random() * 50 * (attempt + 1)); }
+  }
+  throw conflictErr();
 }
 const jobItem = (id, m) => ({ id, owner: m.o, title: m.t, status: m.s, created: m.c, updated: m.u, lastBy: m.lb, storedMB: m.sz || 0,
   service: m.sv || "", ownerName: m.on || "", trial: !!m.tr, price: m.p ?? null, pay: m.py || "",
@@ -2227,6 +2279,11 @@ async function handleBook(request, env, url, who) {
   const actor = who.email || "D.EIGHT", actorName = clip(who.name, 80) || "D.EIGHT";
 
   // settings work without the database
+  if (path === "/api/settings/files" && method === "POST") { // copy the case files still in KV into R2
+    if (!who.can("staff.manage")) return deny();
+    try { return json(await copyKvFiles(env)); }
+    catch (err) { return json({ error: err.message || String(err) }, err.status || 500); }
+  }
   if (path === "/api/settings") {
     if (method === "GET") return who.can("staff.manage") || who.can("billing.edit") ? json({ settings: await loadSettings(env), db: !!env.DB, turnstile: turnstileOn(env), spam: { minSec: CONTACT_MIN_MS / 1000, perIp: CONTACT_PER_IP, daily: MSG_DAILY_CAP }, host: url.hostname,
       files: { store: activeStore(env), keepDays: FILE_KEEP_DAYS }, cases: await caseStoreInfo(env) }) : deny();

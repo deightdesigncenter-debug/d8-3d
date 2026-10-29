@@ -48,6 +48,10 @@ The owner wants the site to run without errors or jank, and every new feature ch
   to staff and the customer (raw fields stay internal). Tests: `dev/tests/revisions.test.mjs` (also with `R2=1`).
 - Case files: in R2 (`FILES`) they are kept with the case (`exp: 0`, shown "lưu cùng ca"); in KV they expire after 60 days.
   privacy / terms carry both texts in `<!--store:r2-->` / `<!--store:kv-->` blocks; `publicPage` keeps the one that matches.
+  Settings › Lưu trữ file ca › "Chép file cũ từ KV sang R2" (`POST /api/settings/files`, staff.manage, `copyKvFiles`): copies
+  each part to R2 under the same key and sets the file record to `st: "r2"`, `exp: 0`; a file whose parts KV already dropped
+  becomes `st: "kv-lost"` (not tried again). A call does ~36 subrequests' worth (Workers free limit 50); the page repeats it.
+  Tests: `dev/tests/filecopy.test.mjs` + `filecopy_ui.py` (run.sh, R2 block; `/__test/exec` writes one row in the emulator only).
   Never add an R2 lifecycle rule for `jf:`.
 - People on the site: Danny Do = client contact (WhatsApp, email, contact form); Nhut Hoa = design technician (About › team).
 - Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
