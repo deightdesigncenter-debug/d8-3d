@@ -35,6 +35,10 @@ The owner wants the site to run without errors or jank, and every new feature ch
 - Type (owner's choice 2026-10-25): one family, Be Vietnam Pro (300–700). `--f-display` = Be Vietnam Pro; page headings
   (home, About, legal / portal bands) are bold, sentence case, slightly negative tracking; small labels, buttons, eyebrows
   stay in spaced caps. Lexend Exa is gone. Noto Serif Display stays only for the serif accent lines (slogans, English in VI).
+- Homepage hero slide 1 (owner's picture, 2026-10-29): `site/hero-arch.webp` (1448×740) + `hero-arch-760.webp`, cut from the
+  owner's image below its baked-in logo (the header already carries the logo); preloaded with `imagesrcset`, `fetchpriority=high`.
+  `.slide-art.hero1` runs wider than the screen on tablet (112vw) and phone (132vw) so the arch fills the width (stage has
+  overflow hidden). `hero-full-mouth.webp` stays: `snap.js` uses it as the 3D-link snapshot fallback.
 - Homepage, Lumina-style: "Why D.EIGHT" is a 4×2 picture/text chequerboard of real CAD screens (2 columns on tablet,
   stacked on phone); a full-width strip of the 3 screen recordings (`#recordings`, same play-on-screen and no-button rules, logic in
   `site/home.js`; captions are `pointer-events: none`) links to `/about#screens` and `/about#clips`.

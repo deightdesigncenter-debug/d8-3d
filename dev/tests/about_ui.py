@@ -186,6 +186,12 @@ with sync_playwright() as p:
     ok(pg.eval_on_selector_all('#about a[href="/about"], #about a[href="/about#case"]', "e => e.length") == 2, "homepage About section links to the page and the featured case")
     ok(pg.eval_on_selector('#work a[href="/about#screens"]', "e => !!e"), "Recent designs links to more work")
     ok(pg.eval_on_selector("#about .about-art img", "e => e.getAttribute('loading') === 'lazy' && e.getAttribute('width') && e.getAttribute('height')"), "homepage About picture is lazy and sized")
+    # first picture of the homepage: the owner's full-arch design (2026-10-29), loaded first, sized, on the right
+    hero = pg.eval_on_selector("#stage .slide.on .slide-art img", """i => { const r = i.getBoundingClientRect(); return { src: i.currentSrc, ok: i.complete && i.naturalWidth > 0,
+        sized: !!(i.getAttribute('width') && i.getAttribute('height')), lazy: i.loading === 'lazy', pri: i.getAttribute('fetchpriority'), left: r.left, right: r.right, top: r.top, bottom: r.bottom }; }""")
+    ok("/site/hero-arch" in hero["src"] and hero["ok"] and hero["sized"] and not hero["lazy"] and hero["pri"] == "high", "homepage hero: the new full-arch picture, loaded first and sized (%s)" % hero["src"].rsplit("/", 1)[-1])
+    ok(pg.eval_on_selector_all('link[rel="preload"][as="image"]', "e => e.some(l => /hero-arch/.test(l.href) && /hero-arch-760/.test(l.getAttribute('imagesrcset') || ''))"), "homepage hero is preloaded, with the small size for phones")
+    ok(hero["left"] > 1366 * 0.3 and hero["right"] <= 1366 + 1 and hero["top"] >= 0, "homepage hero sits on the right, inside the screen")
     # headings: Be Vietnam Pro bold in sentence case (owner's choice); the old wide display font is gone
     ok(pg.eval_on_selector_all('link[rel="stylesheet"][href*="fonts.googleapis"]', "e => e.length === 1 && e.every(l => !/Lexend/.test(l.href) && /Be\\+Vietnam\\+Pro:wght@300;400;500;600;700/.test(l.href))"), "fonts: Be Vietnam Pro 300-700, no Lexend Exa download")
     hs = pg.eval_on_selector_all("#stage h1, .sec-head h2", "e => e.map(h => [getComputedStyle(h).fontFamily.split(',')[0].replace(/\\\"/g, ''), getComputedStyle(h).fontWeight, getComputedStyle(h).textTransform])")
@@ -220,6 +226,9 @@ with sync_playwright() as p:
     c.close()
     # homepage on a phone: each Why picture sits above its text, the photo strip stacks
     c, pg = page({"width": 390, "height": 844}, True); pg.goto(B + "/"); pg.wait_for_timeout(500)
+    ph = pg.eval_on_selector("#stage .slide.on .slide-art img", "i => { const r = i.getBoundingClientRect(), t = document.querySelector('#stage .slide.on .chip').getBoundingClientRect(); return { w: r.width, mid: (r.left + r.right) / 2, bottom: r.bottom, chip: t.top, src: i.currentSrc }; }")
+    ok(ph["w"] >= 390 and abs(ph["mid"] - 195) < 40 and ph["bottom"] <= ph["chip"], "phone: the hero picture fills the width, centred, above the text (%dpx wide)" % ph["w"])
+    ok(pg.evaluate("document.documentElement.scrollWidth") <= 390, "phone: the wide hero picture adds no sideways scroll")
     pg.evaluate("document.getElementById('why').scrollIntoView({behavior: 'instant'})"); pg.wait_for_timeout(400)
     ok(pg.eval_on_selector("#why .checker", "e => { const k = [...e.children]; return k.every((c, i) => i % 2 || c.getBoundingClientRect().bottom <= k[i + 1].getBoundingClientRect().top + 1); }"), "phone: each Why picture sits above its text")
     ok(pg.eval_on_selector("#recordings .strip", "e => getComputedStyle(e).gridTemplateColumns.split(' ').length") == 1, "phone: recordings stack")
