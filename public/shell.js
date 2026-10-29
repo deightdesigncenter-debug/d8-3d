@@ -202,7 +202,8 @@
     "tr.label": ["Translated", "Bản dịch"],
     "tr.hide": ["Hide translation", "Ẩn bản dịch"],
     "tr.show": ["Show translation", "Xem bản dịch"],
-    "tr.opened": ["Opened Google Translate in a new tab.", "Đã mở Google Dịch ở thẻ mới."],
+    "tr.off": ["Automatic translation is not switched on yet.", "Chưa bật dịch tự động trên web."],
+    "tp.is": ["{name} is typing…", "{name} đang nhập…"],
     "zip.btn": ["Download all (.zip)", "Tải tất cả (.zip)"],
     "zip.busy": ["Preparing {i}/{n}…", "Đang gom file {i}/{n}…"],
   });
@@ -290,7 +291,6 @@
       b.disabled = true; b.textContent = D8.t("tr.busy");
       try {
         const r = await D8.translate({ jobId: job.id, at, text: m.text, to });
-        if (r.opened) { D8.toast(D8.t("tr.opened")); b.disabled = false; b.textContent = D8.t("tr.btn"); return false; }
         m.tr = { ...(m.tr || {}), [to]: r.text };
         const bub = b.closest(".bub"), div = document.createElement("div");
         div.className = "bub-tr"; div.innerHTML = `<span>${D8.esc(D8.t("tr.label"))}</span>`; div.appendChild(document.createTextNode(r.text));
@@ -311,7 +311,7 @@
     const auto = root.parentElement && root.parentElement.querySelector("[data-tr-auto]");
     if (auto) {
       const key = "d8-autotr-" + (isAdminPage ? "admin" : "portal");
-      let on = false; try { on = localStorage.getItem(key) === "1"; } catch {}
+      let on = true; try { const saved = localStorage.getItem(key); if (saved !== null) on = saved === "1"; } catch {}
       auto.closest("label").hidden = !D8.aiOn;
       auto.checked = on;
       auto.onchange = () => { try { localStorage.setItem(key, auto.checked ? "1" : "0"); } catch {} if (auto.checked) runAll(); };
@@ -456,9 +456,57 @@
       if (!(err.data && err.data.code === "no_ai") && err.status !== 0) throw err;
       const t = await deviceTranslate(text, to);
       if (t) return { text: t, saved: false };
-      window.open("https://translate.google.com/?sl=auto&tl=" + to + "&op=translate&text=" + encodeURIComponent(text), "_blank", "noopener");
-      return { text: "", opened: true };
+      throw Object.assign(new Error(D8.t("tr.off")), { code: "no_translate" });
     }
+  };
+
+  /* ---- live case chat: "is typing" line, a small poll, and a typing ping for the composer ---- */
+  D8.typingHtml = (t) => `<div class="typing" id="typingLine"${t ? "" : " hidden"}><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${D8.esc(t ? D8.t("tp.is").replace("{name}", t.name || "") : "")}</span></div>`;
+  D8.paintTyping = (t) => {
+    const el = document.getElementById("typingLine");
+    if (!el) return;
+    el.hidden = !t;
+    el.lastElementChild.textContent = t ? D8.t("tp.is").replace("{name}", t.name || "") : "";
+  };
+  // Every `every` ms: who is typing, and the case itself only when its version moved. onJob returns false
+  // when the page must not redraw now (the person has a draft or picked files); the case is kept and drawn later.
+  D8.liveCase = function ({ jobId, version, onJob, onTyping, every = 2500 }) {
+    const id = encodeURIComponent(jobId);
+    let fetched = version || 0, pending = null, busy = false, timer = null;
+    const api = {
+      sync(j) { fetched = j.updated; pending = null; },
+      stop() { clearInterval(timer); timer = null; },
+    };
+    const tick = async () => {
+      if (busy || document.hidden) return;
+      busy = true;
+      try {
+        const st = (await D8.api(`/api/jobs/${id}/state`)).state;
+        if (onTyping) onTyping(st.typing || null);
+        if (st.updated !== fetched) {
+          const j = (await D8.api(`/api/jobs/${id}`)).job;
+          fetched = j.updated;
+          pending = onJob(j) === false ? j : null;
+        } else if (pending && onJob(pending) !== false) pending = null;
+      } catch (err) { if (err && (err.status === 401 || err.status === 404)) api.stop(); }
+      finally { busy = false; }
+    };
+    timer = setInterval(tick, every);
+    return api;
+  };
+  // Pings "typing" while there is text in the box (at most every 2 s); stops when it is empty, on blur, or by stop().
+  D8.typingHelper = function (jobId, box) {
+    let last = 0, on = false, idle = null;
+    const send = (v) => { D8.api(`/api/jobs/${encodeURIComponent(jobId)}/typing`, { method: "POST", body: { on: v } }).catch(() => {}); };
+    const stop = () => { clearTimeout(idle); if (on) { on = false; last = 0; send(false); } };
+    const input = () => {
+      if (!box.value.trim()) return stop();
+      clearTimeout(idle); idle = setTimeout(stop, 4000);
+      if (Date.now() - last > 2000) { last = Date.now(); on = true; send(true); }
+    };
+    box.addEventListener("input", input);
+    box.addEventListener("blur", stop);
+    return { stop, detach() { box.removeEventListener("input", input); box.removeEventListener("blur", stop); stop(); } };
   };
 
   // Download several files as one ZIP (stored, no extra compression), built in the browser.

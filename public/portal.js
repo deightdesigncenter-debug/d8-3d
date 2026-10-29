@@ -164,7 +164,7 @@
       return `<a class="pt-row${needs(x) ? " need" : ""}" href="#/case/${esc(x.id)}">
         <div>${needs(x) ? '<span class="attn-dot" aria-hidden="true"></span>' : ""}<span class="id">${esc(x.order || x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
         <span class="meta">${esc(T("p.sent").replace("{d}", D8.fmtDate(x.created)))} · ${esc(T("p.updated").replace("{t}", D8.ago(x.updated)))}</span>
-        <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${x.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>` : x.pay === "check" ? `<span class="pay pay-check">${esc(T("bill.check"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
+        <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${x.status === "delivered" && x.pay !== "due" && x.pay !== "check" ? (x.pay === "paid" ? `<span class="pay pay-paid">${esc(T("bill.paid"))}</span>` : x.trial ? "" : `<span class="pay pay-due">${esc(T("bill.unpaid"))}</span>`) : ""}${x.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>` : x.pay === "check" ? `<span class="pay pay-check">${esc(T("bill.check"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
     }).join("");
     const empty = !items.length
       ? `<div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">${esc(T("p.empty.h"))}</h2><p>${esc(T("p.empty.p"))}</p>
@@ -183,8 +183,9 @@
   }
 
   /* ------------------------------------------------------------ case */
-  let pollT = null;
-  function stopPoll() { clearInterval(pollT); pollT = null; }
+  let live = null, typingH = null, typingNow = null;
+  // leaving a case: stop the live poll and the typing ping
+  function stopPoll() { if (live) live.stop(); live = null; if (typingH) typingH.detach(); typingH = null; typingNow = null; }
   async function renderCase(id) {
     stopPoll();
     if (!current || current.id !== id) { current = null; loading("case"); }
@@ -194,7 +195,7 @@
       return failed(err.status === 404 ? T("p.err.nf") : err.message);
     }
     drawCase(current);
-    pollT = setInterval(refreshCase, 60000);
+    startLive(id);
     if (payBack && payBack.id === id) {
       const pb = payBack; payBack = null;
       if (pb.via === "cancel") D8.toast(T("pay.cancel"));
@@ -212,22 +213,30 @@
       if (loud) D8.toast(T(out.paid ? "pay.ok" : out.sent ? "pay.sent" : out.job.payHeld ? "pay.held" : "pay.wait"));
     } catch (err) { if (loud) D8.toast(err.message); }
   }
-  async function refreshCase() {
-    if (document.hidden || !current || busy) return;
-    const box = document.getElementById("composer");
-    if ((box && box.value.trim()) || document.querySelector("#addList li")) return; // don't redraw while the customer is typing or picking files
-    try {
-      const j = (await D8.api("/api/jobs/" + current.id)).job;
-      if (j.updated !== current.updated) { current = j; drawCase(j); }
-    } catch {}
+  // every 2.5 s: is the designer / customer typing, and has the case changed? The page is redrawn only when it can be
+  // without losing what the customer is writing or picking.
+  function startLive(id) {
+    if (live) live.stop();
+    live = D8.liveCase({
+      jobId: id, version: current && current.updated,
+      onTyping: (t) => { typingNow = t; D8.paintTyping(t); },
+      onJob: (j) => {
+        if (!current || current.id !== id || busy) return false;
+        const box = document.getElementById("composer");
+        if ((box && box.value.trim()) || document.querySelector("#addList li")) return false;
+        current = j; drawCase(j); return true;
+      },
+    });
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && pollT) refreshCase(); });
 
   function markSeen(j) { const s = store.get("d8-seen", {}); s[j.id] = j.updated; const keys = Object.keys(s); if (keys.length > 300) delete s[keys[0]]; store.set("d8-seen", s); }
 
   function drawCase(j) {
     markSeen(j);
     const st = j.status;
+    const oldBox = document.getElementById("composer"), oldTh = document.getElementById("thread");
+    const draft = oldBox ? oldBox.value : "", hadFocus = !!oldBox && document.activeElement === oldBox;
+    const atBottom = !oldTh || oldTh.scrollHeight - oldTh.scrollTop - oldTh.clientHeight < 80;
     const idx = st === "needs_info" ? 0 : STEPS.indexOf(st);
     const steps = STEPS.map((s, i) => {
       const cls = st === "cancelled" ? "" : i < idx || (i === idx && s === "delivered") ? "done" : i === idx ? "cur" : "";
@@ -237,11 +246,14 @@
     if (st === "needs_info") alerts.push(`<div class="pt-alert warn">${ICON.warn}<div>${esc(T("p.c.needs"))}</div></div>`);
     if (st === "cancelled") alerts.push(`<div class="pt-alert mute">${ICON.info}<div>${esc(T("p.c.cancelled"))}</div></div>`);
     if (st === "delivered") alerts.push(`<div class="pt-alert ok">${ICON.check}<div>${esc(T("p.c.delivered"))}</div></div>`);
+    if (j.assigned && ["in_design", "review", "approved"].includes(st)) alerts.push(`<div class="pt-alert">${ICON.info}<div>${esc(T("p.c.assigned"))}</div></div>`);
     if (st === "approved") alerts.push(`<div class="pt-alert ok">${ICON.check}<div>${esc(T("p.c.approvedOn").replace("{d}", D8.fmtDate(j.approvedAt || j.updated, true)))}</div></div>`);
 
+    // the 3D preview is shown inside the case as well as a link to open it on its own
     const previews = (j.previews || []).map((p) => `<div class="pv"><span class="ic">${ICON.cube}</span><div class="tx"><b>${esc(p.label || j.title)}</b>
       <small>${esc(T("p.pv.exp").replace("{d}", D8.fmtDate(p.expires)))}</small></div>
-      <a class="btn btn-primary small" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(T("p.pv.open"))}</a></div>`).join("");
+      <a class="btn btn-primary small" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(T("p.pv.open"))}</a></div>
+      <iframe class="case-frame" src="${esc(p.url)}" title="${esc(p.label || j.title)}" loading="lazy" referrerpolicy="no-referrer"></iframe>`).join("");
     const rv = j.rev || { free: 2, used: 0 }, revLeft = Math.max(0, rv.free - rv.used);
     const revLine = `<p class="rev-left">${esc(revLeft ? T("p.ap.rev").replace("{l}", revLeft).replace("{n}", rv.free) : T("p.ap.rev0"))}</p>`;
     const approveBox = st === "review" ? `<div class="approve"><p>${T("p.ap.p")}</p>${revLine}<div class="btns">
@@ -250,6 +262,8 @@
 
     const files = j.files || [];
     const outs = files.filter((f) => f.kind === "output"), ins = files.filter((f) => f.kind !== "output");
+    // HTML results open inside the case (no download needed); the file list keeps the download link
+    const htmlOuts = outs.filter((f) => /\.html?$/i.test(f.name));
     const fileRow = (f) => {
       const ext = (f.name.split(".").pop() || "").slice(0, 4);
       const canDel = f.kind !== "output" && CLIENT_DELETE.includes(st);
@@ -314,6 +328,7 @@
           <section class="card" aria-labelledby="flH">
             <div class="card-head-row"><h2 class="h-caps" id="flH">${esc(T("p.fl.h"))}</h2>
               ${files.length > 1 ? `<button class="btn small" type="button" id="zipAll">${ICON.dl}${esc(T("zip.btn"))}</button>` : ""}</div>
+            ${htmlOuts.map((f) => `<iframe class="case-frame" src="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}?view=1" title="${esc(f.name)}" loading="lazy"></iframe>`).join("")}
             ${outs.length ? `<p class="grp">${esc(T("p.fl.out"))}</p><ul class="files">${outs.map(fileRow).join("")}</ul>` : ""}
             <p class="grp">${esc(T("p.fl.in"))}</p>
             ${ins.length ? `<ul class="files">${ins.map(fileRow).join("")}</ul>` : `<p class="muted" style="margin:0 0 6px">${esc(T("p.fl.none"))}</p>`}
@@ -328,6 +343,7 @@
             <p class="sub"><a href="${esc(D8.waLink(T("p.ms.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">${esc(T("p.ms.wa"))}</a></p>
             <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> ${esc(T("tr.auto"))}</label><button type="button" data-tr-all hidden>${esc(T("tr.all"))}</button></div>
             <div class="thread" id="thread">${thread || `<p class="muted" style="margin:0">${esc(T("p.ms.none"))}</p>`}</div>
+            ${D8.typingHtml(typingNow)}
             <form class="compose" id="composeForm">
               <label class="sr-only" for="composer">${esc(T("p.ms.ph"))}</label>
               <textarea class="input" id="composer" maxlength="4000" placeholder="${esc(T("p.ms.ph"))}"></textarea>
@@ -347,9 +363,12 @@
       </div>`);
 
     const th = document.getElementById("thread");
-    th.scrollTop = th.scrollHeight;
+    if (atBottom) th.scrollTop = th.scrollHeight;
     D8.wireThread(th, j, readLang);
     wireCase(j);
+    const nb = document.getElementById("composer");
+    if (nb && draft) nb.value = draft;
+    if (nb && hadFocus) nb.focus();
   }
 
   function dropZone(id) {
@@ -449,6 +468,8 @@
     });
     // messages
     const form = document.getElementById("composeForm"), box = document.getElementById("composer"), send = document.getElementById("sendMsg");
+    if (typingH) typingH.detach();
+    typingH = D8.typingHelper(j.id, box);
     box.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); form.requestSubmit(); } });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -457,7 +478,9 @@
       const err = document.getElementById("msgErr");
       err.hidden = true; D8.busy(send, true);
       try {
+        if (typingH) typingH.stop();
         current = (await D8.api(`/api/jobs/${j.id}/messages`, { method: "POST", body: { text } })).job;
+        if (live) live.sync(current);
         drawCase(current);
         const c = document.getElementById("composer"); c && c.focus();
         D8.done(document.getElementById("sendMsg"), T("p.ms.sent"));

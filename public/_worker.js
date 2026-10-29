@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-29.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-29.3"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -1357,7 +1357,7 @@ async function jobView(env, job, who = null) {
   const payOpen = job.pay === "due" && (payTries || []).some((t) => t.state === "open" || t.state === "held");
   const held = payOpen && (payTries || []).some((t) => t.state === "held");
   if (rest.paid) rest.paid = { via: rest.paid.via, amount: rest.paid.amount, at: rest.paid.at, confirmed: !!rest.paid.confirmed };
-  return { ...rest, amount, payOpen, payHeld: held, previews };
+  return { ...rest, amount, payOpen, payHeld: held, previews, assigned: !!designer };
 }
 
 async function handleJobs(request, env, url, who) {
@@ -1424,8 +1424,32 @@ async function handleJobs(request, env, url, who) {
   }
 }
 
+// Live chat poll (every 2–3 s while a case is open): the case version and who is typing. Reads one small row when D1 is on.
+const TYPING_MS = 4000;
+async function caseState(env, who, id) {
+  let job;
+  if (jobsInD1(env)) {
+    if (!JOB_ID_RE.test(id)) return json({ error: "Case not found." }, 404);
+    const r = await (await bookDb(env)).prepare("SELECT owner, designer, qc_by, stage, updated FROM jobs WHERE id = ?").bind(id).first();
+    job = r ? { id, owner: r.owner, designer: r.designer, qcBy: r.qc_by, stage: r.stage, updated: r.updated } : null;
+  } else job = await loadJob(env, id);
+  if (!job) return json({ error: "Case not found." }, 404);
+  const isOwner = !!(!who.viaKey && who.email && job.owner === who.email);
+  if (!isOwner && !staffSees(who, job)) return json({ error: "Case not found." }, 404);
+  const by = isOwner ? "client" : "admin";
+  let typing = null;
+  if (jobsInD1(env) && (by === "client" || who.can("cases.chat_read"))) {
+    const other = by === "client" ? "admin" : "client";
+    const t = await (await bookDb(env)).prepare("SELECT name, at FROM typing WHERE job = ? AND side = ? AND at > ?")
+      .bind(id, other, Date.now() - TYPING_MS).first();
+    if (t) typing = { side: other, name: other === "admin" ? "D.EIGHT" : t.name || "" };
+  }
+  return json({ state: { updated: job.updated, typing } });
+}
+
 async function caseRequest(request, env, url, who, m, memo) {
   const method = request.method;
+  if ((m[2] || "") === "/state" && method === "GET") return caseState(env, who, m[1]);
   const job = await loadJob(env, m[1]);
   // The owner always acts as the customer; staff act as D.EIGHT on the cases their permissions show them.
   // Requests from the admin tools (password header) always act as D.EIGHT.
@@ -1443,6 +1467,18 @@ async function caseRequest(request, env, url, who, m, memo) {
 
   if (sub === "" && method === "GET") return json({ job: await jobView(env, job, viewer) });
 
+  // "… is typing": pinged while the composer has text (at most every 2 s); stops when empty or after a message
+  if (sub === "/typing" && method === "POST") {
+    if (!isOwner && !who.can("cases.chat")) return nope();
+    if (!jobsInD1(env)) return json({ ok: true });
+    let b; try { b = await request.json(); } catch { b = {}; }
+    const DB = await bookDb(env);
+    if (b.on) await DB.prepare("INSERT INTO typing (job, side, name, at) VALUES (?, ?, ?, ?) ON CONFLICT (job, side) DO UPDATE SET name = excluded.name, at = excluded.at")
+      .bind(job.id, by, by === "client" ? clip(who.name, 100) : "D.EIGHT", Date.now()).run();
+    else await DB.prepare("DELETE FROM typing WHERE job = ? AND side = ?").bind(job.id, by).run();
+    return json({ ok: true });
+  }
+
   if (sub === "/messages" && method === "POST") {
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
     const text = clip(b.text, 4000);
@@ -1458,6 +1494,7 @@ async function caseRequest(request, env, url, who, m, memo) {
     if (job.thread.length > THREAD_MAX) job.thread = job.thread.slice(-THREAD_MAX);
     job.updated = Date.now(); job.lastBy = by;
     await saveJob(env, job);
+    if (jobsInD1(env)) await (await bookDb(env)).prepare("DELETE FROM typing WHERE job = ? AND side = ?").bind(job.id, by).run().catch(() => {});
     return json({ job: await jobView(env, job, viewer) });
   }
 
@@ -1841,7 +1878,7 @@ async function caseRequest(request, env, url, who, m, memo) {
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
@@ -1968,6 +2005,10 @@ const SCHEMA_V5 = [`CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, owner 
   `CREATE INDEX IF NOT EXISTS j_qc ON jobs (qc_by)`,
   `CREATE INDEX IF NOT EXISTS j_updated ON jobs (updated)`];
 async function migrateV5(DB) { await DB.batch(SCHEMA_V5.map((s) => DB.prepare(s))); }
+// who is typing in a case chat: one row per case and side, refreshed while they type
+const SCHEMA_V6 = [`CREATE TABLE IF NOT EXISTS typing (job TEXT NOT NULL, side TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (job, side))`];
+async function migrateV6(DB) { await DB.batch(SCHEMA_V6.map((s) => DB.prepare(s))); }
 async function migrateV3(DB) {
   for (const sql of SCHEMA_V3) {
     try { await DB.prepare(sql).run(); }
@@ -2001,6 +2042,7 @@ async function bookDb(env) {
     if (v < 3) await migrateV3(env.DB);
     if (v < 4) await migrateV4(env.DB);
     if (v < 5) await migrateV5(env.DB);
+    if (v < 6) await migrateV6(env.DB);
     if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }

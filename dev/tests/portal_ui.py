@@ -48,6 +48,10 @@ with sync_playwright() as p:
         pg.wait_for_function("location.hash.startsWith('#/case/')", timeout=60000); pg.wait_for_timeout(900)
         jid = pg.evaluate("location.hash.split('/')[2]")
         ok(jid.startswith("D8-"), name + ": case created " + jid)
+        ok(pg.locator("#typingLine").count() == 1 and not pg.locator("#typingLine").is_visible(), name + ": typing line present, hidden while nobody types")
+        pg.wait_for_timeout(2700)  # one live poll (every 2.5 s) has run
+        ok(pg.locator("#typingLine").count() == 1 and not pg.locator("#typingLine").is_visible(), name + ": still hidden after a live poll")
+        pg.screenshot(path=f"{OUT}/{name}-case.png", full_page=True)
         # with the order book (D1) the case gets an order code yy/mm/dd/xx, shown to the customer instead of D8-…
         oc = pg.evaluate("D8.api('/api/jobs/' + location.hash.split('/')[2]).then((r) => r.job.order || '')")
         if oc:

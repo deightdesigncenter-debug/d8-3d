@@ -57,6 +57,7 @@
   let jobs = [], jobFilter = "open", jobQuery = "";
   let users = [];
   let current = null;         // job open in the detail panel
+  let caseLive = null, caseTyping = null, caseTypingNow = null; // live poll and typing ping of the open case
   let busy = false;
   const aiTried = new Set(); // cases whose summary was requested automatically in this visit
   const payChecked = new Set(); // cases whose open payments were checked with PayPal/Stripe in this visit
@@ -191,7 +192,7 @@
     loadJobs(false, 30000);
     if (dbOn && D8.refreshOrderBadge) D8.refreshOrderBadge();
   }
-  window.addEventListener("hashchange", route);
+  window.addEventListener("hashchange", () => { stopCaseLive(); route(); });
 
   function setNavCount(href, n) {
     const a = document.querySelector(`#wsNav a[href="${href}"], .sh-sub a[href="${href}"]`);
@@ -277,6 +278,22 @@
     try { [current] = await Promise.all([api("/api/jobs/" + id).then((r) => r.job), D8.config()]); }
     catch (err) { $("p-case").innerHTML = `<div class="pt-empty"><h2 class="h-caps">Không mở được ca</h2><p>${esc(err.message)}</p><a class="btn" href="#jobs">Về danh sách ca</a></div>`; return; }
     drawCase(current);
+    startCaseLive(id);
+  }
+  // Every 2.5 s: is the customer typing, and has the case changed? Redrawn only when no draft or picked files would be lost.
+  function stopCaseLive() { if (caseLive) caseLive.stop(); caseLive = null; if (caseTyping) caseTyping.detach(); caseTyping = null; caseTypingNow = null; }
+  function startCaseLive(id) {
+    stopCaseLive();
+    caseLive = D8.liveCase({
+      jobId: id, version: current && current.updated,
+      onTyping: (t) => { caseTypingNow = t; D8.paintTyping(t); },
+      onJob: (j) => {
+        if (!current || current.id !== id) return false;
+        const box = $("composer");
+        if ((box && box.value.trim()) || ($("outList") && $("outList").children.length)) return false;
+        current = j; drawCase(j); return true;
+      },
+    });
   }
 
   const TEMPLATES = [
@@ -306,6 +323,7 @@
   };
 
   function drawCase(j) {
+    const oldTh = $("thread"), keepBottom = !oldTh || oldTh.scrollHeight - oldTh.scrollTop - oldTh.clientHeight < 80;
     const seen = adminSeen(); seen[j.id] = j.updated; const ks = Object.keys(seen); if (ks.length > 500) delete seen[ks[0]]; store.set("d8-admin-seen", seen); updateJobCount();
     setBand(j.title, j.id + " · gửi " + D8.fmtDate(j.created, true), { back: true, right: stChip(j.status) + (j.trial ? ' <span class="badge-trial" style="background:var(--c-cream);color:var(--c-navy)">Dùng thử</span>' : "") });
     const st = j.status, idx = st === "needs_info" ? 0 : STEPS.indexOf(st);
@@ -414,6 +432,7 @@
     const chatCard = can("cases.chat_read") ? `<section class="card"><h2 class="h-caps">Tin nhắn với khách</h2>${can("cases.chat") ? "" : '<p class="sub">Bạn chỉ được đọc tin nhắn.</p>'}
       <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> Luôn dịch tin của khách</label><button type="button" data-tr-all hidden>Dịch tất cả</button></div>
       <div class="thread" id="thread">${D8.threadHtml(j, "admin", "vi") || '<p class="muted" style="margin:0">Chưa có tin nhắn.</p>'}</div>
+      ${D8.typingHtml(caseTypingNow)}
       ${can("cases.chat") ? `<form class="compose" id="composeForm">
         <div class="tpl">${TEMPLATES.map((t, i) => `<button type="button" data-tpl="${i}">${esc(t[0])}</button>`).join("")}</div>
         <label class="sr-only" for="composer">Tin nhắn</label>
@@ -490,7 +509,7 @@
           ${orderCard}${billing}</aside>
       </div>`;
     const th = $("thread");
-    if (th) { th.scrollTop = th.scrollHeight; D8.wireThread(th, j, "vi"); }
+    if (th) { if (keepBottom) th.scrollTop = th.scrollHeight; D8.wireThread(th, j, "vi"); }
     if ($("jobChat") && D8.orderChat) D8.orderChat($("jobChat"), j.orderId);
     if ($("jobOrderBody")) api("/api/orders/" + j.orderId).then((d) => {
       const o = d.order, box = $("jobOrderBody"); if (!box || !current || current.id !== j.id) return;
@@ -525,6 +544,7 @@
   function wireCase(j) {
     const redraw = (job) => {
       current = job;
+      if (caseLive) caseLive.sync(job);
       const i = jobs.findIndex((x) => x.id === job.id);
       if (i >= 0) Object.assign(jobs[i], { status: job.status, updated: job.updated, lastBy: job.lastBy, trial: !!job.trial, designer: job.designer || "", qcBy: job.qcBy || "", stage: job.stage || "",
         ...("pay" in job ? { price: typeof job.price === "number" ? job.price : null, pay: job.pay || "" } : {}) });
@@ -757,8 +777,7 @@
       const b = $("toEn"); b.disabled = true; b.textContent = "Đang dịch…";
       try {
         const r = await D8.translate({ text, to: "en" });
-        if (r.opened) D8.toast("Đã mở Google Dịch ở thẻ mới. Dán bản tiếng Anh vào ô tin nhắn.");
-        else if (r.text) { orig = text; box.value = r.text; showOrig(); }
+        if (r.text) { orig = text; box.value = r.text; showOrig(); }
       } catch (err) { D8.toast(err.message); }
       b.disabled = false; b.textContent = "Dịch sang tiếng Anh";
     });
@@ -772,12 +791,14 @@
       sugBtn.disabled = false; sugBtn.innerHTML = ICON.spark + "Gợi ý trả lời";
     });
     document.querySelectorAll("#p-case [data-tpl]").forEach((b) => b.addEventListener("click", () => { box.value = TEMPLATES[+b.dataset.tpl][1]; orig = ""; showOrig(); box.focus(); }));
+    if (caseTyping) caseTyping.detach();
+    caseTyping = D8.typingHelper(j.id, box);
     box.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); form.requestSubmit(); } });
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = box.value.trim(); if (!text) return box.focus();
       D8.busy($("sendMsg"), true); $("msgErr").hidden = true;
-      try { redraw((await post("/messages", orig ? { text, original: orig, originalLang: "vi" } : { text })).job); D8.done($("sendMsg"), "Đã gửi"); }
+      try { if (caseTyping) caseTyping.stop(); redraw((await post("/messages", orig ? { text, original: orig, originalLang: "vi" } : { text })).job); D8.done($("sendMsg"), "Đã gửi"); }
       catch (err) { D8.busy($("sendMsg"), false); $("msgErr").textContent = err.message; $("msgErr").hidden = false; }
     });
   }

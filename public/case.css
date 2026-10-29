@@ -316,3 +316,15 @@ html[data-theme="dark"] .v3d { background: radial-gradient(ellipse at 50% 38%, #
 .pt-row.need { border-left: 3px solid var(--err-fill); }
 .attn-dot { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; background: var(--err-fill); vertical-align: 1px;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--err-fill) 22%, transparent); }
+
+/* live case chat: "is typing" line and the inline previews of a case */
+.typing { display: flex; align-items: center; gap: 8px; margin: 10px 2px 0; font-size: 12.5px; color: var(--muted); }
+.typing[hidden] { display: none; }
+.typing .dots { display: inline-flex; gap: 3px; }
+.typing .dots i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .3; animation: typing-dot 1.2s ease-in-out infinite; }
+.typing .dots i:nth-child(2) { animation-delay: .15s; }
+.typing .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes typing-dot { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+.case-frame { display: block; width: 100%; height: min(72vh, 640px); min-height: 340px; border: 1px solid var(--line); border-radius: 12px; margin-top: 12px; background: #fff; }
+@media (max-width: 600px) { .case-frame { min-height: 280px; } }
+@media (prefers-reduced-motion: reduce) { .typing .dots i { animation: none; opacity: .6; } }

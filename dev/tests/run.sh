@@ -27,6 +27,7 @@ start PAY=1
 run rbac      node dev/tests/rbac.test.mjs
 run orders    node dev/tests/orders.test.mjs
 run privacy   node dev/tests/privacy.test.mjs
+run live      node dev/tests/live.test.mjs
 run pay       node dev/tests/pay.test.mjs
 run contact   node dev/tests/contact.test.mjs
 run revisions node dev/tests/revisions.test.mjs
