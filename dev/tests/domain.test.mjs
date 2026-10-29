@@ -87,4 +87,19 @@ r = await get("d8-3d.pages.dev", "/");
 ok(r.status === 200, "no more moving");
 r = await get("localhost", "/robots.txt");
 ok(/Disallow: \/\s*$/m.test(r.body), "robots.txt closed again");
+
+// ---------- addresses the site does not have (e.g. /gioithieu from the previous website) answer "not found"
+const notFound = (x) => x.status === 404 && /Page not found/.test(x.body) && !/Remote dental CAD design, production-ready STL/.test(x.body) && /noindex/.test(x.headers["x-robots-tag"] || "");
+r = await get("localhost", "/gioithieu");
+ok(notFound(r), "an old address answers 404 with the not-found page, not the homepage, and is not indexed");
+r = await get("localhost", "/index.php");
+ok(notFound(r), "an unknown address with an extension is 404 too");
+r = await get("localhost", "/site/khong-co-anh.webp");
+ok(notFound(r), "a missing image is 404, not the homepage");
+r = await get("localhost", "/");
+ok(r.status === 200 && /<title>D\.EIGHT DESIGN CENTER \|/.test(r.body), "the homepage still answers 200");
+for (const p of ["/about", "/privacy", "/terms", "/admin", "/portal", "/stl"]) {
+  r = await get("localhost", p);
+  ok(r.status === 200 && !/Page not found/.test(r.body), `${p} still answers as a page`);
+}
 done();

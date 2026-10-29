@@ -119,7 +119,9 @@ const ASSETS = rpcLike({
     let file = path.join(PUBLIC, p);
     if (p.endsWith("/")) file = path.join(PUBLIC, p, "index.html");
     else if (!path.extname(p)) file = path.join(PUBLIC, p + ".html");
-    if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return new Response("Not found", { status: 404 });
+    // Like Cloudflare Pages in production: an address with no file gets the homepage back (200); the worker turns
+    // that into a "not found" page (see notFoundPage), so old addresses never show the homepage.
+    if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return new Response(fs.readFileSync(path.join(PUBLIC, "index.html")), { headers: { "Content-Type": TYPES[".html"] } });
     return new Response(fs.readFileSync(file), { headers: { "Content-Type": TYPES[path.extname(file)] || "application/octet-stream" } });
   },
 });

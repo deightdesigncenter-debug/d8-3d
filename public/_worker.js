@@ -49,6 +49,9 @@ const AI_MODELS = ["@cf/google/gemma-4-26b-a4b-it", "@cf/meta/llama-3.1-8b-instr
 const PAGES_ORIGIN = "https://d8-3d.pages.dev";
 const PREVIEW_HOST = /^[^.]+\.[^.]+\.pages\.dev$/; // <branch or deploy>.d8-3d.pages.dev
 const PUBLIC_PAGES = new Set(["/", "/index.html", "/about", "/about.html", "/privacy", "/privacy.html", "/terms", "/terms.html"]);
+// Every HTML page the site has. Any other address answers "not found": Pages would otherwise send the homepage back
+// for it, so old addresses from the previous website (e.g. /gioithieu) would show the wrong page.
+const SITE_PAGES = new Set([...PUBLIC_PAGES, "/admin", "/admin.html", "/portal", "/portal.html", "/stl", "/stl.html"]);
 const isLocal = (h) => h === "localhost" || h === "127.0.0.1";
 function siteOf(settings, url) {
   const main = settings.siteHost || "";
@@ -82,6 +85,11 @@ const PRIVATE_HEADERS = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "X-Content-Type-Options": "nosniff",
 };
+// The page for an address the site does not have: 404, never indexed, never the homepage.
+function notFoundPage() {
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>Page not found | D.EIGHT DESIGN CENTER</title><style>html,body{margin:0;min-height:100%;background:#05316E;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{min-height:100vh;display:grid;place-content:center;gap:14px;padding:16px;text-align:center;box-sizing:border-box}h1{margin:0;font-size:clamp(28px,6vw,40px);font-weight:700}p{margin:0;line-height:1.5;opacity:.9}a{color:#fff;font-weight:600}</style></head><body><main><h1>Page not found</h1><p>This address is not part of D.EIGHT DESIGN CENTER.</p><p>Trang này không tồn tại.</p><p><a href="/">Back to the homepage · Về trang chủ</a></p></main></body></html>`;
+  return new Response(html, { status: 404, headers: { ...PRIVATE_HEADERS, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
 // 3D links for doctors send no referrer at all, so the link code never leaves the page.
 const LINK_HEADERS = { ...PRIVATE_HEADERS, "Referrer-Policy": "no-referrer" };
 
@@ -155,6 +163,7 @@ export default {
       if (m) return await ogImage(request, env, m[1]);
 
       const res = await env.ASSETS.fetch(request);
+      if (res.status === 200 && /text\/html/i.test(res.headers.get("Content-Type") || "") && !SITE_PAGES.has(path)) return notFoundPage();
       if (site && PUBLIC_PAGES.has(path) && request.method === "GET" && res.status === 200) return publicPage(res, site, env);
       return withHeaders(res, PRIVATE_HEADERS);
     } catch (err) {
