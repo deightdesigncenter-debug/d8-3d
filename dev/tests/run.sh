@@ -28,6 +28,7 @@ run rbac      node dev/tests/rbac.test.mjs
 run orders    node dev/tests/orders.test.mjs
 run privacy   node dev/tests/privacy.test.mjs
 run live      node dev/tests/live.test.mjs
+run presign-off node dev/tests/presign.test.mjs
 run pay       node dev/tests/pay.test.mjs
 run contact   node dev/tests/contact.test.mjs
 run revisions node dev/tests/revisions.test.mjs
@@ -72,6 +73,11 @@ start R2=1
 run revisions-r2 node dev/tests/revisions.test.mjs
 run filecopy-r2 node dev/tests/filecopy.test.mjs
 run filecopy-ui python3 dev/tests/filecopy_ui.py "$OUT/filecopy"
+stop
+
+# the R2 secrets are set: the Worker signs the upload URLs for the parts (the browser then PUTs to R2)
+start R2=1 R2_KEYS=1
+run presign-r2 env R2_KEYS=1 node dev/tests/presign.test.mjs
 stop
 
 # the database bound under another variable name still works

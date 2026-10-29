@@ -285,7 +285,9 @@ async function payMock(req, res) {
   }
   return sendJson(res, 404, { error: "mock: not found" });
 }
-const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` , ...(process.env.NO_AI ? {} : { AI }), ...(process.env.R2 ? { FILES } : {}), ...payEnv };
+const env = { CASES: KV, ASSETS, UPLOAD_PASSWORD: PASSWORD, GOOGLE_CLIENT_ID: TEST_CLIENT_ID, GOOGLE_JWKS_URL: `http://localhost:${PORT}/__test/jwks` , ...(process.env.NO_AI ? {} : { AI }), ...(process.env.R2 ? { FILES } : {}), ...payEnv,
+  // R2_KEYS=1: the R2 API token secrets are set (test values), so the Worker signs upload URLs for the parts
+  ...(process.env.R2_KEYS ? { R2_ACCESS_KEY_ID: "test-access-key", R2_SECRET_ACCESS_KEY: "test-secret-key", R2_ACCOUNT_ID: "0123456789abcdef0123456789abcdef" } : {}) };
 
 http.createServer(async (req, res) => {
   if (req.url === "/__test/exec" && req.method === "POST") { // test hook: change one row to set up a state (local emulator only)

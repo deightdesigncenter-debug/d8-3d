@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-29.4"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-30.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -1014,6 +1014,48 @@ async function translateText(env, text, to) {
 
 // Case files are stored in 20 MB parts: in the R2 bucket bound as FILES when there is one, otherwise in KV.
 const partKey = (job, fid, n) => "jf:" + job + ":" + fid + ":" + n;
+
+// Direct upload to R2. The Worker signs one URL per part (AWS Signature Version 4, query form) and the browser PUTs the
+// part straight to the bucket. Needs the secrets R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ACCOUNT_ID (and optionally
+// R2_BUCKET, default d8-3d-files). Without them, parts go through the Worker as before.
+const R2_BUCKET_DEFAULT = "d8-3d-files";
+const PRESIGN_SECONDS = 3600;          // an hour: the browser sends three parts at a time, a slow phone can take a while
+const encRfc = (v) => encodeURIComponent(String(v)).replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+const hexOf = (buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+async function hmacSha256(key, msg) {
+  const raw = typeof key === "string" ? new TextEncoder().encode(key) : key;
+  const k = await crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg)));
+}
+// Presigned URL for one request. headers: lower-case names (host and whatever must match the request exactly).
+export async function sigv4Presign({ method, host, path, headers, accessKey, secret, region, service, date, expires }) {
+  const amz = date.toISOString().replace(/[:-]|\.\d{3}/g, "");        // 20130524T000000Z
+  const day = amz.slice(0, 8);
+  const scope = `${day}/${region}/${service}/aws4_request`;
+  const names = Object.keys(headers).sort();
+  const signedHeaders = names.join(";");
+  const query = { "X-Amz-Algorithm": "AWS4-HMAC-SHA256", "X-Amz-Credential": `${accessKey}/${scope}`, "X-Amz-Date": amz,
+    "X-Amz-Expires": String(expires), "X-Amz-SignedHeaders": signedHeaders };
+  const canonicalQuery = Object.keys(query).sort().map((k) => encRfc(k) + "=" + encRfc(query[k])).join("&");
+  const canonicalHeaders = names.map((h) => h + ":" + String(headers[h]).trim() + "\n").join("");
+  const canonicalRequest = [method, path, canonicalQuery, canonicalHeaders, signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
+  const stringToSign = ["AWS4-HMAC-SHA256", amz, scope, hexOf(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalRequest)))].join("\n");
+  let k = await hmacSha256("AWS4" + secret, day);
+  for (const part of [region, service, "aws4_request"]) k = await hmacSha256(k, part);
+  const signature = hexOf(await hmacSha256(k, stringToSign));
+  return `https://${host}${path}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+}
+function r2Direct(env) {
+  if (!env.FILES || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY || !env.R2_ACCOUNT_ID) return null;
+  return { accessKey: env.R2_ACCESS_KEY_ID, secret: env.R2_SECRET_ACCESS_KEY, account: env.R2_ACCOUNT_ID, bucket: env.R2_BUCKET || R2_BUCKET_DEFAULT };
+}
+// one part of one file: the signature covers its exact size, so the bytes sent must be the size asked for
+async function r2PresignPart(cfg, key, size, now = new Date()) {
+  const host = `${cfg.account}.r2.cloudflarestorage.com`;
+  const path = "/" + encRfc(cfg.bucket) + "/" + key.split("/").map(encRfc).join("/");
+  return sigv4Presign({ method: "PUT", host, path, headers: { host, "content-length": String(size) }, accessKey: cfg.accessKey,
+    secret: cfg.secret, region: "auto", service: "s3", date: now, expires: PRESIGN_SECONDS });
+}
 const activeStore = (env) => (env.FILES ? "r2" : "kv");
 function partStore(env, kind) {
   if (kind === "r2" && env.FILES) {
@@ -1764,6 +1806,22 @@ async function caseRequest(request, env, url, who, m, memo) {
     await saveJob(env, job);
     if (!b.remove) await syncJobOrder(env, job, { by: actor, name: who.name, text: "Gửi bản xem 3D cho khách duyệt" });
     return json({ job: await jobView(env, job, viewer) });
+  }
+
+  // direct upload: POST /api/jobs/<id>/files/presign {fid, sizes} → {urls} (one per part), or {urls: null} = send through the Worker
+  if (sub === "/files/presign" && method === "POST") {
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const sizes = Array.isArray(b.sizes) ? b.sizes.map((x) => +x) : [];
+    if (!FID_RE.test(b.fid || "") || !sizes.length || sizes.length > FILE_MAX_PARTS || sizes.some((x) => !(x > 0 && x <= CHUNK_MAX))) return json({ error: "Bad request." }, 400);
+    if (by === "client" && !["received", "needs_info", "in_design", "review"].includes(job.status)) return json({ error: "This case is closed for new files." }, 409);
+    if (by === "admin" && !(who.can("cases.design") || who.can("cases.deliver"))) return nope();
+    const used = (job.files || []).reduce((t, x) => t + (x.stored || 0), 0);
+    if (used + sizes.reduce((t, x) => t + x, 0) > JOB_FILES_MAX) return json({ error: "This case has reached its storage limit (300 MB)." }, 413);
+    const cfg = r2Direct(env);
+    if (!cfg) return json({ urls: null });
+    const urls = [];
+    for (let n = 0; n < sizes.length; n++) urls.push(await r2PresignPart(cfg, partKey(job.id, b.fid, n), sizes[n]));
+    return json({ urls, expires: PRESIGN_SECONDS });
   }
 
   // file chunk upload: PUT /api/jobs/<id>/files/<fid>/<n>

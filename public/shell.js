@@ -585,6 +585,20 @@
       x.send(blob);
     });
   }
+  function putDirect(url, blob, onProg) {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open("PUT", url);
+      x.setRequestHeader("Content-Type", "application/octet-stream");
+      x.upload.onprogress = (e) => onProg && onProg(e.loaded);
+      x.onload = () => {
+        if (x.status >= 200 && x.status < 300) return resolve();
+        reject(Object.assign(new Error(D8.t("up.fail")), { status: x.status || 500 }));
+      };
+      x.onerror = () => reject(new Error(D8.t("up.fail")));   // no status: CORS or network
+      x.send(blob);
+    });
+  }
   // gzip where it helps, split into 20 MB parts, PUT each part to <base>/<fid>/<n>; returns what to attach
   D8.uploadParts = async function (base, files, opts = {}) {
     const say = opts.onProgress || (() => {});
@@ -604,18 +618,35 @@
       const parts = Math.max(1, Math.ceil(blob.size / CHUNK));
       if (parts > MAX_PARTS) throw new Error(D8.t("up.big").replace("{name}", name));
       const fid = newFid();
-      // parts go up three at a time (each part retried up to 3 times); progress is the sum of what every part sent
+      const sizes = Array.from({ length: parts }, (_, n) => Math.min(blob.size, (n + 1) * CHUNK) - n * CHUNK);
+      // direct upload when the server signs the parts (R2 keys set): the browser PUTs each part to R2 itself.
+      // No signed URLs, or no answer from R2 (CORS / network): this file goes through the Worker as before.
+      let direct = null;
+      try { direct = (await D8.api(`${base}/presign`, { method: "POST", body: { fid, sizes } })).urls || null; }
+      catch (err) { if (err && [403, 409, 413].includes(err.status)) throw err; }
+      // parts go up three at a time; progress is the sum of what every part has sent
       const sent = new Array(parts).fill(0);
+      const report = () => {
+        const filePct = sent.reduce((a, b) => a + b, 0) / Math.max(1, blob.size);
+        say({ text: D8.t("up.send").replace("{name}", name).replace("{i}", i + 1).replace("{n}", files.length).replace("{pct}", Math.min(100, Math.round(filePct * 100))),
+              pct: Math.round(((i + Math.min(1, filePct)) / files.length) * 100) });
+      };
       const sendPart = async (n) => {
         const part = blob.slice(n * CHUNK, Math.min(blob.size, (n + 1) * CHUNK));
+        if (direct) {
+          try {
+            await putDirect(direct[n], part, (loaded) => { sent[n] = loaded; report(); });
+            sent[n] = part.size;
+            return;
+          } catch (err) {
+            if (err.status) throw err;   // R2 answered with an error: show it
+            direct = null;               // no answer (CORS or network): the rest of this file goes through the Worker
+            sent[n] = 0;
+          }
+        }
         for (let tries = 0; ; ) {
           try {
-            await putPart(`${base}/${fid}/${n}`, part, (loaded) => {
-              sent[n] = loaded;
-              const filePct = sent.reduce((a, b) => a + b, 0) / Math.max(1, blob.size);
-              say({ text: D8.t("up.send").replace("{name}", name).replace("{i}", i + 1).replace("{n}", files.length).replace("{pct}", Math.min(100, Math.round(filePct * 100))),
-                    pct: Math.round(((i + Math.min(1, filePct)) / files.length) * 100) });
-            });
+            await putPart(`${base}/${fid}/${n}`, part, (loaded) => { sent[n] = loaded; report(); });
             sent[n] = part.size;
             return;
           } catch (err) {
