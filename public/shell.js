@@ -564,7 +564,7 @@
   D8.esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // Upload files to a case: gzip in the browser where it helps, split into 20 MB parts, then attach.
-  const CHUNK = 20 * 1024 * 1024, MAX_PARTS = 15;
+  const CHUNK = 20 * 1024 * 1024, MAX_PARTS = 15, PARALLEL = 3;
   const NO_GZIP = /\.(zip|7z|rar|gz|tgz|bz2|xz|jpe?g|png|webp|heic|gif|mp4|mov|avi|pdf|docx|xlsx|pptx)$/i;
   const fidChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   const newFid = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => fidChars[b % fidChars.length]).join("");
@@ -604,23 +604,31 @@
       const parts = Math.max(1, Math.ceil(blob.size / CHUNK));
       if (parts > MAX_PARTS) throw new Error(D8.t("up.big").replace("{name}", name));
       const fid = newFid();
-      for (let n = 0; n < parts; n++) {
+      // parts go up three at a time (each part retried up to 3 times); progress is the sum of what every part sent
+      const sent = new Array(parts).fill(0);
+      const sendPart = async (n) => {
         const part = blob.slice(n * CHUNK, Math.min(blob.size, (n + 1) * CHUNK));
-        let tries = 0;
-        for (;;) {
+        for (let tries = 0; ; ) {
           try {
             await putPart(`${base}/${fid}/${n}`, part, (loaded) => {
-              const filePct = (n * CHUNK + loaded) / Math.max(1, blob.size);
+              sent[n] = loaded;
+              const filePct = sent.reduce((a, b) => a + b, 0) / Math.max(1, blob.size);
               say({ text: D8.t("up.send").replace("{name}", name).replace("{i}", i + 1).replace("{n}", files.length).replace("{pct}", Math.min(100, Math.round(filePct * 100))),
                     pct: Math.round(((i + Math.min(1, filePct)) / files.length) * 100) });
             });
-            break;
+            sent[n] = part.size;
+            return;
           } catch (err) {
             if (++tries >= 3 || (err.status && err.status < 500)) throw err;
             await new Promise((r) => setTimeout(r, 1500 * tries));
           }
         }
-      }
+      };
+      let next = 0;
+      const lanes = Array.from({ length: Math.min(PARALLEL, parts) }, async () => {
+        while (next < parts) { const n = next++; await sendPart(n); }
+      });
+      await Promise.all(lanes);
       metas.push({ fid, name, size: file.size, stored: blob.size, parts, gz });
     }
     say({ text: D8.t("up.attach"), pct: 100 });
