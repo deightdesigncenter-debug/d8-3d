@@ -149,6 +149,10 @@ const AI = {
     const sys = input.messages[0].content, user = input.messages[1].content;
     const text = Array.isArray(user) ? user.map((c) => c.text || (c.image_url ? "[image " + c.image_url.url.length + " chars]" : "")).join(" ") : user;
     const say = (content) => ({ choices: [{ message: { role: "assistant", content } }] });
+    if (/website assistant of D\.EIGHT/.test(sys)) { // the About page chat: echoes the question, names a price for price questions
+      const last = input.messages[input.messages.length - 1].content;
+      return say(/price|cost|how much|PRICE-TEST/i.test(last) ? "The crown costs $500." : "[assistant] " + last);
+    }
     if (/"en": "the reply/.test(sys)) return say(JSON.stringify({ en: "Thanks for your message. We'll confirm shortly.", vi: "Cảm ơn bạn đã nhắn. Chúng tôi sẽ xác nhận sớm." }));
     if (/"patient"/.test(sys)) { const m = text.match(/\b(Mr|Mrs|Ms)\.? [A-Z][a-z]+/); return say(JSON.stringify({ patient: !!m, found: m ? m[0] : "" })); }
     if (/turn them into form fields/.test(sys)) return say("```json\n" + JSON.stringify({ service: /implant/i.test(text) ? "Implant restorations" : "Crown & bridge",

@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-30.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-30.2"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -194,6 +194,10 @@ async function handleApi(request, env, url) {
   if (path === "/api/contact") {
     if (method !== "POST") return json({ error: "Method not allowed." }, 405);
     return submitContact(request, env);
+  }
+  if (path === "/api/assist" || path === "/api/assist/lead") { // the chat box on the About page
+    if (method !== "POST") return json({ error: "Method not allowed." }, 405);
+    return path === "/api/assist" ? assistChat(request, env) : assistLead(request, env);
   }
   if (path === "/api/config" && method === "GET") {
     const pc = payConf(env), on = (await loadSettings(env)).onlinePay;
@@ -1936,7 +1940,7 @@ async function caseRequest(request, env, url, who, m, memo) {
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
@@ -2067,6 +2071,10 @@ async function migrateV5(DB) { await DB.batch(SCHEMA_V5.map((s) => DB.prepare(s)
 const SCHEMA_V6 = [`CREATE TABLE IF NOT EXISTS typing (job TEXT NOT NULL, side TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (job, side))`];
 async function migrateV6(DB) { await DB.batch(SCHEMA_V6.map((s) => DB.prepare(s))); }
+// Website assistant: one row per question (address hashed, day), only to count the limits; no question text is kept.
+const SCHEMA_V7 = [`CREATE TABLE IF NOT EXISTS assist_hits (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, day TEXT NOT NULL, ip TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS assist_hits_ip ON assist_hits (ip, at)`, `CREATE INDEX IF NOT EXISTS assist_hits_day ON assist_hits (day)`];
+async function migrateV7(DB) { await DB.batch(SCHEMA_V7.map((s) => DB.prepare(s))); }
 async function migrateV3(DB) {
   for (const sql of SCHEMA_V3) {
     try { await DB.prepare(sql).run(); }
@@ -2101,6 +2109,7 @@ async function bookDb(env) {
     if (v < 4) await migrateV4(env.DB);
     if (v < 5) await migrateV5(env.DB);
     if (v < 6) await migrateV6(env.DB);
+    if (v < 7) await migrateV7(env.DB);
     if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }
@@ -3717,7 +3726,7 @@ async function turnstileOk(env, token, ip) {
     return !!(d && d.success);
   } catch { return false; }
 }
-async function submitContact(request, env) {
+async function submitContact(request, env, source = "") { // source "chat": sent from the About page chat box
   const len = parseInt(request.headers.get("Content-Length") || "0", 10);
   if (len > 16384) return json({ error: "Your message is too long." }, 413);
   let body;
@@ -3739,6 +3748,7 @@ async function submitContact(request, env) {
   if (!msg.name) return json({ error: E("Please add your name.", "Vui lòng nhập họ tên.") }, 400);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(msg.email)) return json({ error: E("Please add a valid email address.", "Vui lòng nhập email hợp lệ.") }, 400);
   if (msg.message.length < 10) return json({ error: E("Please write a little more in your message.", "Vui lòng viết thêm nội dung.") }, 400);
+  if (source) msg.message = (vi ? "[Chat trên trang Giới thiệu]" : "[Chat on the About page]") + "\n" + msg.message;
 
   // bots: the hidden field filled in, no signed time token (or a forged / old one), or sent too fast. Pretend it worked.
   const quiet = () => json({ ok: true });
@@ -3822,6 +3832,144 @@ async function deleteMessage(env, id) {
   if (!MSG_ID_RE.test(id)) return json({ error: "Mã tin nhắn không hợp lệ." }, 400);
   await env.CASES.delete("msg:" + id);
   return json({ ok: true });
+}
+
+/* ------------------------------------------------------ Website assistant (chat box on the About page) */
+
+// Workers AI answers visitors from the facts in assistSystem. When it is off, fails, or its reply names a price, the same
+// questions get the fixed answers in assistFallback. Chat text is not stored. A visitor's details go to the inbox
+// (Messages) through the contact checks. Only counts are kept, to cap the AI use: ASSIST_PER_HOUR questions an hour from
+// one address (hashed) and ASSIST_DAILY for all visitors in a day (table assist_hits; without the database there is no cap).
+const ASSIST_PER_HOUR = 40, ASSIST_DAILY = 400, ASSIST_TURNS = 12, ASSIST_CHARS = 500;
+// a question about design, a quote or getting in touch also offers the details form
+const ASSIST_LEAD = /design|thiết kế|quote|báo giá|bảng giá|price|pricing|\bgiá|cost|how much|bao nhiêu|order|consult|tư vấn|contact|liên hệ|whatsapp|human|người thật|nhân viên|interested|quan tâm|want you|muốn|send (a |my |the )?case|gửi ca/i;
+// a reply that names a price is replaced: the team quotes after reading the case
+const ASSIST_PRICE = /[$€£]|\b(usd|vnd|vnđ|đồng|dollars?|euros?)\b|\d[\d.,]*\s?(k|đ|vnd|usd)(?![a-z])/i;
+
+const assistSystem = (rev) => [
+  "You are the website assistant of D.EIGHT DESIGN CENTER, a remote dental CAD design team. You answer visitors on the About page and help them ask for our design work.",
+  "Facts you may use:",
+  "- D.EIGHT designs only. We create the digital design (CAD) from the scans or photos the dentist or lab sends, and deliver production-ready STL files. The customer's own lab or milling centre makes the final restoration. We do not mill, print or ship finished products.",
+  "- Services: " + Object.keys(RX_FIELDS).join(", ") + ".",
+  "- Turnaround: the website states delivery within 24 hours. Say that the exact time depends on the case and that our team confirms it when the case arrives.",
+  "- Free revisions: " + rev + " per case. More revisions are quoted separately.",
+  "- How to send a case: sign in with Google at /portal, start a new case, upload the scan files, fill in the case details and send. Our team replies in the case chat.",
+  "- Contact: Danny Do (client contact), WhatsApp +84 703 233 263, email d.eightdesigncenter@gmail.com.",
+  "Rules:",
+  "1. Answer in two to four short sentences, in plain text, with no headings. Reply in the language the visitor writes in, Vietnamese or English.",
+  "2. Never state a price, fee, discount or payment term. Say that the team quotes after reading the case, and offer to take the visitor's details.",
+  "3. Never give clinical advice. Treatment decisions belong to the dentist.",
+  "4. Never mention or describe a patient or another client. Never share details about staff accounts, passwords or the system.",
+  "5. If you do not know something, say so and offer to pass the question to the team.",
+  "6. When a visitor asks for a design or a quote, ask for one or two of these at a time: what they need (service, teeth or arch, material), whether they have scan files, their name, their clinic or lab, and an email or phone number.",
+  "7. Never promise that a case will be accepted or that a date is guaranteed.",
+].join("\n");
+
+// Fixed answers to the same questions: used when Workers AI is off or fails, and whenever its reply names a price.
+function assistFallback(q, vi, rev) {
+  const E = (en, v) => (vi ? v : en), t = String(q).toLowerCase(), has = (re) => re.test(t);
+  if (has(/price|pricing|cost|fee|quote|how much|discount|payment|\bpay\b|bảng giá|báo giá|\bgiá|bao nhiêu|chi phí|chiết khấu|thanh toán|tiền/))
+    return E("Prices depend on each case, so our team quotes after reading it. Leave your details below and we will reply with a quote.",
+      "Giá phụ thuộc từng ca, nên đội ngũ báo giá sau khi xem ca. Bạn để lại thông tin bên dưới, chúng tôi sẽ trả lời kèm báo giá.");
+  if (has(/how.*send|send.*case|upload|submit|gửi ca|gửi file|tải file|tải lên|cách gửi|quy trình/))
+    return E("Sign in with Google at /portal, start a new case, upload your scan files, fill in the case details and send. Our team replies in the case chat.",
+      "Đăng nhập Google tại /portal, tạo ca mới, tải file quét lên, điền thông tin ca rồi gửi. Đội ngũ sẽ trả lời trong khung chat của ca.");
+  if (has(/how long|turnaround|how fast|deadline|when|time|bao lâu|mấy ngày|thời gian|khi nào|bao giờ|giao/))
+    return E("The website states delivery within 24 hours. The exact time depends on the case, and our team confirms it when the case arrives.",
+      "Trang web ghi giao trong 24 giờ. Thời gian cụ thể tuỳ từng ca, đội ngũ sẽ xác nhận khi nhận được ca.");
+  if (has(/revision|revise|chỉnh sửa|sửa lại|sửa đổi/))
+    return E(`Each case includes ${rev} free revision${rev === 1 ? "" : "s"}. More revisions are quoted separately.`,
+      `Mỗi ca có ${rev} lần chỉnh sửa miễn phí. Chỉnh sửa thêm sẽ được báo giá riêng.`);
+  if (has(/contact|reach|phone|email|whatsapp|human|person|liên hệ|người thật|nhân viên|số điện thoại/))
+    return E("You can reach Danny Do on WhatsApp at +84 703 233 263, or by email at d.eightdesigncenter@gmail.com.",
+      "Bạn có thể liên hệ Danny Do qua WhatsApp +84 703 233 263, hoặc email d.eightdesigncenter@gmail.com.");
+  if (has(/service|dịch vụ|what do you|what .{0,15}design|offer|những gì|bên bạn (làm|thiết kế)/))
+    return E("We design implant restorations, All-on-X and bars, surgical guides, crowns and bridges, wax-up and smile design, dentures and partials, splints and trays, aligners and ortho set-ups, and digital models. We deliver production-ready STL files.",
+      "Chúng tôi thiết kế phục hình implant, All-on-X và thanh bar, máng phẫu thuật, mão và cầu răng, wax-up và thiết kế nụ cười, hàm giả và hàm khung, máng và khay, khí cụ chỉnh nha và mẫu hàm số. Chúng tôi giao file STL sẵn sàng để sản xuất.");
+  if (has(/(want|need|would like|muốn|cần).{0,60}(design|thiết kế|make|làm)|design .{0,40}for me|thiết kế cho/))
+    return E("Tell us which service and case you need, and leave your details below. Our team will reply with a quote and the next steps.",
+      "Bạn cho biết cần dịch vụ và loại ca nào, rồi để lại thông tin bên dưới. Đội ngũ sẽ trả lời kèm báo giá và các bước tiếp theo.");
+  if (/^(hi|hello|hey|xin chào|chào|alo)\b/.test(t))
+    return E("Hello! Ask me about our services, how to send a case or how long a case takes.",
+      "Xin chào! Bạn có thể hỏi về dịch vụ, cách gửi ca hoặc thời gian thực hiện.");
+  return E("I'm not sure about that. Leave your details below and our team will reply to you.",
+    "Tôi chưa chắc về câu này. Bạn để lại thông tin bên dưới, đội ngũ sẽ trả lời bạn.");
+}
+
+// Counts this question for the address and for the day. Returns "" when it may be answered, else "hour" or "day".
+const assistKey = async (ip) => b64urlEncode(new Uint8Array(await crypto.subtle.digest("SHA-256", te.encode("d8-assist:" + ip)))).slice(0, 16);
+async function assistGate(env, ip) {
+  if (!env.DB) return "";
+  const DB = await bookDb(env), now = Date.now(), day = vnDay(now), who = await assistKey(ip);
+  const c = await DB.prepare("SELECT (SELECT COUNT(*) FROM assist_hits WHERE ip = ? AND at > ?) AS h, (SELECT COUNT(*) FROM assist_hits WHERE day = ?) AS d")
+    .bind(who, now - 3600000, day).first();
+  if (c.h >= ASSIST_PER_HOUR) return "hour";
+  if (c.d >= ASSIST_DAILY) return "day";
+  await DB.batch([DB.prepare("INSERT INTO assist_hits (at, day, ip) VALUES (?, ?, ?)").bind(now, day, who),
+    DB.prepare("DELETE FROM assist_hits WHERE at < ?").bind(now - 2 * DAY_MS)]);
+  return "";
+}
+
+// One question from the chat box. The whole conversation is sent each time (the last 12 turns, 500 characters each).
+async function assistChat(request, env) {
+  if (parseInt(request.headers.get("Content-Length") || "0", 10) > 16384) return json({ error: "Your message is too long." }, 413);
+  let body;
+  try { body = JSON.parse(await request.text()); } catch { return json({ error: "Please write your question and try again." }, 400); }
+  const vi = !!body && body.lang === "vi";
+  const turns = (Array.isArray(body && body.messages) ? body.messages : []).slice(-ASSIST_TURNS).map((m) => ({
+    role: m && m.role === "assistant" ? "assistant" : "user",
+    text: String(m && m.text != null ? m.text : "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, ASSIST_CHARS),
+  })).filter((m) => m.text);
+  const last = turns[turns.length - 1];
+  if (!last || last.role !== "user") return json({ error: vi ? "Hãy nhập câu hỏi trước." : "Please write a question first." }, 400);
+
+  const ip = request.headers.get("CF-Connecting-IP") || "local";
+  const gate = await assistGate(env, ip).catch(() => "");
+  if (gate) {
+    const reply = gate === "hour"
+      ? (vi ? "Bạn đã hỏi khá nhiều trong giờ qua. Hãy để lại thông tin bên dưới, hoặc nhắn WhatsApp cho Danny Do, chúng tôi sẽ trả lời."
+        : "You've asked a lot in the last hour. Please leave your details below or message Danny Do on WhatsApp, and we will reply.")
+      : (vi ? "Hôm nay trợ lý đã trả lời rất nhiều câu hỏi. Hãy để lại thông tin bên dưới, đội ngũ sẽ trả lời."
+        : "The assistant has answered a lot of questions today. Please leave your details below and our team will reply.");
+    return json({ reply, ai: false, lead: true });
+  }
+
+  const settings = await loadSettings(env);
+  let reply = "", ai = false;
+  if (env.AI) {
+    try {
+      const out = await aiChat(env, [{ role: "system", content: assistSystem(settings.freeRevisions) }, ...turns.map((m) => ({ role: m.role, content: m.text }))],
+        { maxTokens: 320, vi });
+      if (ASSIST_PRICE.test(out)) reply = assistFallback("price", vi, settings.freeRevisions);
+      else { reply = out.slice(0, 1200); ai = true; }
+    } catch (err) { console.error("assist", err && err.message); }
+  }
+  if (!reply) reply = assistFallback(last.text, vi, settings.freeRevisions);
+  return json({ reply, ai, lead: ASSIST_LEAD.test(last.text) });
+}
+
+// The details form: stored in the inbox like a contact message, through the same checks, with the chat so far attached.
+async function assistLead(request, env) {
+  if (parseInt(request.headers.get("Content-Length") || "0", 10) > 16384) return json({ error: "Your message is too long." }, 413);
+  let body;
+  try { body = JSON.parse(await request.text()); } catch { return json({ error: "Please check the form and try again." }, 400); }
+  if (!body || typeof body !== "object") return json({ error: "Please check the form and try again." }, 400);
+  const clean = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max);
+  const vi = body.lang === "vi";
+  const chat = (Array.isArray(body.transcript) ? body.transcript : []).slice(-8).map((m) => {
+    const text = clean(m && m.text, ASSIST_CHARS);
+    return text ? (m && m.role === "assistant" ? "D.EIGHT: " : "Visitor: ") + text : "";
+  }).filter(Boolean);
+  const phone = clean(body.phone, 40), typed = clean(body.message, 3000);
+  const parts = [];
+  if (phone) parts.push((vi ? "WhatsApp / điện thoại: " : "WhatsApp / phone: ") + phone);
+  if (typed) parts.push(typed);
+  if (chat.length) parts.push((vi ? "Trao đổi với trợ lý:" : "Chat with the assistant:") + "\n" + chat.join("\n"));
+  const headers = new Headers({ "Content-Type": "application/json" });
+  for (const h of ["CF-Connecting-IP", "CF-IPCountry"]) if (request.headers.get(h)) headers.set(h, request.headers.get(h));
+  const contact = { lang: vi ? "vi" : "en", name: body.name, email: body.email, practice: body.practice, service: body.service,
+    message: parts.join("\n\n"), website: body.website, token: body.token, turnstile: body.turnstile };
+  return submitContact(new Request(request.url, { method: "POST", headers, body: JSON.stringify(contact) }), env, "chat");
 }
 
 /* --------------------------------------------------------- Doctor views */

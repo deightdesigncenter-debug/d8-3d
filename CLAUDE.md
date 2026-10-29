@@ -107,6 +107,12 @@ The owner wants the site to run without errors or jank, and every new feature ch
   Sessions API. Never roll the deployment back to before 2026-10-26: that code reads cases from KV only.
   Tests: `dev/tests/move.test.mjs` (old KV cases → D1, needs a fresh server) and the team test, both in run.sh with
   `KV_RATE=1`. Settings › file storage shows `cases` (store, count, left).
+- Website assistant (chat box on the About page; `data-assist` on `<body>`, `public/site/assist.js` + `assist.css`): `POST /api/assist`
+  answers from the facts in `assistSystem` (Workers AI); the fixed answers in `assistFallback` are used when AI is off or fails, and
+  whenever a reply names a price (never a price in a reply). `POST /api/assist/lead` sends the visitor's details through
+  `submitContact(…, "chat")` into the inbox (Messages), tagged "[Chat trên trang Giới thiệu]". Chat text is not stored. Limits: 40
+  questions an hour per address, 400 a day (D1 `assist_hits`, schema v7, address hashed, kept 2 days). Tests: `assist.test.mjs` (also
+  `NO_AI=1 NO_DB=1`), `assist_cap.test.mjs` (needs D1), `assist_ui.py` (light and dark).
 - `public/_worker.js`: API. Staff/roles in KV `cfg:staff` and `cfg:roles`; owners = `ADMIN_EMAILS`.
   Every staff endpoint checks a permission (`can(...)`); `jobView` strips fields per viewer.
 - Motion rules: 200–300 ms, ease-out curves, transform/opacity only, off under `prefers-reduced-motion`.

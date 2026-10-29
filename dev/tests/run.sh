@@ -43,6 +43,9 @@ run access    python3 dev/tests/access_ui.py "$OUT/access"
 run portal    python3 dev/tests/portal_ui.py "$OUT/portal"
 run site      python3 dev/tests/site_ui.py "$OUT/site"
 run about     python3 dev/tests/about_ui.py "$OUT/about"
+run assist    node dev/tests/assist.test.mjs
+run assist-ui python3 dev/tests/assist_ui.py "$OUT/assist" light
+run assist-ui-dark python3 dev/tests/assist_ui.py "$OUT/assist-dark" dark
 run speed     python3 dev/tests/perf.py
 stop
 
@@ -53,6 +56,8 @@ run site-plain   python3 dev/tests/site_ui.py "$OUT/site-plain"
 run about-plain  python3 dev/tests/about_ui.py "$OUT/about-plain"
 run nodb-ui      python3 dev/tests/nodb_ui.py "$OUT/nodb"
 run access-plain python3 dev/tests/access_ui.py "$OUT/access-plain"
+run assist-plain node dev/tests/assist.test.mjs
+run assist-ui-plain python3 dev/tests/assist_ui.py "$OUT/assist-plain" light
 stop
 
 # cases saved in KV by the old site move into D1 (fresh server: nothing listed yet), then a team working at the
@@ -83,6 +88,11 @@ stop
 # the database bound under another variable name still works
 start DB_AS=d8_db
 run db-name   node dev/tests/dbname.test.mjs
+stop
+
+# the About page chat box's limits (per address per hour, all visitors per day) are counted in the database
+start PAY=1
+run assist-cap node dev/tests/assist_cap.test.mjs
 stop
 
 echo
