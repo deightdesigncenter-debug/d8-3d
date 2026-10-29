@@ -405,6 +405,10 @@ ok(r.data.msgs.some((m) => /Phân công/.test(m.text)), "case events appear in t
 r = await owner(`/api/customers/${jake}/logins`, { method: "POST", body: { email: labEmail } });
 r = await owner("/api/orders/" + po.id);
 ok(r.data.order.customer_id === jake, "linking the account to Dr Jake moves its orders");
+r = await lab("/api/me");
+ok(r.data.user && r.data.user.greet === "Dr Jake – Colorado", "customer is greeted by the name entered in the customer list (" + (r.data.user && r.data.user.greet) + ")");
+r = await lab("/api/my/jobs", { method: "POST", body: { title: "", service: "Crown", teeth: "14", material: "Zirconia" } });
+ok(r.status === 201 && r.data.job && /^D8-/.test(r.data.job.id) && r.data.job.title === "Crown", "case without a typed reference: the system makes the code (" + (r.data.job && r.data.job.id) + ")");
 
 // ---------- 3D link previews
 const html = "<!doctype html><html><head><title>scene</title></head><body>exocad</body></html>";

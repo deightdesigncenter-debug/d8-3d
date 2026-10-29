@@ -139,7 +139,7 @@
 
   function drawList(items) {
     const seen = store.get("d8-seen", {});
-    const first = String(user.name || user.email).slice(0, 48);
+    const first = String(user.greet || user.name || user.email).slice(0, 48);
     const counts = {
       all: items.length,
       active: items.filter((x) => ["received", "needs_info", "in_design", "approved"].includes(x.status)).length,
@@ -492,9 +492,6 @@
           </details>
           <fieldset class="fs"><legend><span class="n">1</span><span class="h-caps">${T("p.nf.s1")}</span></legend>
             <div class="row2">
-              <div class="full"><label class="field-label" for="nTitle"><span>${esc(T("p.nf.ref"))}</span><span class="req">*</span></label>
-                <input class="input" id="nTitle" data-k="title" maxlength="80" required value="${esc(d.title)}" placeholder="${esc(T("p.nf.refph"))}">
-                <p class="hint">${esc(T("p.nf.refh"))}</p></div>
               <div class="full"><label class="field-label" for="nService">${esc(T("p.nf.service"))}</label>
                 <select class="input" id="nService" data-k="service"><option value="">${esc(T("p.nf.choose"))}</option>${SERVICES.map(opt).join("")}</select></div>
               <div class="full row2" id="rxBox" style="gap:18px 16px"></div>
@@ -597,7 +594,6 @@
       err.hidden = true;
       d.title = d.title.trim();
       const linkList = d.links.map((l) => l.trim()).filter(Boolean);
-      if (!d.title) return fail(T("p.nf.need"), document.getElementById("nTitle"));
       if (linkList.some((l) => !/^https?:\/\/\S+$/i.test(l))) return fail(T("p.nf.badlink"));
       if (!d.files.length && !linkList.length) return fail(T("p.nf.needfile"));
       if (!d.checked) {

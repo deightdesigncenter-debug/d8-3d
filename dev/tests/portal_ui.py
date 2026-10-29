@@ -33,7 +33,7 @@ with sync_playwright() as p:
         ok(pg.evaluate(SIGNIN, [f"{name}{stamp}@lab.example", "Dr. Jamie Lee"]) == 200, name + ": signed in")
         pg.reload(); pg.wait_for_timeout(700)
         pg.goto(B + "/portal#/new"); pg.wait_for_timeout(500)
-        pg.fill("#nTitle", "Case 1024, upper full arch")
+        ok(pg.locator("#nTitle").count() == 0, name + ": no case-reference field (system makes the code)")
         pg.select_option("#nService", "Implant restorations")
         pg.fill("#nTeeth", "14-24"); pg.fill("#nMat", "Zirconia"); pg.fill("#nShade", "A2")
         pg.fill("#nNotes", "Cement gap 0.05 mm. Screw access palatal.")

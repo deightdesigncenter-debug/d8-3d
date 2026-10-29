@@ -208,7 +208,18 @@ async function handleApi(request, env, url) {
 
   const session = await readSession(request, env);
   const staff = session ? await staffFor(env, session.email) : null;
-  if (path === "/api/me" && method === "GET") return json({ user: session ? publicUser(session, staff) : null });
+  if (path === "/api/me" && method === "GET") {
+    // a customer whose sign-in email is on a customer record is greeted by the name the owner gave that customer
+    let greet = "";
+    if (session && env.DB) {
+      try {
+        const r = await (await bookDb(env)).prepare("SELECT c.name AS name FROM customer_logins l JOIN customers c ON c.id = l.customer_id WHERE l.email = ?")
+          .bind(String(session.email).toLowerCase()).first();
+        greet = r && r.name ? String(r.name).slice(0, 100) : "";
+      } catch {}
+    }
+    return json({ user: session ? { ...publicUser(session, staff), greet } : null });
+  }
 
   // A request authenticated only by the session cookie must carry X-D8 (blocks form-based CSRF).
   const keyOk = await isAuthorized(request, env);
@@ -1359,8 +1370,8 @@ async function handleJobs(request, env, url, who) {
   if (path === "/api/my/jobs" && method === "POST") {
     if (!who.email) return json({ error: "Sign in with Google to send a case." }, 403);
     let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
-    const title = clip(b.title, 80);
-    if (!title) return json({ error: "Please give the case a reference." }, 400);
+    // the case code is made by the system; no reference is typed by the customer (the service name stands in for it)
+    const title = clip(b.title, 80) || clip(b.service, 60) || "Ca mới";
     const now = Date.now();
     const links = (Array.isArray(b.links) ? b.links : []).map((l) => clip(l, 500)).filter((l) => /^https?:\/\//i.test(l)).slice(0, 5);
     const job = {
