@@ -619,7 +619,7 @@
   D8.esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // Upload files to a case: gzip in the browser where it helps, split into 20 MB parts, then attach.
-  const CHUNK = 20 * 1024 * 1024, MAX_PARTS = 15, PARALLEL = 3;
+  const CHUNK = 20 * 1024 * 1024, MAX_PARTS = 15, PARALLEL = 3, FILE_PARALLEL = 3;
   const NO_GZIP = /\.(zip|7z|rar|gz|tgz|bz2|xz|jpe?g|png|webp|heic|gif|mp4|mov|avi|pdf|docx|xlsx|pptx)$/i;
   const fidChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   const newFid = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => fidChars[b % fidChars.length]).join("");
@@ -657,12 +657,17 @@
   // gzip where it helps, split into 20 MB parts, PUT each part to <base>/<fid>/<n>; returns what to attach
   D8.uploadParts = async function (base, files, opts = {}) {
     const say = opts.onProgress || (() => {});
-    const metas = [];
     files = Array.from(files);
-    for (let i = 0; i < files.length; i++) {
+    const total = files.length, metas = new Array(total), frac = new Array(total).fill(0), label = new Array(total).fill("");
+    // the bar is the average over all files; the text names the first file that is not finished yet
+    const tell = () => {
+      let cur = frac.findIndex((f) => f < 1); if (cur < 0) cur = total - 1;
+      say({ text: label[cur], pct: Math.round((frac.reduce((a, b) => a + b, 0) / total) * 100) });
+    };
+    const one = async (i) => {
       const file = files[i];
       const name = file.name;
-      say({ text: D8.t("up.prep").replace("{name}", name), pct: Math.round((i / files.length) * 100) });
+      label[i] = D8.t("up.prep").replace("{name}", name); tell();
       let blob = file, gz = 0;
       if (!NO_GZIP.test(name) && file.size > 4096 && "CompressionStream" in window) {
         try {
@@ -683,8 +688,9 @@
       const sent = new Array(parts).fill(0);
       const report = () => {
         const filePct = sent.reduce((a, b) => a + b, 0) / Math.max(1, blob.size);
-        say({ text: D8.t("up.send").replace("{name}", name).replace("{i}", i + 1).replace("{n}", files.length).replace("{pct}", Math.min(100, Math.round(filePct * 100))),
-              pct: Math.round(((i + Math.min(1, filePct)) / files.length) * 100) });
+        frac[i] = Math.min(1, filePct);
+        label[i] = D8.t("up.send").replace("{name}", name).replace("{i}", i + 1).replace("{n}", total).replace("{pct}", Math.min(100, Math.round(filePct * 100)));
+        tell();
       };
       const sendPart = async (n) => {
         const part = blob.slice(n * CHUNK, Math.min(blob.size, (n + 1) * CHUNK));
@@ -715,8 +721,18 @@
         while (next < parts) { const n = next++; await sendPart(n); }
       });
       await Promise.all(lanes);
-      metas.push({ fid, name, size: file.size, stored: blob.size, parts, gz });
-    }
+      metas[i] = { fid, name, size: file.size, stored: blob.size, parts, gz };
+      frac[i] = 1; tell();
+    };
+    // FILE_PARALLEL files at a time; once one fails, the others start no new file
+    let nextFile = 0, failed = false;
+    const worker = async () => {
+      while (!failed && nextFile < total) {
+        const i = nextFile++;
+        try { await one(i); } catch (err) { failed = true; throw err; }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(FILE_PARALLEL, total) }, worker));
     say({ text: D8.t("up.attach"), pct: 100 });
     return metas;
   };
