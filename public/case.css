@@ -329,11 +329,48 @@ html[data-theme="dark"] .v3d { background: radial-gradient(ellipse at 50% 38%, #
 .v3d-chip { max-width: 260px; overflow: hidden; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--white); color: var(--navy); font: inherit; font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .v3d-chip.on { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
 .v3d-wait { place-items: center; grid-template-rows: 1fr; }
+.v3d-tools a[hidden] { display: none; }
+/* several files in one view: the mode switch, chips that switch files on and off, a row per file under the view */
+.v3d-mode { display: inline-flex; margin: 0 0 10px; }
+.v3d-mode label { flex: 0 0 auto; }
+.v3d-mode span { height: 30px; padding: 0 14px; font-size: 9.5px; }
+.v3d-chips.multi .v3d-chip { position: relative; padding-left: 30px; }
+.v3d-chips.multi .v3d-chip::before { content: ""; position: absolute; top: 50%; left: 11px; width: 12px; height: 12px; margin-top: -6px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M6 2v8M2 6h8' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M6 2v8M2 6h8' stroke='black' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+.v3d-chips.multi .v3d-chip.on::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.v3d-hint { margin: -4px 0 12px; font-size: 12.5px; }
+.v3d-hint:empty { display: none; }
+.v3d.multi { height: 520px; }
+.v3d.multi:fullscreen { height: 100vh; }
+.v3d.multi .v3d-info { flex: 1 1 100%; }
+.v3d-legend { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.v3d-legend li { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 30px; }
+.v3d-dot { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: #e6dcc4; box-shadow: inset 0 0 0 1px rgba(11, 27, 51, .2); }
+.v3d-dot.t1 { background: #9ec2ed; }
+.v3d-dot.t2 { background: #edada8; }
+.v3d-dot.t3 { background: #a3dbb8; }
+.v3d-dot.scan { background: conic-gradient(#f1e7d2 0 50%, #d99a92 50% 100%); }
+.v3d-legend b { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--navy); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.v3d-legend small { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.v3d-legend li.err small { color: var(--err-fg2); }
+.v3d-legend button { flex: 0 0 auto; height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--white); color: var(--navy);
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: background-color .2s ease-out, color .2s ease-out; }
+.v3d-legend button:hover { background: var(--steel-100); }
+.v3d-legend button[aria-pressed="true"] { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
+.v3d-legend a { flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; color: var(--navy); }
+.v3d-legend a:hover { background: var(--steel-100); }
+.v3d-legend svg { width: 15px; height: 15px; }
+@media (prefers-reduced-motion: reduce) { .v3d-legend button { transition: none; } }
 .case-3d { margin: 6px 0 16px; }
 .ochat-3d { margin: 4px 0 0 6px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--white); color: var(--navy); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .ochat-3d:hover { background: var(--steel-100); }
 @media (max-width: 640px) {
   .v3d { height: 320px; }
+  .v3d.multi { height: 440px; }
+  .v3d-legend li:not(.err) small { display: none; }
   .v3d-overlay { padding: 0; }
   .v3d-overlay .v3d { border-radius: 0; }
 }

@@ -23,6 +23,10 @@ The owner wants the site to run without errors or jank, and every new feature ch
   import, settings), `public/tech.js` (KTV pages `#team`, `#team/<email>`, `#me` "Công của tôi", monthly pay slips),
   `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format),
   `public/viewer3d.js` (own WebGL viewer for STL / PLY / OBJ: order page "Xem trước 3D" from chat files, case design files, any `[data-v3d]` button).
+  The card has "Từng file / Xem cùng lúc": up to 4 files in one scene, in their own coordinates (upper, lower and bite scans line up),
+  a colour per STL, "Mờ" (see-through), one file loaded at a time. `gallery()` is called again on every chat refresh (15 s) and page
+  redraw: the same files must leave the view alone, a new file only adds a chip, a redrawn host with the same id takes over the old view.
+  Tests: `orders_ui.py` (multi view, broken file, no rebuild after a chat refresh or a redraw).
 - `public/about.html` + `site/about.js` + `site/about-dict.js` ("Giới thiệu", `dev/tests/about_ui.py`): layout modelled on
   luminadental.com.au (centred heads, picture/text chequerboard, card rows, closing call to action). Featured full-mouth case,
   17 CAD screenshots with a filter, 3 screen recordings (MP4 + WebM, `preload="none"`, play only while on screen, never by

@@ -264,6 +264,42 @@ with sync_playwright() as p:
     qp.mouse.wheel(0, -500); qp.wait_for_timeout(300)
     ok(qp.evaluate(PIX, "#o3d canvas") > px1, "wheel zooms in")
     qp.screenshot(path=f"{OUT}/order-3d.png", full_page=True)
+    # several files in one view. A new file in the chat only adds its chip: the crown stays as it is (not loaded again)
+    qp.evaluate("window.__c3 = document.querySelector('#o3d canvas')")
+    ant = os.path.join(OUT, "11-13 antagonist.stl")
+    with open(ant, "wb") as fh:
+        fh.write(b"solid antagonist".ljust(80, b" ")); fh.write(struct.pack("<I", len(cf)))
+        for a, b_, c in cf: fh.write(struct.pack("<12fH", 0, 0, 0, *[x - (9 if k == 2 else 0) for v_ in (cv[a], cv[b_], cv[c]) for k, x in enumerate(v_)], 0))
+    qp.set_input_files('#oChat [data-ochat="file"]', ant); qp.wait_for_timeout(300)
+    qp.fill("#oChat textarea", "Hàm đối diện"); qp.click("#oChat [type=submit]")
+    try: qp.wait_for_selector("#o3d .v3d-chip[title='11-13 antagonist.stl']", timeout=15000)
+    except Exception: pass
+    ok(qp.query_selector("#o3d .v3d-chip[title='11-13 antagonist.stl']") is not None and qp.get_attribute("#o3d .v3d-chip.on", "title") == "11-13 crown v1.stl"
+       and qp.evaluate("document.querySelector('#o3d canvas') === window.__c3"), "a new file in the chat adds its chip, the crown view is kept")
+    ok(qp.is_visible("#o3d .v3d-mode") and qp.query_selector("#o3d .v3d-legend") is None, "3D: 'Từng file / Xem cùng lúc' switch, one file at first")
+    qp.click("#o3d .v3d-mode label:has(input[value='multi'])"); qp.wait_for_timeout(200)
+    qp.click("#o3d .v3d-chip[title='11-13 antagonist.stl']")
+    try: qp.wait_for_selector("#o3d .v3d[data-models='2']", timeout=15000)
+    except Exception: pass
+    rows = qp.eval_on_selector_all("#o3d .v3d-legend li", "els => els.map((e) => [e.querySelector('b').textContent, e.querySelector('.v3d-dot').className])")
+    ok(qp.get_attribute("#o3d .v3d", "data-models") == "2" and qp.get_attribute("#o3d .v3d", "data-tris") == str(2 * len(cf)) and len(rows) == 2
+       and rows[0][1] != rows[1][1], "Xem cùng lúc: crown and antagonist in one view, each its own colour " + str(rows))
+    ok(qp.evaluate("document.querySelector('#o3d canvas') === window.__c3"), "adding a file keeps the view (the crown is not loaded again)")
+    s3 = qp.query_selector("#o3d canvas").screenshot()
+    qp.click("#o3d .v3d-legend li:first-child [data-ghost]"); qp.wait_for_timeout(250)
+    ok(qp.get_attribute("#o3d .v3d-legend li:first-child [data-ghost]", "aria-pressed") == "true" and qp.query_selector("#o3d canvas").screenshot() != s3, "'Mờ' makes a model see-through")
+    qp.click(f"#o3d .v3d-chip[title='{os.path.basename(long_name)}']")
+    try: qp.wait_for_selector("#o3d .v3d-legend li.err", timeout=15000)
+    except Exception: pass
+    ok(qp.query_selector("#o3d .v3d-legend li.err") is not None and qp.get_attribute("#o3d .v3d", "data-models") == "2", "a file that cannot be read shows its error, the others stay")
+    qp.evaluate("document.querySelector('#o3d').scrollIntoView({block: 'center'})"); qp.wait_for_timeout(200)
+    qp.screenshot(path=f"{OUT}/order-3d-multi.png", full_page=True)
+    # the chat refreshes every 15 s: the view is left alone (it used to be rebuilt and every file loaded again)
+    qp.wait_for_timeout(16000)
+    ok(qp.evaluate("document.querySelector('#o3d canvas') === window.__c3") and qp.get_attribute("#o3d .v3d", "data-models") == "2", "a chat refresh leaves the 3D view as it is")
+    qp.click("#o3d .v3d-mode label:has(input[value='one'])"); qp.wait_for_timeout(300)
+    ok(qp.get_attribute("#o3d .v3d", "data-models") == "1" and qp.get_attribute("#o3d .v3d-chip.on", "title") == "11-13 antagonist.stl" and qp.query_selector("#o3d .v3d-legend") is None,
+       "back to one file: the last one picked that shows")
     qp.click('#oChat .ochat-3d[data-name="11-13 crown v1.stl"]')
     try: qp.wait_for_selector(".v3d-overlay .v3d[data-tris]", timeout=15000)
     except Exception: pass
@@ -275,6 +311,9 @@ with sync_playwright() as p:
     ok("Chờ QC" in qp.inner_text(".pt-band"), "QC fail needs a note")
     qp.fill("#oNote", "Tiếp xúc 21 quá chặt"); qp.click('[data-act="fail"]'); qp.wait_for_timeout(1000)
     ok("QC trả sửa" in qp.inner_text(".pt-band"), "QC returns the order")
+    try: qp.wait_for_selector("#o3d .v3d[data-tris]", timeout=10000)
+    except Exception: pass
+    ok(qp.evaluate("document.querySelector('#o3d canvas') === window.__c3"), "the order page redraws and keeps its 3D view (not loaded again)")
     kp.goto(B + "/admin#orders/" + OID); kp.wait_for_timeout(1500)
     ok("Tiếp xúc 21 quá chặt" in text(kp, "#oChat"), "KTV sees the QC note in the chat")
     kp.click('[data-act="submit"]'); kp.wait_for_timeout(900)
