@@ -47,6 +47,8 @@ The owner wants the site to run without errors or jank, and every new feature ch
   `POST /api/jobs/<id>/revisions` (billing.edit only); review → in_design adds one used. `jobView` sends `rev: {free, used, custom}`
   to staff and the customer (raw fields stay internal). Tests: `dev/tests/revisions.test.mjs` (also with `R2=1`).
 - Case files: in R2 (`FILES`) they are kept with the case (`exp: 0`, shown "lưu cùng ca"); in KV they expire after 60 days.
+  Files in an order's team chat go the same way: `POST /api/orders/<id>/files/presign` signs the parts (keys `ofp:<id>:<fid>:<n>`),
+  the browser PUTs them to R2, then `POST /api/orders/<id>/files` attaches them. Tests: `presign.test.mjs` (both modes).
   privacy / terms carry both texts in `<!--store:r2-->` / `<!--store:kv-->` blocks; `publicPage` keeps the one that matches.
   Settings › Lưu trữ file ca › "Chép file cũ từ KV sang R2" (`POST /api/settings/files`, staff.manage, `copyKvFiles`): copies
   each part to R2 under the same key and sets the file record to `st: "r2"`, `exp: 0`; a file whose parts KV already dropped

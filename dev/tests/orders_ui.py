@@ -20,6 +20,9 @@ def block(route):
 SIGNIN = """async ([email,name]) => { const tok = await (await fetch('/__test/idtoken?email='+encodeURIComponent(email)+'&name='+encodeURIComponent(name))).text();
   const r = await fetch('/api/auth/google', {method:'POST', headers:{'Content-Type':'application/json','X-D8':'1'}, body: JSON.stringify({credential: tok})}); return r.status; }"""
 API = """async ([path, body, method]) => { const r = await fetch(path, {method: method || (body ? 'POST' : 'GET'), headers:{'Content-Type':'application/json','X-D8':'1'}, body: body ? JSON.stringify(body) : undefined}); return [r.status, await r.json().catch(()=>({}))]; }"""
+# nothing in the chat thread is wider than the thread, and the thread does not scroll sideways
+THREAD_FITS = """e => { const r = e.getBoundingClientRect(); return e.scrollWidth <= e.clientWidth + 1 &&
+  [...e.querySelectorAll('*')].every((c) => { const q = c.getBoundingClientRect(); return !q.width || q.right <= r.right + 1; }); }"""
 stamp = str(int(time.time()))[-6:]
 CODE = "UI" + stamp
 KTV, QC = f"ktv{stamp}@d8.example", f"qc{stamp}@d8.example"
@@ -138,6 +141,16 @@ with sync_playwright() as p:
     ok("US$225" in body and "Đang thiết kế" in body, "order page: total and status")
     op.wait_for_timeout(600)
     ok("khớp cắn 0.4" in text(op, "#oChat"), "first team message is in the order chat")
+    # the team chat is a real column next to the order details (was a 340 px strip)
+    cw = op.eval_on_selector(".o-chat-card", "e => e.getBoundingClientRect().width"); gw = op.eval_on_selector(".o-grid", "e => e.getBoundingClientRect().width")
+    ok(cw >= 380 and cw >= 0.4 * gw, "owner: the team chat column is wide (%d of %d px)" % (cw, gw))
+    # a file with a long name (no spaces) in the chat must not push its bubble out of the thread
+    long_name = os.path.join(OUT, "11-13_crown_v1_cement_gap_0.05_mm_final_exocad_export_v12_LONG.stl")
+    open(long_name, "wb").write(b"solid long".ljust(84, b" "))
+    op.set_input_files('#oChat [data-ochat="file"]', long_name); op.wait_for_timeout(300)
+    op.fill("#oChat textarea", "file dài tên"); op.click("#oChat [type=submit]"); op.wait_for_timeout(1500)
+    ok(op.query_selector("#oChat a.ochat-file") is not None and "_LONG" in text(op, "#oChat .ochat-list"), "owner sends a file with a long name in the chat")
+    ok(op.eval_on_selector("#oChat .ochat-list", THREAD_FITS), "owner: nothing in the chat thread runs past the thread (long file name)")
     op.screenshot(path=f"{OUT}/order-page.png", full_page=True)
 
     # search
@@ -218,7 +231,8 @@ with sync_playwright() as p:
     ok("11-13 crown v1.stl" in text(kp, "#oChat .ochat-files"), "file waits under the message box")
     kp.fill("#oChat textarea", "File thiết kế v1"); kp.click("#oChat [type=submit]"); kp.wait_for_timeout(2000)
     ok(kp.query_selector("#oChat a.ochat-file") is not None and "11-13 crown v1.stl" in text(kp, "#oChat .ochat-list"), "file sent in the chat")
-    href = kp.eval_on_selector("#oChat a.ochat-file", "a => a.getAttribute('href')")
+    ok(kp.eval_on_selector("#oChat .ochat-list", THREAD_FITS), "KTV: the chat thread fits its column")
+    href = kp.eval_on_selector('#oChat a.ochat-file[download="11-13 crown v1.stl"]', "a => a.getAttribute('href')")
     fr = kp.request.get(B + href)
     ok(fr.status == 200 and fr.body() == STL_BYTES, "file downloads from the chat")
     kp.click('[data-act="submit"]'); kp.wait_for_timeout(1000)
@@ -250,7 +264,7 @@ with sync_playwright() as p:
     qp.mouse.wheel(0, -500); qp.wait_for_timeout(300)
     ok(qp.evaluate(PIX, "#o3d canvas") > px1, "wheel zooms in")
     qp.screenshot(path=f"{OUT}/order-3d.png", full_page=True)
-    qp.click("#oChat .ochat-3d")
+    qp.click('#oChat .ochat-3d[data-name="11-13 crown v1.stl"]')
     try: qp.wait_for_selector(".v3d-overlay .v3d[data-tris]", timeout=15000)
     except Exception: pass
     ok(qp.is_visible(".v3d-overlay canvas"), "Xem 3D in the chat opens a large viewer")
@@ -442,6 +456,7 @@ with sync_playwright() as p:
     mp.goto(B + "/admin#orders/" + OID); mp.wait_for_timeout(1500)
     rows = mp.eval_on_selector_all(".o-items tbody tr", "els => els.map((e) => e.getBoundingClientRect().width)")
     ok(rows and all(w <= 360 for w in rows) and mp.eval_on_selector(".o-items tbody tr td", "e => e.getBoundingClientRect().width") > 250, "phone: order items as full-width rows")
+    ok(mp.eval_on_selector("#oChat .ochat-list", THREAD_FITS) and mp.eval_on_selector(".o-chat-card", "e => e.getBoundingClientRect().width") <= 360, "phone: the chat thread fits the screen")
     for h in ["orders", "orders/" + OID, "orders/new", "reports", "catalog", "cust/" + CID, "import/orders", "team", "team/" + KTV.replace("@", "%40")]:
         mp.goto(B + "/admin#" + h); mp.wait_for_timeout(1500)
         w = mp.evaluate("document.documentElement.scrollWidth")

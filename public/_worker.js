@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-30.5"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-30.6"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -1023,6 +1023,8 @@ async function translateText(env, text, to) {
 
 // Case files are stored in 20 MB parts: in the R2 bucket bound as FILES when there is one, otherwise in KV.
 const partKey = (job, fid, n) => "jf:" + job + ":" + fid + ":" + n;
+// files sent in an order's team chat: the same parts, under their own prefix
+const orderPartKey = (order, fid, n) => "ofp:" + order + ":" + fid + ":" + n;
 
 // Direct upload to R2. The Worker signs one URL per part (AWS Signature Version 4, query form) and the browser PUTs the
 // part straight to the bucket. Needs the secrets R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ACCOUNT_ID (and optionally
@@ -2711,13 +2713,30 @@ async function handleBook(request, env, url, who) {
     const o = await createOrder(env, DB, b, who, now);
     return json({ order: o }, 201);
   }
+  // team chat files, direct upload: POST /files/presign {fid, sizes} → {urls} (one per part, straight to R2), or {urls: null}
+  if ((m = path.match(/^\/api\/orders\/(\d+)\/files\/presign$/)) && method === "POST") {
+    const id = +m[1];
+    const o = await DB.prepare("SELECT id, designer, qc, status FROM orders WHERE id = ?").bind(id).first();
+    if (!o || !seesOrder(who, o)) return json({ error: "Không tìm thấy đơn hàng." }, 404);
+    if (!who.can("cases.notes")) return deny();
+    let b; try { b = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+    const sizes = Array.isArray(b.sizes) ? b.sizes.map((x) => +x) : [];
+    if (!FID_RE.test(b.fid || "") || !sizes.length || sizes.length > FILE_MAX_PARTS || sizes.some((x) => !(x > 0 && x <= CHUNK_MAX))) return json({ error: "Bad request." }, 400);
+    const used = await DB.prepare("SELECT COALESCE(SUM(stored), 0) AS n FROM order_files WHERE order_id = ?").bind(id).first();
+    if (used.n + sizes.reduce((t, x) => t + x, 0) > JOB_FILES_MAX) return json({ error: "Đơn này đã dùng hết 300 MB cho file trong chat." }, 413);
+    const cfg = r2Direct(env);
+    if (!cfg) return json({ urls: null });
+    const urls = [];
+    for (let n = 0; n < sizes.length; n++) urls.push(await r2PresignPart(cfg, orderPartKey(id, b.fid, n), sizes[n]));
+    return json({ urls, expires: PRESIGN_SECONDS });
+  }
   // files in the team chat: PUT parts /files/<fid>/<n>, then POST /files {files, text}; GET /files/<fid> downloads
   if ((m = path.match(/^\/api\/orders\/(\d+)\/files(?:\/([A-Za-z0-9]{10})(?:\/(\d{1,2}))?)?$/))) {
     const id = +m[1];
     const o = await DB.prepare("SELECT id, designer, qc, status FROM orders WHERE id = ?").bind(id).first();
     if (!o || !seesOrder(who, o)) return json({ error: "Không tìm thấy đơn hàng." }, 404);
     if (!who.can("cases.notes")) return deny();
-    const pkey = (fid, n) => "ofp:" + id + ":" + fid + ":" + n;
+    const pkey = (fid, n) => orderPartKey(id, fid, n);
     if (m[2] && m[3] && method === "PUT") {
       const n = +m[3], len = parseInt(request.headers.get("Content-Length") || "0", 10);
       if (n >= FILE_MAX_PARTS) return json({ error: "File quá lớn (tối đa 300 MB)." }, 413);
