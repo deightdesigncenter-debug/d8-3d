@@ -3,6 +3,7 @@
 # runs every API and browser test, and stops on nothing: the summary at the end lists what failed.
 # Usage: dev/tests/run.sh [screenshot folder]      (needs node 18+, python3 + playwright with chromium)
 set -u
+export PYTHONUNBUFFERED=1  # a stuck browser test shows where it stopped, not a log cut short at the last buffer flush
 cd "$(dirname "$0")/../.."
 OUT="${1:-/tmp/d8-test-shots}"
 PORT=8799
@@ -20,7 +21,8 @@ stop() { kill "$SERVER" 2>/dev/null; wait "$SERVER" 2>/dev/null; }
 run() { # name, command...
   local name="$1"; shift
   echo "=== $name"
-  if "$@" > "$OUT/$name.log" 2>&1; then echo "    ok ($(grep -c '^PASS' "$OUT/$name.log") checks)"; grep '^WARN' "$OUT/$name.log" | sed 's/^/    /'; else echo "    FAILED"; grep -E '^(FAIL|ERR)|Error' "$OUT/$name.log" | head -20; FAILED+=("$name"); fi
+  # 20 minutes at most per suite: a test that hangs fails and the run goes on (it once hung an hour on one browser step)
+  if timeout 1200 "$@" > "$OUT/$name.log" 2>&1; then echo "    ok ($(grep -c '^PASS' "$OUT/$name.log") checks)"; grep '^WARN' "$OUT/$name.log" | sed 's/^/    /'; else echo "    FAILED"; grep -E '^(FAIL|ERR)|Error' "$OUT/$name.log" | head -20; FAILED+=("$name"); fi
 }
 
 start PAY=1

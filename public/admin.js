@@ -429,7 +429,7 @@
         <div style="margin-top:12px"><button class="btn btn-primary small" type="button" id="outBtn" disabled>Tải lên &amp; giao</button></div></div>
     </section>` : (outs.length ? `<section class="card"><h2 class="h-caps">File đã giao khách</h2><ul class="files">${outs.map((f) => fileRow(f)).join("")}</ul></section>` : "");
 
-    const chatCard = can("cases.chat_read") ? `<section class="card"><h2 class="h-caps">Tin nhắn với khách</h2>${can("cases.chat") ? "" : '<p class="sub">Bạn chỉ được đọc tin nhắn.</p>'}
+    const chatCard = can("cases.chat_read") ? `${D8.chatBub.html("Tin nhắn với khách")}<section class="card chat-panel" aria-labelledby="chatH" id="chatPanel">${D8.chatBub.head("Tin nhắn với khách", D8.t("chat.close"))}${can("cases.chat") ? "" : '<p class="sub">Bạn chỉ được đọc tin nhắn.</p>'}
       <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> Luôn dịch tin của khách</label><button type="button" data-tr-all hidden>Dịch tất cả</button></div>
       <div class="thread" id="thread">${D8.threadHtml(j, "admin", "vi") || '<p class="muted" style="margin:0">Chưa có tin nhắn.</p>'}</div>
       ${D8.typingHtml(caseTypingNow)}
@@ -510,6 +510,7 @@
       </div>`;
     const th = $("thread");
     if (th) { if (keepBottom) th.scrollTop = th.scrollHeight; D8.wireThread(th, j, "vi"); }
+    D8.chatBub.wire(j, "admin");
     if ($("jobChat") && D8.orderChat) D8.orderChat($("jobChat"), j.orderId);
     if ($("jobOrderBody")) api("/api/orders/" + j.orderId).then((d) => {
       const o = d.order, box = $("jobOrderBody"); if (!box || !current || current.id !== j.id) return;

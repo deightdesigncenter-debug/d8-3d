@@ -206,9 +206,10 @@ r = await ktv2("/api/orders/dupes?patient=john%20smith&customer=" + jake);
 ok(r.status === 403, "staff who cannot enter orders get no duplicate check");
 await owner("/api/staff", { method: "POST", body: { email: KTV2, role: "designer", perms: [...desPerms, "orders.edit"] } });
 r = await ktv2("/api/orders/dupes?patient=" + encodeURIComponent("JOHN  smith") + "&customer=" + jake);
-const dj = (r.data.dupes || []).find((x) => x.id === o1.id);
-ok(r.status === 200 && dj && dj.code === o1.code && dj.match === "patient" && dj.canOpen === false && !("total" in dj), "KTV sees the existing order code " + (dj && dj.code) + " (no money, cannot open it)");
-ok(!(r.data.dupes || []).some((x) => x.kind !== "new" && x.patient !== "John Smith"), "duplicates are matched on the patient");
+// an order the KTV may not open is listed by code only: its id is 0 and its patient, KTV, doctor and clinic are blank
+const dj = (r.data.dupes || []).find((x) => x.code === o1.code);
+ok(r.status === 200 && dj && dj.id === 0 && dj.match === "patient" && dj.canOpen === false && !("total" in dj) && dj.patient === "" && dj.designer === "", "KTV sees the existing order code " + (dj && dj.code) + " (no money, no patient, cannot open it)");
+ok(!(r.data.dupes || []).some((x) => x.canOpen ? x.patient !== "John Smith" : x.patient !== ""), "duplicates are matched on the patient, and hidden ones show no patient");
 r = await ktv2("/api/orders/dupes?patient=Nobody%20Here&customer=" + jake);
 ok(r.status === 200 && r.data.dupes.length === 0, "no false alarm for a new patient");
 r = await owner("/api/orders", { method: "POST", body: { customer_id: alls, received: day, patient: "Mai Anh", ref: "AS-7781", items: [{ product: "CR" }] } });

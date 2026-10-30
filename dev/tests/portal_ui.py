@@ -58,12 +58,33 @@ with sync_playwright() as p:
             ok(re.match(r"^\d{8,9}$", oc) is not None, name + ": order code " + oc)
             ok(oc in pg.inner_text(".pt-band"), name + ": order code in the case header")
         ok(pg.eval_on_selector_all(".files li", "e=>e.length") >= 2, name + ": files attached")
+        # the case chat is a round button in the corner: a click opens the thread in a panel that fits the screen
+        pg.click("#chatBub"); pg.wait_for_timeout(350)
+        bx = pg.query_selector("#chatPanel").bounding_box()
+        ok(pg.is_visible("#chatPanel") and not pg.is_visible("#chatBub") and bx["x"] >= 0 and bx["x"] + bx["width"] <= vp["width"] + 0.5
+           and bx["y"] >= 0 and bx["y"] + bx["height"] <= vp["height"] + 0.5, name + ": the chat opens from the button and fits the screen")
+        pg.screenshot(path=f"{OUT}/{name}-chat-open.png")
         pg.fill("#composer", "Hi, please keep the screw access palatal on 12 and 22."); pg.click("#sendMsg"); pg.wait_for_timeout(700)
         ok("screw access palatal on 12" in pg.inner_text("#thread"), name + ": message sent")
         # D.EIGHT replies and posts a 3D link (admin password)
         H = {"X-Upload-Key": PW, "Content-Type": "application/json", "X-D8": "1"}
         api = ctx.request
-        api.post(B + f"/api/jobs/{jid}/messages", headers=H, data=json.dumps({"text": "Thanks, noted."}))
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+        ok(not pg.is_visible("#chatPanel") and pg.is_visible("#chatBub") and pg.evaluate("document.activeElement && document.activeElement.id") == "chatBub",
+           name + ": Escape closes the chat and gives focus back to the button")
+        rep = api.post(B + f"/api/jobs/{jid}/messages", headers=H, data=json.dumps({"text": "Thanks, noted."}))
+        # closed, so the staff reply waits on the button: one unread, and the button pops (a live poll brings it in)
+        try:
+            pg.wait_for_function("document.getElementById('chatN') && !document.getElementById('chatN').hidden", timeout=15000)
+        except Exception:
+            print("DIAG reply status", rep.status, "thread", pg.evaluate("D8.api('/api/jobs/' + location.hash.split('/')[2]).then((r) => r.job.thread.map((m) => [m.by, m.at, m.text.slice(0, 30)]))"))
+            print("DIAG seen", pg.evaluate("localStorage.getItem('d8-chat-seen')"), "hidden", pg.evaluate("document.hidden"), "composer", pg.evaluate("document.getElementById('composer') && document.getElementById('composer').value"))
+            print("DIAG badge", pg.evaluate("document.getElementById('chatN') && document.getElementById('chatN').outerHTML"), "bubble", pg.evaluate("document.getElementById('chatBub') && document.getElementById('chatBub').outerHTML.slice(0, 160)"))
+        ok(pg.inner_text("#chatN") == "1" and "pop" in (pg.get_attribute("#chatBub", "class") or ""), name + ": a staff reply shows as one unread and the button pops")
+        pg.screenshot(path=f"{OUT}/{name}-chat-bubble.png")
+        pg.click("#chatBub"); pg.wait_for_timeout(350)
+        ok("Thanks, noted." in pg.inner_text("#thread") and not pg.is_visible("#chatN"), name + ": opening the chat shows the reply and clears the count")
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
         r = api.post(B + "/api/upload", headers={"X-Upload-Key": PW, "X-D8": "1", "X-Case-Label": "Upper v1", "X-Expire-Days": "14", "Content-Type": "application/octet-stream"}, data=open(F["html"], "rb").read())
         link = r.json(); ok(r.status == 201, name + ": 3D link created")
         r = api.post(B + f"/api/jobs/{jid}/previews", headers=H, data=json.dumps({"linkId": link["id"]}))

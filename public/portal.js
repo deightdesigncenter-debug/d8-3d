@@ -223,7 +223,7 @@
       onJob: (j) => {
         if (!current || current.id !== id || busy) return false;
         const box = document.getElementById("composer");
-        if ((box && box.value.trim()) || document.querySelector("#addList li")) return false;
+        if ((box && box.value.trim()) || document.querySelector("#addList li")) { D8.chatBub.badge(j, "client"); return false; }
         current = j; drawCase(j); return true;
       },
     });
@@ -338,8 +338,9 @@
               <div style="margin-top:12px" id="addBtnWrap" hidden><button class="btn btn-primary small" type="button" id="addBtn"></button></div></div>`
               : `<p class="hint">${esc(T("p.fl.closed"))}</p>`}
           </section>
-          <section class="card" aria-labelledby="msH" id="messages">
-            <h2 class="h-caps" id="msH">${esc(T("p.ms.h"))}</h2>
+          ${D8.chatBub.html(T("p.ms.h"))}
+          <section class="card chat-panel" aria-labelledby="chatH" id="chatPanel">
+            ${D8.chatBub.head(T("p.ms.h"), T("chat.close"))}
             <p class="sub"><a href="${esc(D8.waLink(T("p.ms.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">${esc(T("p.ms.wa"))}</a></p>
             <div class="thread-tools"><label class="tr-auto" hidden><input type="checkbox" data-tr-auto> ${esc(T("tr.auto"))}</label><button type="button" data-tr-all hidden>${esc(T("tr.all"))}</button></div>
             <div class="thread" id="thread">${thread || `<p class="muted" style="margin:0">${esc(T("p.ms.none"))}</p>`}</div>
@@ -365,6 +366,7 @@
     const th = document.getElementById("thread");
     if (atBottom) th.scrollTop = th.scrollHeight;
     D8.wireThread(th, j, readLang);
+    D8.chatBub.wire(j, "client");
     wireCase(j);
     const nb = document.getElementById("composer");
     if (nb && draft) nb.value = draft;
@@ -480,6 +482,7 @@
       try {
         if (typingH) typingH.stop();
         current = (await D8.api(`/api/jobs/${j.id}/messages`, { method: "POST", body: { text } })).job;
+        box.value = ""; // sent: the box is empty (drawCase keeps a draft, so clear it first)
         if (live) live.sync(current);
         drawCase(current);
         const c = document.getElementById("composer"); c && c.focus();

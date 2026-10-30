@@ -120,6 +120,42 @@ ok(r.status === 403 || r.status === 400, "A cannot deliver to the customer (" + 
 r = await ka("/api/orders/" + oa.id);
 ok(r.data.order.status !== "delivered", "A's order is not delivered");
 
+// ---------- a KTV given the wider permissions (all orders, all cases, assign, team reports) still sees only their own work
+const Cm = uniq("ktvc") + "@d8.example";
+await owner("/api/staff", { method: "POST", body: { email: Cm, role: "designer", perms: ["cases.files", "cases.design", "cases.notes", "cases.chat_read", "orders.view", "orders.edit", "cases.all", "cases.assign", "cases.status", "cases.deliver", "reports.view", "techpay.own"] } });
+const kc = await signin(Cm, "Chi KTV");
+const oc = (await owner("/api/orders", { method: "POST", body: { customer_id: cust.id, received: "2026-10-21", patient: "Patient Of C", designer: Cm, qc: QC, items: [{ product: "CR", qty: 1 }] } })).data.order;
+await owner("/api/orders", { method: "POST", body: { customer_id: cust.id, received: "2026-10-21", patient: "Unassigned Patient", items: [{ product: "CR", qty: 1 }] } });
+r = await kc("/api/orders?status=&limit=200");
+ok(r.status === 200 && r.data.items.some((x) => x.id === oc.id) && !r.data.items.some((x) => x.id === oa.id || x.id === ob.id), "with all-orders and assign permissions, a KTV lists only their own orders");
+ok(r.data.items.every((x) => x.designer === Cm || x.qc === Cm), "nothing of another KTV in that list");
+r = await kc("/api/orders/" + ob.id);
+ok(r.status === 404, "...and cannot open B's order");
+r = await kc("/api/orders/" + oa.id);
+ok(r.status === 404, "...nor A's order");
+r = await kc("/api/orders/" + oc.id);
+ok(r.status === 200, "their own order opens");
+r = await kc(`/api/orders/${ob.id}/act`, { method: "POST", body: { action: "start" } });
+ok(r.status === 404, "...and cannot start B's order");
+r = await kc("/api/staff/team");
+ok(r.status === 200 && !r.data.team.some((t) => t.email === A || t.email === Bm) && r.data.team.some((t) => t.email === QC), "the team list leaves out the other KTVs");
+r = await kc("/api/tech/" + encodeURIComponent(Bm));
+ok(r.status === 403, "...and cannot open another KTV's page");
+r = await kc("/api/tech");
+ok(r.status === 403, "...nor the team page");
+r = await kc("/api/admin/jobs");
+ok(r.status === 200 && !(r.data.jobs || r.data.items || []).some((x) => x.id === job.id), "B's portal case is not in C's list, even with cases.all and cases.assign");
+r = await kc("/api/jobs/" + job.id);
+ok(r.status === 404, "...and cannot open it");
+r = await kc("/api/todo");
+ok(r.status === 200 && !r.data.items.some((x) => x.key === "free" || x.key === "ready"), "bell counts: no team-wide counts for a KTV");
+const dupesOf = async (who) => (await who(`/api/orders/dupes?customer=${cust.id}&patient=${encodeURIComponent("Patient Of B")}`)).data.dupes || [];
+const dk = await dupesOf(kc);
+ok(dk.some((x) => x.code === ob.code && !x.canOpen), "a duplicate check says that B's patient has an order (for a KTV who may not open it)");
+ok(dk.every((x) => x.canOpen || (!x.patient && !x.designer && !x.qc && !x.doctor && !x.clinic && !x.customer_name)), "...but shows neither the patient, doctor, clinic, customer nor KTV of that order");
+const dOwner = await dupesOf(owner);
+ok(dOwner.some((x) => x.code === ob.code && x.patient === "Patient Of B" && x.designer === Bm), "the owner still sees the patient and KTV of the matched order");
+
 // ---------- QC: checks the work, still no money
 r = await qc("/api/orders/" + ob.id);
 ok(r.status === 200 && !("total" in r.data.order) && !("tech_cost" in r.data.order), "QC on the order: no price, no KTV pay");

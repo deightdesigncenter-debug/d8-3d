@@ -254,6 +254,7 @@
     "pay.via.paypal": ["PayPal", "PayPal"], "pay.via.stripe": ["card (Stripe)", "thẻ (Stripe)"], "pay.via.manual": ["bank transfer", "chuyển khoản"], "pay.via.claim": ["transfer", "chuyển khoản"],
     "pay.ev.paid": ["Payment confirmed", "Đã xác nhận thanh toán"], "pay.ev.sent": ["Payment sent, being confirmed", "Đã gửi thanh toán, đang xác nhận"], "pay.ev.rejected": ["Payment not received", "Chưa nhận được thanh toán"],
     "bill.check": ["Confirming payment", "Đang xác nhận thanh toán"],
+    "chat.close": ["Close chat", "Đóng khung chat"],
   });
   // [label, value] rows for a case's extra prescription fields, in the current language
   D8.rxRows = (rx) => Object.entries(rx || {}).map(([k, v]) => [D8.t("rx." + k, k.replace(/_/g, " ")), D8.t("rxo." + v, v)]);
@@ -462,6 +463,60 @@
 
   /* ---- live case chat: "is typing" line, a small poll, and a typing ping for the composer ---- */
   D8.typingHtml = (t) => `<div class="typing" id="typingLine"${t ? "" : " hidden"}><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${D8.esc(t ? D8.t("tp.is").replace("{name}", t.name || "") : "")}</span></div>`;
+  /* ---- case chat as a round button in the corner (portal and admin): the unread count sits on it, a new message makes it
+     pop, and a click opens the thread in a panel above it. The open state survives redraws; "seen" is a per-viewer
+     convenience in localStorage, not a record. */
+  const chatBubState = { open: false, job: "", shown: {}, j: null, me: "" };
+  const chatSeen = () => { try { return JSON.parse(localStorage.getItem("d8-chat-seen") || "{}") || {}; } catch (e) { return {}; } };
+  const chatSaveSeen = (s) => { const k = Object.keys(s); if (k.length > 300) delete s[k[0]]; try { localStorage.setItem("d8-chat-seen", JSON.stringify(s)); } catch (e) { /* private window: no memory of it, fine */ } };
+  const CHAT_CLOSE = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4l10 10M14 4 4 14"/></svg>';
+  D8.chatBub = {
+    // the round button; hidden until wire() runs, so no empty button shows
+    html(label) { return `<button type="button" class="chat-bub" id="chatBub" aria-expanded="false" aria-controls="chatPanel" aria-label="${D8.esc(label)}" title="${D8.esc(label)}" hidden>${D8.ICON_CHAT}<span class="chat-n" id="chatN" hidden></span></button>`; },
+    // heading row of the panel, with its close button
+    head(title, closeLabel) { return `<div class="chat-head"><h2 class="h-caps" id="chatH">${D8.esc(title)}</h2><button type="button" class="iconbtn" data-chat-close aria-label="${D8.esc(closeLabel)}" title="${D8.esc(closeLabel)}">${CHAT_CLOSE}</button></div>`; },
+    // messages from the other side that this viewer has not seen yet (system lines are not chat)
+    unread(j, me) { const seen = +chatSeen()[j.id] || 0; return (j.thread || []).filter((m) => m.by !== "system" && m.by !== me && m.at > seen).length; },
+    markSeen(j) {
+      const at = (j.thread || []).reduce((a, m) => (m.by !== "system" && m.at > a ? m.at : a), 0), s = chatSeen();
+      if (at > (s[j.id] || 0)) { s[j.id] = at; chatSaveSeen(s); }
+    },
+    setOpen(j, me, open) {
+      chatBubState.open = open; chatBubState.j = j; chatBubState.me = me;
+      this.markSeen(j);
+      const bub = document.getElementById("chatBub"), panel = document.getElementById("chatPanel"), badge = document.getElementById("chatN");
+      if (!bub || !panel || !badge) return;
+      panel.classList.toggle("open", open); bub.hidden = open; bub.setAttribute("aria-expanded", String(open)); badge.hidden = true;
+      if (open) { const th = document.getElementById("thread"); if (th) th.scrollTop = th.scrollHeight; } else bub.focus();
+    },
+    // count only, no redraw (the customer is typing a draft and the page must not be redrawn under it)
+    badge(j, me) {
+      if (chatBubState.open || chatBubState.job !== j.id) return;
+      const bub = document.getElementById("chatBub"), badge = document.getElementById("chatN");
+      if (!bub || !badge) return;
+      const n = this.unread(j, me), prev = chatBubState.shown[j.id];
+      chatBubState.shown[j.id] = n;
+      badge.hidden = !n; badge.textContent = n > 9 ? "9+" : String(n);
+      if (prev !== undefined && n > prev) { bub.classList.remove("pop"); void bub.offsetWidth; bub.classList.add("pop"); }
+    },
+    // called after each draw of a case: keeps the panel open or shut, sets the count, pops the button on a new message
+    wire(j, me) {
+      const bub = document.getElementById("chatBub"), panel = document.getElementById("chatPanel"), badge = document.getElementById("chatN");
+      if (!bub || !panel || !badge) return;
+      if (chatBubState.job !== j.id) { chatBubState.job = j.id; chatBubState.open = false; }
+      chatBubState.j = j; chatBubState.me = me;
+      if (chatBubState.open) this.markSeen(j);
+      const n = chatBubState.open ? 0 : this.unread(j, me), prev = chatBubState.shown[j.id];
+      chatBubState.shown[j.id] = n;
+      panel.classList.toggle("open", chatBubState.open);
+      bub.hidden = chatBubState.open; bub.setAttribute("aria-expanded", String(chatBubState.open));
+      badge.hidden = !n; badge.textContent = n > 9 ? "9+" : String(n);
+      if (!chatBubState.open && prev !== undefined && n > prev) { bub.classList.remove("pop"); void bub.offsetWidth; bub.classList.add("pop"); }
+      bub.onclick = () => this.setOpen(j, me, true);
+      const x = panel.querySelector("[data-chat-close]"); if (x) x.onclick = () => this.setOpen(j, me, false);
+      if (!this.keyed) { this.keyed = true; document.addEventListener("keydown", (e) => { if (e.key === "Escape" && chatBubState.open && chatBubState.j) this.setOpen(chatBubState.j, chatBubState.me, false); }); }
+    }
+  };
   D8.paintTyping = (t) => {
     const el = document.getElementById("typingLine");
     if (!el) return;

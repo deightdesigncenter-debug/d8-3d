@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-30.2"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-30.4"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -728,10 +728,10 @@ async function syncPayment(env, job) {
 // Roles (admin, designer, qc and any custom role) are permission sets kept in "cfg:roles";
 // a staff member can also have their own permission list that replaces the role's.
 const PERMS = [
-  ["orders.view", "Xem tất cả đơn hàng (không chỉ đơn được giao)", "Đơn hàng"],
+  ["orders.view", "Xem tất cả đơn hàng (KTV vẫn chỉ thấy đơn của mình)", "Đơn hàng"],
   ["orders.edit", "Nhập / sửa đơn hàng, tạo đơn làm lại (R) và làm tiếp (C)", "Đơn hàng"],
   ["orders.delete", "Xóa đơn hàng", "Đơn hàng"],
-  ["cases.all", "Xem tất cả ca từ cổng khách (không chỉ ca được giao)", "Ca hàng"],
+  ["cases.all", "Xem tất cả ca từ cổng khách (KTV vẫn chỉ thấy ca của mình)", "Ca hàng"],
   ["cases.assign", "Giao ca cho KTV / QC", "Ca hàng"],
   ["cases.status", "Đổi trạng thái ca", "Ca hàng"],
   ["cases.customer", "Xem email và liên hệ của khách", "Ca hàng"],
@@ -791,9 +791,14 @@ async function staffFor(env, email) {
   const perms = Array.isArray(rec.perms) ? rec.perms.filter((p) => PERM_KEYS.includes(p)) : roles[rec.role].perms;
   return { email, role: rec.role, label: roles[rec.role].label, perms: new Set(perms), custom: Array.isArray(rec.perms) };
 }
+// A technician (KTV: can design) sees only the work assigned to them. The permissions that normally show more
+// (orders.view, cases.all, cases.assign, reports.view, techpay.manage) never show another technician's cases or
+// orders to a KTV. QC (cases.qc) and staff managers (staff.manage) keep the wider view.
+const techOnly = (who) => !!who && !who.viaKey && who.can("cases.design") && !who.can("cases.qc") && !who.can("staff.manage");
 // Who may see a case in the workspace (the customer who owns it is handled separately).
 function staffSees(who, j) {
   if (!who || !who.staff) return false;
+  if (techOnly(who)) return (!!j.designer && j.designer === who.email) || (!!j.qcBy && j.qcBy === who.email);
   if (who.viaKey || who.can("cases.all") || who.can("cases.assign")) return true;
   if (j.designer && j.designer === who.email) return true;
   if (j.qcBy && j.qcBy === who.email) return true;
@@ -814,7 +819,7 @@ async function handleStaff(request, env, url, who) {
     }
     await fillNames(env, team);
     // a KTV who does not run the team sees themself, the owners and QC — never the other KTVs
-    const runs = who.viaKey || ["staff.manage", "cases.assign", "orders.view", "reports.view", "techpay.manage"].some((p) => who.can(p));
+    const runs = !techOnly(who) && (who.viaKey || ["staff.manage", "cases.assign", "orders.view", "reports.view", "techpay.manage"].some((p) => who.can(p)));
     if (!runs && who.can("cases.design")) return json({ team: team.filter((t) => t.email === who.email || t.owner || (t.qc && !t.design)) });
     return json({ team });
   }
@@ -1337,7 +1342,7 @@ async function listJobs(env, owner, who) {
     const DB = await bookDb(env), left = await kvJobsLeft(env, DB);
     const w = [], a = [];
     if (owner) { w.push("owner = ?"); a.push(owner); }
-    if (who && !(who.viaKey || who.can("cases.all") || who.can("cases.assign"))) {
+    if (who && (techOnly(who) || !(who.viaKey || who.can("cases.all") || who.can("cases.assign")))) {
       const me = who.email || "\u0000", or = ["designer = ?", "qc_by = ?"];
       a.push(me, me);
       if (who.can("cases.qc")) or.push("(stage = 'qc' AND qc_by = '')");
@@ -2150,13 +2155,13 @@ async function loadSettings(env) {
 /* ---- who may see what */
 const canMoney = (who) => who.viaKey || who.can("billing.view");
 function orderScope(who) {
-  if (who.viaKey || who.can("orders.view")) return { sql: "1 = 1", args: [] };
+  if (who.viaKey || (who.can("orders.view") && !techOnly(who))) return { sql: "1 = 1", args: [] };
   const parts = ["o.designer = ?", "o.qc = ?"], args = [who.email, who.email];
   if (who.can("cases.qc")) parts.push("(o.status = 'qc' AND o.qc = '')");
   return { sql: "(" + parts.join(" OR ") + ")", args };
 }
 function seesOrder(who, o) {
-  if (who.viaKey || who.can("orders.view")) return true;
+  if (who.viaKey || (who.can("orders.view") && !techOnly(who))) return true;
   if (!who.email) return false;
   return o.designer === who.email || o.qc === who.email || (who.can("cases.qc") && o.status === "qc" && !o.qc);
 }
@@ -2288,7 +2293,12 @@ async function findDupes(DB, who, q) {
       o.source, o.job_id, o.customer_id, c.code AS customer_code, c.name AS customer_name,
       (SELECT group_concat(CASE WHEN qty = CAST(qty AS INTEGER) THEN CAST(qty AS INTEGER) ELSE qty END || '× ' || product, ', ') FROM order_items WHERE order_id = o.id) AS items_text
     FROM orders o JOIN customers c ON c.id = o.customer_id WHERE (${w.join(" OR ")}) AND o.status != 'cancelled' AND o.id != ? ORDER BY o.received_at DESC LIMIT 6`).bind(...a, +q.exclude || 0));
-  return list.map((o) => ({ ...o, match: cid && ref && o.customer_id === cid && o.ref === ref ? "ref" : "patient", canOpen: seesOrder(who, o) }));
+  return list.map((o) => {
+    const match = cid && ref && o.customer_id === cid && o.ref === ref ? "ref" : "patient";
+    // an order this person may not open: only its code, day and that a match exists, never the patient, doctor, clinic, customer or KTV
+    if (!seesOrder(who, o)) return { id: 0, code: o.code, day: o.day, match, canOpen: false, patient: "", ref: "", doctor: "", clinic: "", customer_code: "", customer_name: "", designer: "", qc: "", items_text: "" };
+    return { ...o, match, canOpen: true };
+  });
 }
 const custSearch = (c) => fold([c.code, c.name, c.contact, c.email, c.country].join(" "));
 
@@ -2678,8 +2688,8 @@ async function handleBook(request, env, url, who) {
       add("fix", "đơn bị trả sửa (QC / bác sĩ)", "#orders?designer=me&status=fix,revise", "SELECT COUNT(*) AS n FROM orders WHERE designer = ? AND status IN ('fix', 'revise')", me);
     }
     if (who.can("cases.qc")) add("qc", "đơn chờ QC", "#orders?status=qc", "SELECT COUNT(*) AS n FROM orders WHERE status = 'qc' AND (qc = ? OR qc = '')", me);
-    if (who.can("cases.assign")) add("free", "đơn chưa giao KTV", "#orders?designer=none&status=open", `SELECT COUNT(*) AS n FROM orders WHERE designer = '' AND ${OPEN}`);
-    if (who.can("cases.deliver") || who.can("cases.status")) add("ready", "đơn đã qua QC / bác sĩ đã duyệt, chờ giao", "#orders?status=ready,approved", "SELECT COUNT(*) AS n FROM orders WHERE status IN ('ready', 'approved')");
+    if (who.can("cases.assign") && !techOnly(who)) add("free", "đơn chưa giao KTV", "#orders?designer=none&status=open", `SELECT COUNT(*) AS n FROM orders WHERE designer = '' AND ${OPEN}`);
+    if ((who.can("cases.deliver") || who.can("cases.status")) && !techOnly(who)) add("ready","đơn đã qua QC / bác sĩ đã duyệt, chờ giao", "#orders?status=ready,approved", "SELECT COUNT(*) AS n FROM orders WHERE status IN ('ready', 'approved')");
     const sc = orderScope(who);
     add("late", "đơn quá hạn", "#orders?status=open&sort=due", `SELECT COUNT(*) AS n FROM orders o WHERE ${sc.sql} AND o.due_at > 0 AND o.due_at < ? AND o.${OPEN}`, ...sc.args, now);
     if (who.can("cases.notes") && me) add("chat", "đơn có tin nhắn nội bộ mới", "#orders?status=open", `SELECT COUNT(*) AS n FROM orders o LEFT JOIN order_reads r ON r.order_id = o.id AND r.email = ?
@@ -3356,7 +3366,7 @@ async function updateOrder(env, DB, o, b, who, now) {
 // Workflow of an order entered in the workspace (portal cases use their own case page).
 async function orderAction(env, DB, o, b, who, now) {
   if (o.job_id) return json({ error: "Đơn từ cổng khách hàng: làm quy trình trên trang ca.", job: o.job_id }, 409);
-  const note = clip(b.note, 2000), me = who.email, any = who.viaKey || who.can("orders.view");
+  const note = clip(b.note, 2000), me = who.email, any = who.viaKey || (who.can("orders.view") && !techOnly(who));
   const go = async (status, text, extra = {}) => {
     const set = { status, updated_at: now, ...extra };
     if (status === "delivered") { set.delivered_at = now; set.dday = vnDay(now); }
@@ -3465,7 +3475,7 @@ async function orderDash(DB, who, now) {
   return json(out);
 }
 // Who sees every KTV's page; pay is shown to techpay.manage, or to a KTV for their own orders with techpay.own.
-const canTeam = (who) => who.viaKey || who.can("staff.manage") || who.can("techpay.manage") || who.can("reports.view");
+const canTeam = (who) => !techOnly(who) && (who.viaKey || who.can("staff.manage") || who.can("techpay.manage") || who.can("reports.view"));
 const canPayOf = (who, email) => who.viaKey || who.can("techpay.manage") || (!!who.email && email === who.email && who.can("techpay.own"));
 const ITEMS_TEXT = `(SELECT group_concat(CASE WHEN i.qty = 1 THEN i.product WHEN i.qty = CAST(i.qty AS INTEGER) THEN (CAST(i.qty AS INTEGER) || '× ' || i.product) ELSE (i.qty || '× ' || i.product) END, ', ') FROM order_items i WHERE i.order_id = o.id)`;
 const REDONE = `EXISTS (SELECT 1 FROM orders c WHERE c.parent_id = o.id AND c.kind = 'redo')`;
