@@ -479,6 +479,13 @@ with sync_playwright() as p:
     op.screenshot(path=f"{OUT}/link-preview.png", full_page=True)
     r = op.request.get(B + "/og/" + lid + ".jpg"); default = op.request.get(B + "/brand/og-3d.jpg")
     ok(r.status == 200 and r.headers["content-type"] == "image/jpeg" and r.body() != default.body(), "link preview picture is the captured design")
+    ok(len(r.body()) < 300 * 1024, "captured preview picture under 300 KB, so WhatsApp shows it (" + str(len(r.body())) + " bytes)")
+    op.click("#snapDef")
+    for _ in range(20):
+        if "mặc định" in text(op, "#snapSay"): break
+        op.wait_for_timeout(300)
+    r2 = op.request.get(B + "/og/" + lid + ".jpg")
+    ok(r2.body() == default.body() and len(default.body()) < 300 * 1024, "'Dùng ảnh mặc định' gives the link the D.EIGHT default picture")
     page = op.request.get(B + "/v/" + lid).text()
     ok('og:title" content="Patient: CHUANG TSUNG WEI' in page, "doctor link carries the preview title")
     st, od = op.evaluate(API, ["/api/orders/" + OID])

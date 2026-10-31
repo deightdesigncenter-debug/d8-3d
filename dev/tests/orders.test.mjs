@@ -2,6 +2,7 @@
 // permissions (KTV never sees money), workflow, team chat, payments matched to orders, reports, export, import,
 // portal cases becoming orders, 3D link previews. Run against: PAY=1 node dev/server.mjs public 8788 mat-khau-thu
 import { B, PW, ok, done, signin, uniq } from "./lib.mjs";
+import { readFileSync } from "node:fs";
 
 const OWNER = "d.eightdesigncenter@gmail.com";
 const owner = await signin(OWNER, "D.EIGHT");
@@ -429,6 +430,14 @@ img = await fetch(B + "/og/" + link.id + ".jpg");
 ok((await img.arrayBuffer()).byteLength === 4000, "preview image is the snapshot");
 r = await keyCall(`/api/cases/${link.id}/og`, { method: "PUT", body: "not a jpeg at all".repeat(100), headers: { "Content-Type": "image/jpeg" } });
 ok(r.status === 400, "only JPEG accepted as preview");
+// the default picture is the owner's (2026-10-31), small enough for WhatsApp (no picture over ~300 KB there)
+const newDefault = Buffer.from(await (await fetch(B + "/brand/og-3d.jpg")).arrayBuffer());
+ok(newDefault.byteLength < 300 * 1024 && Buffer.compare(Buffer.from(fallback), newDefault) === 0, "default preview picture: the owner's picture, under 300 KB (" + newDefault.byteLength + " bytes)");
+// a link made before keeps a copy of the old default picture: it shows the new one
+r = await keyCall(`/api/cases/${link.id}/og`, { method: "PUT", body: readFileSync(new URL("./old-og-3d.jpg", import.meta.url)), headers: { "Content-Type": "image/jpeg" } });
+img = await fetch(B + "/og/" + link.id + ".jpg");
+ok(r.status === 200 && Buffer.compare(Buffer.from(await img.arrayBuffer()), newDefault) === 0, "a link holding the old default picture shows the new one");
+ok(page.includes("/og/" + link.id + ".jpg?v="), "the picture's address carries the site version (chat apps fetch a changed picture)");
 r = await owner(`/api/orders/${o1.id}/previews`, { method: "POST", body: { linkId: link.id } });
 ok(r.status === 200 && r.data.order.previews.includes(link.id), "3D link attached to the order");
 const robots = await (await fetch(B + "/robots.txt")).text();

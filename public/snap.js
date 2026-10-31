@@ -83,9 +83,11 @@
     };
   }
   const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
-  // The picture chat apps show: the design (or the D.EIGHT default) with the logo and "3D Design View".
+  // The picture chat apps show: the design with the logo and "3D Design View", or the D.EIGHT default picture.
+  // WhatsApp shows no picture over ~300 KB: the JPEG is kept under 290 KB.
+  const OG_MAX = 290 * 1024;
   async function compose(shotUrl) {
-    if (!shotUrl) { const r = await fetch("/brand/og-3d.jpg"); if (r.ok) return await r.blob(); }
+    if (!shotUrl) { const r = await fetch("/brand/og-3d.jpg?v=2026-10-31", { cache: "no-cache" }); if (r.ok) return await r.blob(); }
     const W = 1200, H = 630;
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d");
@@ -110,11 +112,11 @@
     g.textAlign = "left"; g.font = '600 15px "Be Vietnam Pro", system-ui, sans-serif'; g.fillStyle = "#D6E1E7";
     try { g.letterSpacing = "3px"; } catch {}
     g.fillText("OPEN TO ROTATE AND ZOOM · NO SOFTWARE NEEDED", 48, H - 30);
-    for (const q of [0.86, 0.78, 0.7]) {
+    for (const q of [0.86, 0.8, 0.72, 0.64, 0.56]) {
       const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", q));
-      if (blob && blob.size < 600 * 1024) return blob;
+      if (blob && blob.size < OG_MAX) return blob;
     }
-    return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.6));
+    return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.45));
   }
   D8.snap = { open, compose };
 

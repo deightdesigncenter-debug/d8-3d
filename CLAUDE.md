@@ -21,7 +21,9 @@ The owner wants the site to run without errors or jank, and every new feature ch
   customers, product codes & prices, reports, Excel import, staff & permissions, settings, 3D links, contact messages). `public/stl.html`: HTML → STL tool.
 - `public/orders.js` (order list/form/page, order chat), `public/books.js` (customers, product codes & prices, reports,
   import, settings), `public/tech.js` (KTV pages `#team`, `#team/<email>`, `#me` "Công của tôi", monthly pay slips),
-  `public/snap.js` (3D link preview snapshot), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format),
+  `public/snap.js` (3D link preview snapshot; default picture `brand/og-3d.jpg` = the owner's Before/After picture from
+  `site/fullco.png`, 1200×630, owner's choice 2026-10-31; every preview JPEG stays under 290 KB because WhatsApp shows no picture
+  over ~300 KB; `ogImage` serves the new default to links that stored a copy of the old one), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format),
   `public/viewer3d.js` (own WebGL viewer for STL / PLY / OBJ: order page "Xem trước 3D" from chat files, case design files, any `[data-v3d]` button).
   The card has "Từng file / Xem cùng lúc": up to 4 files in one scene, in their own coordinates (upper, lower and bite scans line up),
   a colour per STL, "Mờ" (see-through), one file loaded at a time. `gallery()` is called again on every chat refresh (15 s) and page

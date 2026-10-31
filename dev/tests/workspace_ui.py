@@ -163,7 +163,10 @@ with sync_playwright() as p:
     cp.goto(B + "/portal#/case/" + JID); cp.reload(); cp.wait_for_timeout(1200)
     ok(cp.query_selector('[data-pay="paypal"]') is not None, "customer sees pay buttons")
     ok("crowns-design.html" in cp.inner_text("#view"), "customer sees the delivered file")
-    cp.click('[data-pay="paypal"]'); cp.wait_for_url("**/portal**#/case/**", timeout=10000); cp.wait_for_timeout(1500)
+    cp.click('[data-pay="paypal"]'); cp.wait_for_url("**/portal**#/case/**", timeout=10000)
+    # back from the payment page the case reloads: wait for the new state rather than a fixed time (it once took longer than 1.5 s)
+    try: cp.wait_for_function("document.querySelector('#view') && /payment being confirmed/i.test(document.querySelector('#view').innerText)", timeout=10000)
+    except Exception: pass
     ok("payment being confirmed" in cp.inner_text("#view").lower(), "customer: payment being confirmed")
     cp.screenshot(path=f"{OUT}/customer-confirming.png", full_page=True)
     # owner confirms

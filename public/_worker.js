@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-30.7"; // bump with brand.css changes
+const ASSET_VERSION = "2026-10-31.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -4004,11 +4004,14 @@ async function assistLead(request, env) {
 /* --------------------------------------------------------- Doctor views */
 
 // Preview image for a 3D link (shown by Messenger, Zalo, WhatsApp…): the snapshot made when the link was created,
-// otherwise the D.EIGHT "3D design view" picture.
+// otherwise the D.EIGHT default picture (/brand/og-3d.jpg, the owner's picture since 2026-10-31; WhatsApp shows
+// no picture over ~300 KB, keep it small). Links that stored a copy of the old default picture get the new one.
+const OLD_OG = { bytes: 63868, sha: "8721be5e1bdad4c7b199ebfcc56825d923f9333d3f60831de63148f081c4ea52" };
 async function ogImage(request, env, id) {
   if (ID_RE.test(id) && env.CASES) {
-    const v = await env.CASES.get("og:" + id, { type: "stream" });
-    if (v) return new Response(v, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff" } });
+    const v = await env.CASES.get("og:" + id, { type: "arrayBuffer" });
+    const old = v && v.byteLength === OLD_OG.bytes && hexOf(await crypto.subtle.digest("SHA-256", v)) === OLD_OG.sha;
+    if (v && !old) return new Response(v, { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff" } });
   }
   const u = new URL(request.url);
   u.pathname = "/brand/og-3d.jpg"; u.search = "";
@@ -4037,7 +4040,8 @@ async function viewerPage(env, id, url) {
   const label = meta.t ? escapeHtml(meta.t) : meta.l ? escapeHtml(meta.l) : "3D design preview";
   const heading = meta.t || meta.l ? label : "Ready for your review";
   const desc = escapeHtml(meta.d || "Open the link to view and rotate the 3D design in your browser. No software needed.");
-  const pageUrl = escapeHtml(url.origin + "/v/" + id), img = escapeHtml(url.origin + "/og/" + id + ".jpg");
+  // the version in the picture's address makes chat apps that keep pictures by address fetch a changed one
+  const pageUrl = escapeHtml(url.origin + "/v/" + id), img = escapeHtml(url.origin + "/og/" + id + ".jpg?v=" + ASSET_VERSION);
   const until = new Date(meta.e).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   const raw = `/raw/${id}`;
 
