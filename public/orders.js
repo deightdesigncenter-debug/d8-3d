@@ -684,17 +684,117 @@
       files = files.slice(0, 10); drawFiles();
     };
     const me = (D8.user && D8.user.email) || "";
+    // 3D files in a message: a picture each (drawn once by whoever has the model, saved on the server for everyone).
+    // A picture turns its file on and off in the message's 3D view, which opens only when asked (big files are not
+    // downloaded by themselves) and stays as it is while new messages come in.
+    const galId = (x) => "ochat-gal-" + String(x.id).replace(/[^\w-]/g, "");
+    const fileUrl = (f) => `/api/orders/${orderId}/files/${f.fid}`;
+    const is3d = (f) => !!(D8.view3d && D8.view3d.is(f.name));
+    const models3d = (x) => (x.kind === "sys" ? [] : (x.files || []).filter(is3d));
+    const PIC_AUTO = 40 * 1048576;     // a file from before this visit without a picture: drawn here up to this size
+    const PIC_LOCAL = 120 * 1048576;   // the sender draws pictures of files up to this size
+    const CUBE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>';
+    const DL = '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>';
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const opened = new Set();   // ids of messages whose 3D view is open
+    const firstIds = new Set(); // messages of the first load (files from before this visit)
+    const srcs = new Map();     // file url → Promise<picture URL | null>
+    const putPic = (url) => (blob) => api(url + "/thumb", { method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" } });
+    // a picture comes in when its tile is on screen (not for every old file at once)
+    const waiting = new Map();
+    const io = typeof IntersectionObserver !== "undefined" ? new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return;
+      const r = waiting.get(e.target.dataset.url);
+      if (r) { waiting.delete(e.target.dataset.url); r(); }
+      io.unobserve(e.target);
+    }), { root: list, rootMargin: "240px" }) : null;
+    const onScreen = (url) => new Promise((res) => { if (!io) return res(); waiting.set(url, res); list.querySelectorAll(`.ot-pic[data-url="${url}"]`).forEach((b) => io.observe(b)); });
+    const srcFor = (f, x) => {
+      const url = fileUrl(f);
+      if (!srcs.has(url)) srcs.set(url, (async () => {
+        if (f.th) return D8.view3d.thumb(url, { server: url + "/thumb" });
+        if (D8.view3d.thumb.has(url)) return D8.view3d.thumb(url, {});   // drawn on this page (sent from here)
+        if (!firstIds.has(x.id)) {   // just came in: the sender's browser is drawing it, the server will have it soon
+          for (let i = 0; i < 10; i++) {
+            await sleep(i ? 6000 : 2500);
+            if (!host.isConnected) return null;
+            const r = await api(url + "/thumb?q=1").catch(() => null);
+            if (r && r.th) return D8.view3d.thumb(url, { server: url + "/thumb" });
+          }
+        }
+        if (f.size > PIC_AUTO) return null;
+        await onScreen(url);
+        return D8.view3d.thumb(url, { name: f.name, want: () => host.isConnected, save: putPic(url) });
+      })().catch(() => null));
+      return srcs.get(url);
+    };
+    const applyPic = (url, src) => {
+      list.querySelectorAll(`.ot-pic[data-url="${url}"]`).forEach((b) => {
+        if (!src) { b.classList.add("nopic"); return; }
+        if (b.querySelector("img")) return;
+        b.innerHTML = `<img alt="" src="${src}" width="320" height="240" decoding="async">`;
+        b.classList.add("has");
+      });
+    };
+    const tile = (x, f) => `<figure class="ochat-thumb" data-url="${esc(fileUrl(f))}"><button type="button" class="ot-pic" data-mid="${esc(String(x.id))}" data-url="${esc(fileUrl(f))}" aria-pressed="false" title="Xem 3D ${esc(f.name)}" aria-label="Xem 3D ${esc(f.name)}"><span class="ot-ph">${CUBE}</span></button><figcaption><span class="fn" title="${esc(f.name)}">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span><a class="ot-dl" href="${esc(fileUrl(f))}" download="${esc(f.name)}" title="Tải ${esc(f.name)}" aria-label="Tải ${esc(f.name)}">${DL}</a></figcaption></figure>`;
+    const viewText = (x) => (opened.has(x.id) ? "Đóng khung 3D" : `Xem ${Math.min(models3d(x).length, D8.view3d.MAX_SHOWN)} file cùng lúc`);
+    const block3d = (x) => {
+      const m3 = models3d(x);
+      if (!m3.length) return "";
+      return `<div class="ochat-thumbs">${m3.map((f) => tile(x, f)).join("")}</div><button type="button" class="ochat-3dall" data-mid="${esc(String(x.id))}"${m3.length < 2 && !opened.has(x.id) ? " hidden" : ""}>${esc(viewText(x))}</button><div class="ochat-gal" id="${galId(x)}"${opened.has(x.id) ? "" : " hidden"}></div>`;
+    };
+    // which pictures are on in the view, and the button under them
+    const markOn = (x, sel) => {
+      list.querySelectorAll(`.ot-pic[data-mid="${String(x.id)}"]`).forEach((b) => {
+        const on = sel.includes(b.dataset.url);
+        b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+        b.closest(".ochat-thumb").classList.toggle("on", on);
+      });
+      const bar = list.querySelector(`.ochat-3dall[data-mid="${String(x.id)}"]`);
+      if (bar) { bar.textContent = viewText(x); bar.hidden = models3d(x).length < 2 && !opened.has(x.id); }
+    };
+    const closeView = (x) => {
+      opened.delete(x.id);
+      const gh = list.querySelector("#" + galId(x));
+      if (gh) D8.view3d.close(gh);
+      markOn(x, []);
+    };
+    const openView = (x, o) => {
+      const gh = list.querySelector("#" + galId(x));
+      if (!gh) return null;
+      opened.add(x.id);
+      const v = D8.view3d.gallery(gh, models3d(x).map((f) => ({ url: fileUrl(f), name: f.name, size: f.size })),
+        { ...(o || {}), onChange: (sel) => { if (!sel.length) closeView(x); else markOn(x, sel); } });
+      if (v) markOn(x, v.sel());
+      return v;
+    };
+    list.addEventListener("click", (e) => {
+      const pic = e.target.closest(".ot-pic"), all = e.target.closest(".ochat-3dall");
+      if (!pic && !all) return;
+      const x = msgs.find((m) => String(m.id) === (pic || all).dataset.mid);
+      if (!x || !D8.view3d) return;
+      if (all) { if (opened.has(x.id)) closeView(x); else openView(x, { all: true, go: true }); return; }
+      if (!opened.has(x.id)) { openView(x, { pick: pic.dataset.url, go: true }); return; }
+      const v = openView(x);
+      if (v && v.toggle(pic.dataset.url) === "full") D8.toast(`Khung xem đã có ${D8.view3d.MAX_SHOWN} file. Bấm một ảnh đang bật để bỏ bớt.`);
+    });
     const draw = () => {
       if (!msgs.length) { list.innerHTML = '<p class="muted ochat-empty">Chưa có tin nhắn.</p>'; return; }
+      if (!draw.done) msgs.forEach((x) => firstIds.add(x.id));
       const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
       list.innerHTML = msgs.map((x) => x.kind === "sys" ? `<div class="sys">${esc(D8.fmtDate(x.at, true))} · ${esc(x.name || name(x.by) || "")}: ${esc(x.text)}</div>`
-        : `<div class="bub ${x.by === me ? "me" : "them"}">${x.by === me ? "" : `<b>${esc(x.name || name(x.by))}</b>`}${x.text ? `<div class="bub-text">${esc(x.text)}</div>` : ""}${x.img ? `<a class="ochat-photo" data-mid="${x.id}" href="#" aria-label="Mở ảnh"><img alt="Ảnh" data-mid="${x.id}"></a>` : ""}${(x.files || []).map((f) => `<a class="ochat-file" href="/api/orders/${orderId}/files/${esc(f.fid)}" download="${esc(f.name)}">${ICON.clip}<span class="fn">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span></a>${D8.view3d && D8.view3d.is(f.name) ? `<button class="ochat-3d" type="button" data-v3d="/api/orders/${orderId}/files/${esc(f.fid)}" data-name="${esc(f.name)}" data-size="${f.size}">Xem 3D</button>` : ""}`).join("")}<small>${esc(D8.fmtDate(x.at, true))}</small></div>`).join("");
+        : `<div class="bub ${x.by === me ? "me" : "them"}">${x.by === me ? "" : `<b>${esc(x.name || name(x.by))}</b>`}${x.text ? `<div class="bub-text">${esc(x.text)}</div>` : ""}${x.img ? `<a class="ochat-photo" data-mid="${x.id}" href="#" aria-label="Mở ảnh"><img alt="Ảnh" data-mid="${x.id}"></a>` : ""}${(x.files || []).filter((f) => !is3d(f)).map((f) => `<a class="ochat-file" href="/api/orders/${orderId}/files/${esc(f.fid)}" download="${esc(f.name)}">${ICON.clip}<span class="fn">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span></a>`).join("")}${block3d(x)}<small>${esc(D8.fmtDate(x.at, true))}</small></div>`).join("");
+      if (D8.view3d) {
+        msgs.forEach((x) => { if (opened.has(x.id)) openView(x); });   // a view that was open is taken over, as it was
+        msgs.forEach((x) => models3d(x).forEach((f) => srcFor(f, x).then((src) => applyPic(fileUrl(f), src))));
+        if (io) list.querySelectorAll(".ot-pic").forEach((b) => { if (waiting.has(b.dataset.url)) io.observe(b); });
+      }
       list.querySelectorAll("img[data-mid]").forEach(async (im) => { const u = await imgUrl(orderId, im.dataset.mid); if (u) im.src = u; else im.alt = "Ảnh đã hết hạn"; });
       list.querySelectorAll("a.ochat-photo").forEach((a) => a.addEventListener("click", async (e) => { e.preventDefault(); const u = await imgUrl(orderId, a.dataset.mid); if (u) window.open(u, "_blank", "noopener"); }));
       if (atBottom || !draw.done) list.scrollTop = list.scrollHeight;
       draw.done = true;
       // 3D files sent in the chat (newest first) for the preview on the order page
-      const models = msgs.flatMap((x) => (x.files || []).map((f) => ({ url: `/api/orders/${orderId}/files/${f.fid}`, name: f.name, size: f.size, at: x.at }))).filter((f) => D8.view3d && D8.view3d.is(f.name)).reverse();
+      const models = msgs.flatMap((x) => (x.files || []).map((f) => ({ url: fileUrl(f), name: f.name, size: f.size, at: x.at }))).filter(is3d).reverse();
       host.dispatchEvent(new CustomEvent("d8:models", { detail: models }));
     };
     const load = async () => {
@@ -703,7 +803,7 @@
       try {
         const r = await api(`/api/orders/${orderId}/chat?after=${last}`);
         if (r.msgs.length) { msgs = [...msgs, ...r.msgs].slice(-400); last = msgs[msgs.length - 1].id; }
-        draw();
+        if (r.msgs.length || !draw.done) draw();
         document.dispatchEvent(new CustomEvent("d8:chat-read", { detail: orderId }));
       } catch (e) { if (!msgs.length) list.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
       loading = false;
@@ -736,6 +836,12 @@
           prog.hidden = false;
           const metas = await D8.uploadParts(base, files, { onProgress: (p) => { prog.textContent = p.text; } });
           await api(base, { method: "POST", body: { files: metas, text } });
+          files.forEach((f, i) => {
+            const mt = metas[i];
+            if (!mt || !is3d(f) || f.size > PIC_LOCAL) return;
+            const u = `${base}/${mt.fid}`;
+            D8.view3d.thumb(u, { file: f, name: f.name, save: putPic(u) }).catch(() => {});
+          });
           files = []; drawFiles(); prog.hidden = true;
         }
         box.value = ""; D8.busy(b, false);

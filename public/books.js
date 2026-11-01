@@ -139,9 +139,9 @@
     W.show("p-cust", true);
     const host = $("p-cust");
     host.innerHTML = D8.skel.page();
-    let d, orders, prods, prices, pays;
+    let d, orders, prods, prices, pays, traits;
     try {
-      [d, orders] = await Promise.all([api("/api/customers/" + id), api(`/api/orders?customer=${id}&status=&limit=12`)]);
+      [d, orders, traits] = await Promise.all([api("/api/customers/" + id), api(`/api/orders?customer=${id}&status=&limit=12`), api(`/api/customers/${id}/traits`)]);
       if (can("pricing.manage")) [prods, prices] = await Promise.all([D8.book.products(true), api("/api/prices?customer=" + id)]);
       if (can("billing.view")) pays = (await api("/api/payments?customer=" + id)).payments;
     } catch (err) { if (isNoDb(err)) return noDb(host, err); host.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
@@ -173,6 +173,10 @@
           ${payRows ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Ngày</th><th class="num">Số tiền</th><th>Hình thức</th><th>Đơn</th><th>Ghi chú</th><th></th></tr></thead><tbody>${payRows}</tbody></table></div>` : '<p class="muted" style="margin:0">Chưa có khoản thu nào.</p>'}</section>` : ""}
       </div><aside>
         <section class="card"><h2 class="h-caps" style="margin-bottom:14px">Hồ sơ khách</h2>${can("customers.edit") ? custForm(c) : `<dl class="dl">${[["Mã", c.code], ["Tên", c.name], ["Loại", KINDS[c.kind]], ["Tiền tệ", c.currency], ["Quốc gia", c.country], ["Liên hệ", c.contact], ["Email", c.email], ["Điện thoại", c.phone], ["Thanh toán", c.terms], ["Ghi chú", c.note]].filter((x) => x[1]).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>`}</section>
+        <section class="card" id="cuTraits"><h2 class="h-caps">Đặc tính khách</h2>
+          <p class="hint" style="margin:6px 0 12px">Điều cần nhớ riêng về khách này. Chỉ xem ở đây, không tự chèn vào đơn hay ca.</p>
+          ${traits.traits.length ? `<ul class="trait-list">${traits.traits.map((t) => `<li data-t="${t.id}"><span class="trait-text">${esc(t.text)}</span><small>${esc(t.by === "password" ? "" : t.by)}${t.by === "password" ? "" : " · "}${esc(D8.fmtDate(t.updated || t.at, true))}</small>${can("customers.edit") ? `<span class="trait-acts"><button class="btn small" type="button" data-tedit="${t.id}">Sửa</button><button class="btn small" type="button" data-tdel="${t.id}">Xóa</button></span>` : ""}</li>`).join("")}</ul>` : '<p class="muted" style="margin:0 0 10px">Chưa có đặc tính nào.</p>'}
+          ${can("customers.edit") ? `<form class="add-row" id="ctAdd"><input class="input" id="ctText" maxlength="300" placeholder="Ví dụ: thích răng sứ màu A2, hay gửi gấp" aria-label="Đặc tính mới" required><button class="btn small" type="submit">Thêm</button></form>` : ""}</section>
         <section class="card"><h2 class="h-caps">Tài khoản cổng khách</h2>
           ${d.logins.length ? `<ul class="logins">${d.logins.map((l) => `<li><span>${esc(l.email)}</span>${can("customers.edit") ? `<button class="iconbtn del" type="button" data-unlink="${esc(l.email)}" aria-label="Bỏ gắn">${D8.ORDER_ICON.x}</button>` : ""}</li>`).join("")}</ul>` : '<p class="muted" style="margin:0 0 10px">Chưa gắn tài khoản nào.</p>'}
           ${can("customers.edit") ? `<form class="add-row" id="clAdd" style="margin-top:10px"><input class="input" type="email" id="clEmail" placeholder="Email Google của khách là gì?" required><button class="btn small" type="submit">Gắn</button></form>` : ""}
@@ -186,6 +190,26 @@
       catch (err) { D8.toast(err.message); }
     });
     if ($("cuPlImp")) $("cuPlImp").addEventListener("click", () => priceListImport($("cuPlBox"), { target: "customer", customer: c, label: "bảng giá riêng của " + c.code, currency: c.currency, onDone: () => drawCustomer(id) }));
+    const tAdd = $("ctAdd");
+    if (tAdd) tAdd.addEventListener("submit", async (e) => {
+      e.preventDefault(); const b = tAdd.querySelector("button"); D8.busy(b, true);
+      try { await api(`/api/customers/${c.id}/traits`, { method: "POST", body: { text: $("ctText").value.trim() } }); D8.toast("Đã thêm đặc tính."); drawCustomer(id); }
+      catch (err) { D8.busy(b, false); D8.toast(err.message); }
+    });
+    host.querySelectorAll("[data-tdel]").forEach((b) => W.armed(b, async () => { await api(`/api/customers/${c.id}/traits/${b.dataset.tdel}`, { method: "DELETE" }); D8.toast("Đã xóa đặc tính."); drawCustomer(id); }));
+    // edit in place: the line becomes a field; Hủy puts the page back as it was
+    host.querySelectorAll("[data-tedit]").forEach((b) => b.addEventListener("click", () => {
+      const t = traits.traits.find((x) => String(x.id) === b.dataset.tedit), li = b.closest("li");
+      if (!t || !li) return;
+      li.innerHTML = `<form class="add-row" data-tform="${t.id}"><input class="input" maxlength="300" value="${esc(t.text)}" aria-label="Sửa đặc tính" required><button class="btn small btn-primary" type="submit">Lưu</button><button class="btn small" type="button" data-tcancel>Hủy</button></form>`;
+      li.querySelector("input").focus();
+      li.querySelector("[data-tcancel]").addEventListener("click", () => drawCustomer(id));
+      li.querySelector("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try { await api(`/api/customers/${c.id}/traits/${t.id}`, { method: "POST", body: { text: li.querySelector("input").value.trim() } }); D8.toast("Đã lưu đặc tính."); drawCustomer(id); }
+        catch (err) { D8.toast(err.message); }
+      });
+    }));
     const add = $("cpAdd");
     if (add) add.addEventListener("click", () => { $("cpForm").hidden = !$("cpForm").hidden; if (!$("cpForm").hidden) $("cpAmt").focus(); });
     const pf = $("cpForm");

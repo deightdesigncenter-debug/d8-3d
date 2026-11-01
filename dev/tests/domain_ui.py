@@ -38,10 +38,14 @@ with sync_playwright() as p:
     for theme, vp, mobile in [("light", None, False), ("dark", None, False), ("light", {"width": 390, "height": 844}, True)]:
         tag = theme + ("-phone" if mobile else "")
         c, pg = ctx(vp, mobile, theme)
+        loads = []
+        pg.on("request", lambda r: loads.append(r.url) if r.method == "GET" and r.url.endswith("/api/settings") else None)
         pg.goto(B + "/"); pg.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "D.EIGHT"])
         pg.goto(B + "/admin#settings"); pg.wait_for_selector("#domCard", timeout=8000)
         ok("Chưa đặt tên miền chính" in pg.inner_text("#domCard") and pg.locator("#domSet").count() == 1, tag + ": not set yet, offers the address in use")
         ok("cơ sở dữ liệu D1" in pg.inner_text("#caseStore"), tag + ": settings say the cases are kept in D1")
+        pg.wait_for_timeout(800)
+        ok(len(loads) == 1, tag + ": the workspace opens the page once (settings loaded %d time(s))" % len(loads))
         pg.locator("#domCard").scroll_into_view_if_needed()
         pg.screenshot(path=f"{OUT}/settings-unset-{tag}.png", full_page=True)
         pg.click("#domSet"); pg.wait_for_selector("#domOff", timeout=6000)

@@ -25,10 +25,16 @@ The owner wants the site to run without errors or jank, and every new feature ch
   `site/fullco.png`, 1200×630, owner's choice 2026-10-31; every preview JPEG stays under 290 KB because WhatsApp shows no picture
   over ~300 KB; `ogImage` serves the new default to links that stored a copy of the old one), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format),
   `public/viewer3d.js` (own WebGL viewer for STL / PLY / OBJ: order page "Xem trước 3D" from chat files, case design files, any `[data-v3d]` button).
-  The card has "Từng file / Xem cùng lúc": up to 4 files in one scene, in their own coordinates (upper, lower and bite scans line up),
-  a colour per STL, "Mờ" (see-through), one file loaded at a time. `gallery()` is called again on every chat refresh (15 s) and page
-  redraw: the same files must leave the view alone, a new file only adds a chip, a redrawn host with the same id takes over the old view.
-  Tests: `orders_ui.py` (multi view, broken file, no rebuild after a chat refresh or a redraw).
+  One mode only (owner's rule 2026-11-01, no "Từng file / Xem cùng lúc" switch): each chip turns its file on or off, up to 4 files in
+  one scene, in their own coordinates (upper, lower and bite scans line up), a colour per STL, "Mờ" (see-through), one file loaded at
+  a time. `gallery(host, files, {all, pick, go, onChange})` returns `{sel(), toggle(url)}`; it is called again on page redraws: the same
+  files must leave the view alone, a new file only adds a chip, a redrawn host with the same id takes over the old view; `close(host)` frees it.
+  Team chat (owner's request 2026-11-01): a 3D file shows as a picture (`D8.view3d.thumb`, 320×240 JPEG on the viewer's navy, ≤ 64 KB).
+  The sender's browser draws it from the File it has and POSTs it to `/api/orders/<id>/files/<fid>/thumb` (first one stays; D1
+  `order_files.thumb`, schema v9; the chat list only carries `th: 1`). Others GET it; files from before (no picture) are drawn when on
+  screen, one at a time, up to 40 MB, then saved. A picture turns its file on/off in the message's own view, which opens only when asked
+  ("Xem n file cùng lúc" / "Đóng khung 3D"). The chat list is drawn again only when new messages come in (no flicker every 15 s).
+  Tests: `orders_ui.py` (multi view, broken file, pictures, view kept when a message comes in), `presign.test.mjs` (picture API).
 - `public/about.html` + `site/about.js` + `site/about-dict.js` ("Giới thiệu", `dev/tests/about_ui.py`): layout modelled on
   luminadental.com.au (centred heads, picture/text chequerboard, card rows, closing call to action). Featured full-mouth case,
   17 CAD screenshots with a filter, 3 screen recordings (MP4 + WebM, `preload="none"`, play only while on screen, never by
@@ -62,6 +68,10 @@ The owner wants the site to run without errors or jank, and every new feature ch
   Tests: `dev/tests/filecopy.test.mjs` + `filecopy_ui.py` (run.sh, R2 block; `/__test/exec` writes one row in the emulator only).
   Never add an R2 lifecycle rule for `jf:`.
 - People on the site: Danny Do = client contact (WhatsApp, email, contact form); Nhut Hoa = design technician (About › team).
+- Customer traits "Đặc tính khách" (owner's rule 2026-11-01): a card of its own on the customer record (`#cust/<id>`), D1
+  `customer_traits` (schema v8), `/api/customers/<id>/traits[/<tid>]` (read: customers.view, change: customers.edit, ≤ 60 per
+  customer, deleted with the customer). Never copied into an order or a case, never shown to the customer. Tests: `traits.test.mjs`,
+  `traits_ui.py`.
 - Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
   the server; the prefix follows the kind. Price levels: list price (MAX) = prices.customer_id 0, MID = -2, MIN = -3; `customers.tier`
   ('' / mid / min, schema v3). Lookup: customer's own price → their level → list price. `/api/pricelist` imports the owner's Excel layout

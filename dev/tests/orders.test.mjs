@@ -268,13 +268,13 @@ r = await owner("/api/orders?pay=due&customer=" + jake);
 ok(r.data.items.every((x) => x.due > 0) && r.data.sums.length >= 1, "filter: orders still owing");
 
 // ---------- reports and export
-r = await owner(`/api/reports?from=2026-09-01&to=2026-10-31`);
+r = await owner(`/api/reports?from=2026-09-01&to=2026-12-31`);
 const cRow = r.data.customers.find((x) => x.code === A);
 ok(r.status === 200 && r.data.days.length > 0 && cRow && cRow.t === 160 && cRow.p === 160, "report per customer (All Smiles billed 160, paid 160)");
 ok(r.data.credit.some((x) => x.code === A && x.credit === 90) && r.data.debt.some((x) => x.code === J), "report lists credit and money owed");
 ok(r.data.designers.some((x) => x.email === KTV && x.f === 1), "report per KTV with QC returns");
 ok(r.data.products.some((x) => x.code === "CR"), "report per product code");
-r = await owner(`/api/export?from=2026-09-01&to=2026-10-31`);
+r = await owner(`/api/export?from=2026-09-01&to=2026-12-31`);
 ok(r.status === 200 && r.data.orders.length >= 10 && r.data.items.length >= 10 && r.data.payments.length >= 2, "export: orders, items, payments");
 
 // KTV pay rates: only admin, and the KTV's own pay only with its own permission

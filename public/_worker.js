@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-10-31.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-11-01.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -79,6 +79,7 @@ async function publicPage(res, site, env) {
   for (const [k, v] of Object.entries(PRIVATE_HEADERS)) if (!(site.here && k === "X-Robots-Tag")) headers.set(k, v);
   return new Response(html, { status: 200, headers });
 }
+const THUMB_MAX = 64 * 1024; // a 3D file's picture in the team chat (JPEG)
 const PRIVATE_HEADERS = {
   "X-Robots-Tag": "noindex, nofollow, noarchive",
   // Google sign-in needs the page origin; cross-site requests get the origin only, never the path.
@@ -1947,7 +1948,7 @@ async function caseRequest(request, env, url, who, m, memo) {
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 7;
+const DB_VERSION = 9;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
@@ -2082,6 +2083,19 @@ async function migrateV6(DB) { await DB.batch(SCHEMA_V6.map((s) => DB.prepare(s)
 const SCHEMA_V7 = [`CREATE TABLE IF NOT EXISTS assist_hits (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, day TEXT NOT NULL, ip TEXT NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS assist_hits_ip ON assist_hits (ip, at)`, `CREATE INDEX IF NOT EXISTS assist_hits_day ON assist_hits (day)`];
 async function migrateV7(DB) { await DB.batch(SCHEMA_V7.map((s) => DB.prepare(s))); }
+// Customer traits: what staff keep in mind about one customer. Their own table; never copied into an order or a case.
+const SCHEMA_V8 = [`CREATE TABLE IF NOT EXISTS customer_traits (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER NOT NULL,
+  text TEXT NOT NULL, by TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, updated INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE INDEX IF NOT EXISTS customer_traits_c ON customer_traits (customer_id, id)`];
+async function migrateV8(DB) { await DB.batch(SCHEMA_V8.map((s) => DB.prepare(s))); }
+// v9: a small picture (JPEG, base64url) of each 3D file in the team chat, made in the browser from the model
+const SCHEMA_V9 = [`ALTER TABLE order_files ADD COLUMN thumb TEXT NOT NULL DEFAULT ''`];
+async function migrateV9(DB) {
+  for (const sql of SCHEMA_V9) {
+    try { await DB.prepare(sql).run(); }
+    catch (err) { if (!/duplicate column|already exists/i.test(String(err && err.message))) throw err; }
+  }
+}
 async function migrateV3(DB) {
   for (const sql of SCHEMA_V3) {
     try { await DB.prepare(sql).run(); }
@@ -2117,6 +2131,8 @@ async function bookDb(env) {
     if (v < 5) await migrateV5(env.DB);
     if (v < 6) await migrateV6(env.DB);
     if (v < 7) await migrateV7(env.DB);
+    if (v < 8) await migrateV8(env.DB);
+    if (v < 9) await migrateV9(env.DB);
     if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }
@@ -2601,6 +2617,35 @@ async function handleBook(request, env, url, who) {
     const c = await DB.prepare("SELECT * FROM customers WHERE code = ?").bind(r.codes[0]).first();
     return json({ customer: custOut(c, who, []) });
   }
+  // traits of one customer (staff only; the customer never sees them and orders and cases never copy them)
+  if ((m = path.match(/^\/api\/customers\/(\d+)\/traits(?:\/(\d+))?$/))) {
+    const cid = +m[1], tid = m[2] ? +m[2] : 0;
+    if (method === "GET") {
+      if (!who.can("customers.view")) return deny();
+      return json({ traits: await rows(DB.prepare("SELECT id, text, by, at, updated FROM customer_traits WHERE customer_id = ? ORDER BY id").bind(cid)) });
+    }
+    if (!who.can("customers.edit")) return deny();
+    if (!await DB.prepare("SELECT id FROM customers WHERE id = ?").bind(cid).first()) return json({ error: "Không tìm thấy khách hàng." }, 404);
+    if (method === "POST" && !tid) {
+      const text = clip((await body()).text, 300);
+      if (!text) return json({ error: "Viết đặc tính cần nhớ về khách." }, 400);
+      const cnt = await DB.prepare("SELECT COUNT(*) AS n FROM customer_traits WHERE customer_id = ?").bind(cid).first();
+      if (cnt.n >= 60) return json({ error: "Khách này đã có 60 đặc tính. Xóa bớt trước khi thêm." }, 409);
+      await DB.prepare("INSERT INTO customer_traits (customer_id, text, by, at, updated) VALUES (?, ?, ?, ?, 0)").bind(cid, text, who.email || "password", now).run();
+      return json({ ok: true });
+    }
+    if (method === "POST" && tid) {
+      const text = clip((await body()).text, 300);
+      if (!text) return json({ error: "Viết đặc tính cần nhớ về khách." }, 400);
+      const r = await DB.prepare("UPDATE customer_traits SET text = ?, updated = ? WHERE id = ? AND customer_id = ?").bind(text, now, tid, cid).run();
+      if (!(r.meta && r.meta.changes)) return json({ error: "Không tìm thấy đặc tính này." }, 404);
+      return json({ ok: true });
+    }
+    if (method === "DELETE" && tid) {
+      await DB.prepare("DELETE FROM customer_traits WHERE id = ? AND customer_id = ?").bind(tid, cid).run();
+      return json({ ok: true });
+    }
+  }
   if ((m = path.match(/^\/api\/customers\/(\d+)(\/logins)?$/))) {
     const id = +m[1];
     const c = await DB.prepare("SELECT * FROM customers WHERE id = ?").bind(id).first();
@@ -2635,7 +2680,7 @@ async function handleBook(request, env, url, who) {
       const used = await DB.prepare("SELECT (SELECT COUNT(*) FROM orders WHERE customer_id = ?1) + (SELECT COUNT(*) FROM payments WHERE customer_id = ?1) AS n").bind(id).first();
       if (used.n) return json({ error: "Khách đã có đơn hàng hoặc thanh toán, không xóa được. Bỏ chọn \"Đang hợp tác\" để ẩn khách." }, 409);
       await DB.batch([DB.prepare("DELETE FROM customers WHERE id = ?").bind(id), DB.prepare("DELETE FROM customer_logins WHERE customer_id = ?").bind(id),
-        DB.prepare("DELETE FROM prices WHERE customer_id = ?").bind(id)]);
+        DB.prepare("DELETE FROM prices WHERE customer_id = ?").bind(id), DB.prepare("DELETE FROM customer_traits WHERE customer_id = ?").bind(id)]);
       return json({ ok: true });
     }
   }
@@ -2730,6 +2775,30 @@ async function handleBook(request, env, url, who) {
     for (let n = 0; n < sizes.length; n++) urls.push(await r2PresignPart(cfg, orderPartKey(id, b.fid, n), sizes[n]));
     return json({ urls, expires: PRESIGN_SECONDS });
   }
+  // picture of a 3D file in the team chat: the browser that has the model draws it (JPEG, at most THUMB_MAX) and sends it
+  // once; everyone in the chat then sees it without downloading the file. The first picture stays (never replaced).
+  if ((m = path.match(/^\/api\/orders\/(\d+)\/files\/([A-Za-z0-9]{10})\/thumb$/))) {
+    const id = +m[1];
+    const o = await DB.prepare("SELECT id, designer, qc, status FROM orders WHERE id = ?").bind(id).first();
+    if (!o || !seesOrder(who, o)) return json({ error: "Không tìm thấy đơn hàng." }, 404);
+    if (!who.can("cases.notes")) return deny();
+    const f = await DB.prepare("SELECT fid, thumb FROM order_files WHERE order_id = ? AND fid = ?").bind(id, m[2]).first();
+    if (!f) return json({ error: "Không tìm thấy file." }, 404);
+    if (method === "GET") {
+      if (P.get("q")) return json({ th: !!f.thumb });   // has the sender's browser sent it yet? (no 404 in the console)
+      if (!f.thumb) return json({ error: "File này chưa có ảnh xem trước." }, 404);
+      return new Response(b64urlDecode(f.thumb), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=604800", ...PRIVATE_HEADERS } });
+    }
+    if (method === "POST") {
+      if (parseInt(request.headers.get("Content-Length") || "0", 10) > THUMB_MAX) return json({ error: "Ảnh xem trước quá lớn." }, 413);
+      const img = new Uint8Array(await request.arrayBuffer());
+      if (img.length < 100 || img.length > THUMB_MAX || img[0] !== 0xff || img[1] !== 0xd8 || img[2] !== 0xff) return json({ error: "Ảnh xem trước không hợp lệ." }, 400);
+      if (f.thumb) return json({ ok: true, saved: false });
+      const r = await DB.prepare("UPDATE order_files SET thumb = ? WHERE order_id = ? AND fid = ? AND thumb = ''").bind(b64urlEncode(img), id, f.fid).run();
+      return json({ ok: true, saved: !!(r.meta && r.meta.changes) });
+    }
+    return json({ error: "Method not allowed." }, 405);
+  }
   // files in the team chat: PUT parts /files/<fid>/<n>, then POST /files {files, text}; GET /files/<fid> downloads
   if ((m = path.match(/^\/api\/orders\/(\d+)\/files(?:\/([A-Za-z0-9]{10})(?:\/(\d{1,2}))?)?$/))) {
     const id = +m[1];
@@ -2767,7 +2836,7 @@ async function handleBook(request, env, url, who) {
       return json({ ok: true, files: files.length });
     }
     if (m[2] && !m[3] && method === "GET") {
-      const f = await DB.prepare("SELECT * FROM order_files WHERE order_id = ? AND fid = ?").bind(id, m[2]).first();
+      const f = await DB.prepare("SELECT fid, name, parts, gz, st FROM order_files WHERE order_id = ? AND fid = ?").bind(id, m[2]).first();
       if (!f) return json({ error: "Không tìm thấy file." }, 404);
       const store = partStore(env, f.st || "kv");
       const first = await store.stream(pkey(f.fid, 0));
@@ -2856,9 +2925,9 @@ async function handleBook(request, env, url, who) {
       if (method === "GET") {
         const after = parseInt(P.get("after") || "0", 10) || 0;
         const [ml, fl] = await DB.batch([DB.prepare(`SELECT id, at, by, name, kind, text, img != '' AS img FROM order_msgs WHERE order_id = ? AND id > ? ORDER BY id DESC LIMIT 300`).bind(id, after),
-          DB.prepare("SELECT msg_id, fid, name, size FROM order_files WHERE order_id = ? AND msg_id > ? ORDER BY id").bind(id, after)]);
+          DB.prepare("SELECT msg_id, fid, name, size, thumb != '' AS th FROM order_files WHERE order_id = ? AND msg_id > ? ORDER BY id").bind(id, after)]);
         const list = ml.results || [], byMsg = new Map();
-        for (const f of fl.results || []) { if (!byMsg.has(f.msg_id)) byMsg.set(f.msg_id, []); byMsg.get(f.msg_id).push({ fid: f.fid, name: f.name, size: f.size }); }
+        for (const f of fl.results || []) { if (!byMsg.has(f.msg_id)) byMsg.set(f.msg_id, []); byMsg.get(f.msg_id).push({ fid: f.fid, name: f.name, size: f.size, ...(f.th ? { th: 1 } : {}) }); }
         for (const x of list) if (byMsg.has(x.id)) x.files = byMsg.get(x.id);
         if (P.get("read") !== "0" && who.email) await DB.prepare("INSERT OR REPLACE INTO order_reads (email, order_id, at) VALUES (?, ?, ?)").bind(who.email, id, now).run();
         return json({ msgs: list.reverse() });

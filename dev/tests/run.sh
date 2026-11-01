@@ -34,6 +34,8 @@ run presign-off node dev/tests/presign.test.mjs
 run pay       node dev/tests/pay.test.mjs
 run contact   node dev/tests/contact.test.mjs
 run revisions node dev/tests/revisions.test.mjs
+run traits    node dev/tests/traits.test.mjs
+run traits-ui python3 dev/tests/traits_ui.py "$OUT/traits"
 run contact-ui python3 dev/tests/contact_ui.py "$OUT/contact"
 run domain    node dev/tests/domain.test.mjs
 run domain-ui python3 dev/tests/domain_ui.py "$OUT/domain"

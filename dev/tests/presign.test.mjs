@@ -92,4 +92,42 @@ ok(r.status === 200 && r.data.files === 1, "team chat: the file is attached to a
 const dl = await fetch(`${B}/api/orders/${oid}/files/${ofid}`, { headers: owner.headers });
 ok(dl.status === 200 && Buffer.compare(Buffer.from(await dl.arrayBuffer()), data) === 0, "team chat: the file downloads byte for byte");
 
+// ---------- the picture of a 3D file in the chat: sent once by the browser that drew it, then served to everyone in the chat
+const tpath = `/api/orders/${oid}/files/${ofid}/thumb`;
+const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(2000, 9), Buffer.from([0xff, 0xd9])]);
+const sendPic = (who, body, type = "image/jpeg") => fetch(B + tpath, { method: "POST", headers: { ...who.headers, "Content-Type": type }, body });
+r = await owner(tpath + "?q=1");
+ok(r.status === 200 && r.data.th === false, "chat picture: none at first");
+let res = await fetch(B + tpath, { headers: owner.headers });
+ok(res.status === 404, "chat picture: nothing to show yet (" + res.status + ")");
+r = await owner(`/api/orders/${oid}/chat?after=0&read=0`);
+ok(r.status === 200 && r.data.msgs.some((x) => (x.files || []).some((f) => f.fid === ofid && !f.th)), "chat list: the file has no picture yet");
+res = await sendPic(owner, Buffer.from("not a picture at all, just some text that is long enough to pass the size check ........"));
+ok(res.status === 400, "chat picture: something that is not a JPEG is refused (" + res.status + ")");
+res = await sendPic(owner, Buffer.concat([jpeg, Buffer.alloc(70 * 1024, 1)]));
+ok(res.status === 413 || res.status === 400, "chat picture: a picture over 64 KB is refused (" + res.status + ")");
+res = await sendPic(outsiderKtv, jpeg);
+ok(res.status === 404, "chat picture: a technician not on the order cannot send one (" + res.status + ")");
+res = await sendPic(other, jpeg);
+ok(res.status === 403 || res.status === 404, "chat picture: a customer cannot send one (" + res.status + ")");
+res = await fetch(B + `/api/orders/${oid}/files/NoSuchFil1/thumb`, { method: "POST", headers: { ...owner.headers, "Content-Type": "image/jpeg" }, body: jpeg });
+ok(res.status === 404, "chat picture: an unknown file gets none (" + res.status + ")");
+res = await sendPic(owner, jpeg);
+let j = await res.json().catch(() => ({}));
+ok(res.status === 200 && j.saved === true, "chat picture: saved");
+res = await sendPic(owner, Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe1]), Buffer.alloc(500, 3)]));
+j = await res.json().catch(() => ({}));
+ok(res.status === 200 && j.saved === false, "chat picture: the first one stays (a second is not saved)");
+res = await fetch(B + tpath, { headers: owner.headers });
+ok(res.status === 200 && res.headers.get("content-type") === "image/jpeg" && Buffer.compare(Buffer.from(await res.arrayBuffer()), jpeg) === 0, "chat picture: served byte for byte as a JPEG");
+res = await fetch(B + tpath, { headers: outsiderKtv.headers });
+ok(res.status === 404, "chat picture: a technician not on the order cannot see it (" + res.status + ")");
+r = await owner(tpath + "?q=1");
+ok(r.status === 200 && r.data.th === true, "chat picture: the quick check says it is there");
+r = await owner(`/api/orders/${oid}/chat?after=0&read=0`);
+ok(r.data.msgs.some((x) => (x.files || []).some((f) => f.fid === ofid && f.th === 1)) && !JSON.stringify(r.data).includes(jpeg.toString("base64").slice(0, 40)),
+  "chat list: the file is marked as having a picture (the picture itself is not in the list)");
+const dl2 = await fetch(`${B}/api/orders/${oid}/files/${ofid}`, { headers: owner.headers });
+ok(dl2.status === 200 && Buffer.compare(Buffer.from(await dl2.arrayBuffer()), data) === 0, "team chat: the file still downloads byte for byte after its picture");
+
 done();

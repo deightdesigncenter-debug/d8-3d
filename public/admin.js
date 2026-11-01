@@ -108,6 +108,7 @@
   /* ------------------------------------------------------------ sign in */
   async function boot() {
     const u = await D8.ready;
+    if (mode) return;   // the d8:user event (sent just before D8.ready resolves) already let this person in
     if (u && u.staff) return enter("google");
     if (D8.adminKey()) {
       try { await api("/api/ping"); return enter("key"); }
@@ -143,7 +144,9 @@
     $("loginBtn").disabled = false;
   });
 
+  // once per page: entering twice drew every page twice (two loads of its data, and the first copy thrown away)
   async function enter(m) {
+    if (mode) return;
     mode = m;
     document.body.dataset.authed = "1";
     document.body.dataset.authMode = m;

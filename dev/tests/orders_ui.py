@@ -149,7 +149,10 @@ with sync_playwright() as p:
     open(long_name, "wb").write(b"solid long".ljust(84, b" "))
     op.set_input_files('#oChat [data-ochat="file"]', long_name); op.wait_for_timeout(300)
     op.fill("#oChat textarea", "file dài tên"); op.click("#oChat [type=submit]"); op.wait_for_timeout(1500)
-    ok(op.query_selector("#oChat a.ochat-file") is not None and "_LONG" in text(op, "#oChat .ochat-list"), "owner sends a file with a long name in the chat")
+    ok(op.query_selector("#oChat .ochat-thumb") is not None and "_LONG" in text(op, "#oChat .ochat-list"), "owner sends a file with a long name in the chat")
+    try: op.wait_for_selector("#oChat .ot-pic.nopic", timeout=10000)
+    except Exception: pass
+    ok(op.query_selector("#oChat .ot-pic.nopic") is not None, "a 3D file that cannot be drawn keeps a plain tile (no picture, no error)")
     ok(op.eval_on_selector("#oChat .ochat-list", THREAD_FITS), "owner: nothing in the chat thread runs past the thread (long file name)")
     op.screenshot(path=f"{OUT}/order-page.png", full_page=True)
 
@@ -230,11 +233,19 @@ with sync_playwright() as p:
     kp.set_input_files('#oChat [data-ochat="file"]', stl); kp.wait_for_timeout(300)
     ok("11-13 crown v1.stl" in text(kp, "#oChat .ochat-files"), "file waits under the message box")
     kp.fill("#oChat textarea", "File thiết kế v1"); kp.click("#oChat [type=submit]"); kp.wait_for_timeout(2000)
-    ok(kp.query_selector("#oChat a.ochat-file") is not None and "11-13 crown v1.stl" in text(kp, "#oChat .ochat-list"), "file sent in the chat")
+    ok(kp.query_selector("#oChat .ochat-thumb") is not None and "11-13 crown v1.stl" in text(kp, "#oChat .ochat-list"), "file sent in the chat")
     ok(kp.eval_on_selector("#oChat .ochat-list", THREAD_FITS), "KTV: the chat thread fits its column")
-    href = kp.eval_on_selector('#oChat a.ochat-file[download="11-13 crown v1.stl"]', "a => a.getAttribute('href')")
+    href = kp.eval_on_selector('#oChat a.ot-dl[download="11-13 crown v1.stl"]', "a => a.getAttribute('href')")
     fr = kp.request.get(B + href)
     ok(fr.status == 200 and fr.body() == STL_BYTES, "file downloads from the chat")
+    # the sender's browser draws a picture of the model from the file it has, and saves it for everyone
+    CROWN_PIC = '#oChat .ochat-thumb:has(.fn[title="11-13 crown v1.stl"]) .ot-pic'
+    try: kp.wait_for_selector(CROWN_PIC + ".has img", timeout=15000)
+    except Exception: pass
+    ok(kp.query_selector(CROWN_PIC + ".has img") is not None, "sender: the STL shows as a picture in its message")
+    tr = kp.request.get(B + href + "/thumb")
+    ok(tr.status == 200 and tr.headers.get("content-type") == "image/jpeg" and 1000 < len(tr.body()) <= 64 * 1024, "the picture is saved on the server (" + str(len(tr.body())) + " bytes)")
+    ok(kp.query_selector("#oChat .ochat-gal canvas") is None and kp.query_selector("#oChat .ochat-3d") is None, "no 3D view opens by itself in the chat, no Xem 3D button")
     kp.click('[data-act="submit"]'); kp.wait_for_timeout(1000)
     ok("Chờ QC" in kp.inner_text(".pt-band"), "KTV sends to QC")
     kp.screenshot(path=f"{OUT}/ktv-order.png", full_page=True)
@@ -247,6 +258,12 @@ with sync_playwright() as p:
     ok(qp.query_selector("#oList .o-dot") is not None, "QC sees an unread chat mark")
     qp.goto(B + "/admin#orders/" + OID); qp.wait_for_timeout(1500)
     ok("12 cần dài thêm" in text(qp, "#oChat"), "QC reads the KTV message")
+    try: qp.wait_for_selector(CROWN_PIC + ".has img", timeout=10000)
+    except Exception: pass
+    PIC_LIT = """(sel) => { const im = document.querySelector(sel + ' img'); if (!im || !im.naturalWidth) return 0; const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+      const x = c.getContext('2d'); x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 120) n++; return n; }"""
+    lit = qp.evaluate(PIC_LIT, CROWN_PIC)
+    ok(lit > 500, "QC sees the saved picture, and it shows the model (" + str(lit) + " bright pixels)")
     try: qp.wait_for_selector("#o3d .v3d[data-tris]", timeout=15000)
     except Exception: pass
     ok(qp.get_attribute("#o3d .v3d", "data-tris") == str(len(cf)) and "tam giác" in text(qp, "#o3d .v3d-info"), "QC sees the design in 3D on the order page (" + str(qp.get_attribute("#o3d .v3d", "data-tris")) + " triangles)")
@@ -276,8 +293,8 @@ with sync_playwright() as p:
     except Exception: pass
     ok(qp.query_selector("#o3d .v3d-chip[title='11-13 antagonist.stl']") is not None and qp.get_attribute("#o3d .v3d-chip.on", "title") == "11-13 crown v1.stl"
        and qp.evaluate("document.querySelector('#o3d canvas') === window.__c3"), "a new file in the chat adds its chip, the crown view is kept")
-    ok(qp.is_visible("#o3d .v3d-mode") and qp.query_selector("#o3d .v3d-legend") is None, "3D: 'Từng file / Xem cùng lúc' switch, one file at first")
-    qp.click("#o3d .v3d-mode label:has(input[value='multi'])"); qp.wait_for_timeout(200)
+    ok(qp.query_selector("#o3d .v3d-mode") is None and qp.query_selector("#o3d .v3d-legend") is not None and qp.get_attribute("#o3d .v3d", "data-models") == "1",
+       "3D: no mode switch; one file on at first, the chips are the choice")
     qp.click("#o3d .v3d-chip[title='11-13 antagonist.stl']")
     try: qp.wait_for_selector("#o3d .v3d[data-models='2']", timeout=15000)
     except Exception: pass
@@ -297,16 +314,42 @@ with sync_playwright() as p:
     # the chat refreshes every 15 s: the view is left alone (it used to be rebuilt and every file loaded again)
     qp.wait_for_timeout(16000)
     ok(qp.evaluate("document.querySelector('#o3d canvas') === window.__c3") and qp.get_attribute("#o3d .v3d", "data-models") == "2", "a chat refresh leaves the 3D view as it is")
-    qp.click("#o3d .v3d-mode label:has(input[value='one'])"); qp.wait_for_timeout(300)
-    ok(qp.get_attribute("#o3d .v3d", "data-models") == "1" and qp.get_attribute("#o3d .v3d-chip.on", "title") == "11-13 antagonist.stl" and qp.query_selector("#o3d .v3d-legend") is None,
-       "back to one file: the last one picked that shows")
-    qp.click('#oChat .ochat-3d[data-name="11-13 crown v1.stl"]')
-    try: qp.wait_for_selector(".v3d-overlay .v3d[data-tris]", timeout=15000)
+    qp.click("#o3d .v3d-chip[title='11-13 antagonist.stl']"); qp.wait_for_timeout(300)
+    ok(qp.get_attribute("#o3d .v3d", "data-models") == "1" and qp.get_attribute("#o3d .v3d-chip.on", "title") == "11-13 crown v1.stl",
+       "a file switched off leaves the others on")
+    qp.click("#o3d .v3d-chip[title='11-13 antagonist.stl']")
+    try: qp.wait_for_selector("#o3d .v3d[data-models='2']", timeout=15000)
     except Exception: pass
-    ok(qp.is_visible(".v3d-overlay canvas"), "Xem 3D in the chat opens a large viewer")
-    qp.screenshot(path=f"{OUT}/order-3d-full.png")
-    qp.keyboard.press("Escape"); qp.wait_for_timeout(300)
-    ok(qp.query_selector(".v3d-overlay") is None, "Esc closes it")
+    # chat: two scans in one message, a picture each; the pictures switch files on and off in the message's own view
+    up, lo = os.path.join(OUT, "scan upper.stl"), os.path.join(OUT, "scan lower.stl")
+    open(up, "wb").write(open(stl, "rb").read()); open(lo, "wb").write(open(ant, "rb").read())
+    qp.set_input_files('#oChat [data-ochat="file"]', [up, lo]); qp.wait_for_timeout(300)
+    qp.fill("#oChat textarea", "Bản quét hai hàm"); qp.click("#oChat [type=submit]")
+    UP_PIC, LO_PIC = '#oChat .ochat-thumb:has(.fn[title="scan upper.stl"]) .ot-pic', '#oChat .ochat-thumb:has(.fn[title="scan lower.stl"]) .ot-pic'
+    try: qp.wait_for_selector(LO_PIC + ".has img", timeout=20000); qp.wait_for_selector(UP_PIC + ".has img", timeout=5000)
+    except Exception: pass
+    ok(qp.query_selector(UP_PIC + ".has img") is not None and qp.query_selector(LO_PIC + ".has img") is not None and qp.evaluate(PIC_LIT, LO_PIC) > 500,
+       "two files in one message: a picture of each model")
+    mid = qp.get_attribute(LO_PIC, "data-mid"); BAR, GAL = f'#oChat .ochat-3dall[data-mid="{mid}"]', f"#ochat-gal-{mid}"
+    ok(qp.query_selector(GAL + " canvas") is None and qp.is_visible(BAR) and "2 file cùng lúc" in qp.inner_text(BAR), "no view until asked; a button shows both together")
+    qp.click(BAR)
+    try: qp.wait_for_selector(GAL + " .v3d[data-models='2']", timeout=15000)
+    except Exception: pass
+    ok(qp.get_attribute(GAL + " .v3d", "data-models") == "2" and qp.get_attribute(UP_PIC, "aria-pressed") == "true" and qp.get_attribute(LO_PIC, "aria-pressed") == "true",
+       "Xem 2 file cùng lúc: both scans in the message's view, both pictures marked")
+    qp.click(UP_PIC); qp.wait_for_timeout(400)
+    ok(qp.get_attribute(GAL + " .v3d", "data-models") == "1" and qp.get_attribute(UP_PIC, "aria-pressed") == "false" and qp.get_attribute(LO_PIC, "aria-pressed") == "true",
+       "a picture switches its file off, the other stays")
+    qp.evaluate(f"window.__cc = document.querySelector('{GAL} canvas')")
+    qp.fill("#oChat textarea", "Đã xem bản quét"); qp.click("#oChat [type=submit]"); qp.wait_for_timeout(1800)
+    ok("Đã xem bản quét" in text(qp, "#oChat .ochat-list") and qp.evaluate(f"document.querySelector('{GAL} canvas') === window.__cc")
+       and qp.get_attribute(GAL + " .v3d", "data-models") == "1" and qp.get_attribute(LO_PIC, "aria-pressed") == "true", "a new message keeps the open view as it was (not loaded again)")
+    ok(qp.eval_on_selector("#oChat .ochat-list", THREAD_FITS), "QC: pictures and view fit the chat thread")
+    qp.evaluate(f"document.querySelector('{GAL}').scrollIntoView({{block: 'center'}})"); qp.wait_for_timeout(200)
+    qp.screenshot(path=f"{OUT}/order-chat-3d.png", full_page=True)
+    qp.click(BAR); qp.wait_for_timeout(300)
+    ok(qp.query_selector(GAL + " canvas") is None and "2 file cùng lúc" in qp.inner_text(BAR) and qp.get_attribute(LO_PIC, "aria-pressed") == "false", "Đóng khung 3D closes the view")
+    ok(qp.query_selector("#oChat .ochat-3d") is None, "no Xem 3D buttons in the chat")
     qp.click('[data-act="fail"]'); qp.wait_for_timeout(500)
     ok("Chờ QC" in qp.inner_text(".pt-band"), "QC fail needs a note")
     qp.fill("#oNote", "Tiếp xúc 21 quá chặt"); qp.click('[data-act="fail"]'); qp.wait_for_timeout(1000)

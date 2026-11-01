@@ -350,6 +350,7 @@
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(draw) : null;
     if (ro) ro.observe(canvas);
     this.add = add; this.remove = remove; this.reset = reset; this.zoom = zoom; this.canvas = canvas;
+    this.now = () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } render(); };   // draw at once (a hidden tab has no next frame)
     this.ghost = (it, on) => { it.alpha = on ? GHOST : 1; draw(); };
     this.destroy = () => { if (ro) ro.disconnect(); if (raf) cancelAnimationFrame(raf); items.forEach(free); items = []; const lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); canvas.remove(); };
   }
@@ -497,54 +498,57 @@
     return close;
   }
 
-  // Inline card: a chip per file (newest first). "Từng file" shows the one picked; "Xem cùng lúc" puts up to four
-  // in one view (chips switch files on and off). A large file waits for a click. The page calls this again and again
-  // (the order chat refreshes every 15 s, the case page redraws on news): the same files leave the view as it is,
-  // a new file only adds its chip, and a redrawn page takes over the view it had (same host id), turned and loaded.
+  // Inline card: a chip per file (newest first). One chip on = that file alone; tick more and they all show in one view
+  // (up to four, each in its own colour). A large single file waits for a click. The page calls this again and again
+  // (the order chat, the case page redrawn on news): the same files leave the view as it is, a new file only adds its
+  // chip, and a redrawn page takes over the view it had (same host id), turned and loaded.
+  // opts, first call: all = start with the first few files, pick = start with this file, go = load at once even if
+  // large; onChange(urls) is told which files are in the view. Returns { sel(), toggle(url) → "on" | "off" | "full" }.
   const kept = new Map();   // host id → gallery state, so a redrawn page keeps its view
   let galSeq = 0;
   function dropGallery(g) { if (g.sc) g.sc.destroy(); g.sc = null; }
-  function gallery(host, files) {
+  function gallery(host, files, opts) {
+    opts = opts || {};
     const list = files.filter((f) => IS3D.test(f.name));
     let g = host._g;
     if (!g && host.id) {
       const old = kept.get(host.id);
       if (old && old.host !== host && !old.host.isConnected) { host.replaceChildren(...old.host.childNodes); g = old; }
     }
-    if (!g) g = { id: ++galSeq, key: null, multi: false, sel: [], sc: null };
+    if (!g) g = { id: ++galSeq, key: null, multi: false, sel: [], sc: null, api: null, onChange: null };
     g.host = host; host._g = g;
     if (host.id) kept.set(host.id, g);
+    if (opts.onChange) g.onChange = opts.onChange;
     host.hidden = !list.length;
     const key = list.map((f) => f.url).join("|");
-    if (g.key === key) return;
+    if (g.key === key) return g.api;
     g.key = key;
-    if (!list.length) { dropGallery(g); g.sel = []; host.innerHTML = ""; return; }
-    if (list.length < 2) g.multi = false;
-    // what was picked stays picked; nothing picked (first time, or those files are gone): the newest
+    if (!list.length) { dropGallery(g); g.sel = []; g.api = null; host.innerHTML = ""; return null; }
+    g.multi = list.length > 1;
+    // what was picked stays picked; nothing picked (first time, or those files are gone): the file asked for, the newest,
+    // or the first few
     g.sel = g.sel.filter((u) => list.some((f) => f.url === u));
-    if (!g.sel.length) g.sel = [list[0].url];
+    if (!g.sel.length) g.sel = opts.pick && list.some((f) => f.url === opts.pick) ? [opts.pick] : opts.all ? list.slice(0, MAX_SHOWN).map((f) => f.url) : [list[0].url];
     const H = host.classList.contains("card") ? "h2" : "h3";
     if (!host.querySelector(".v3d-slot")) {
       host.innerHTML = `<div class="card-head-row"><${H} class="h-caps">Xem trước 3D</${H}><span class="chip" data-n></span></div><div class="v3d-pick"></div><div class="v3d-slot"></div>`;
     }
     host.querySelector("[data-n]").textContent = list.length + " file";
-    const pick = host.querySelector(".v3d-pick"), slot = host.querySelector(".v3d-slot"), radio = "v3dm" + g.id;
-    pick.innerHTML = list.length > 1 ? `<div class="seg v3d-mode" role="radiogroup" aria-label="Cách xem file 3D">
-        <label><input type="radio" name="${radio}" value="one"${g.multi ? "" : " checked"}><span>Từng file</span></label>
-        <label><input type="radio" name="${radio}" value="multi"${g.multi ? " checked" : ""}><span>Xem cùng lúc</span></label></div>
-      <div class="v3d-chips"></div><p class="hint v3d-hint" role="status"></p>` : "";
+    const pick = host.querySelector(".v3d-pick"), slot = host.querySelector(".v3d-slot");
+    pick.innerHTML = list.length > 1 ? `<div class="v3d-chips"></div><p class="hint v3d-hint" role="status"></p>` : "";
     const chips = pick.querySelector(".v3d-chips"), hint = pick.querySelector(".v3d-hint");
-    const MULTI_HINT = `Bấm tên file để thêm hoặc bỏ khỏi khung xem (tối đa ${MAX_SHOWN} file). File của cùng một lần quét (hàm trên, hàm dưới, khớp cắn) nằm đúng vị trí với nhau.`;
+    const MULTI_HINT = `Bấm tên file để hiện hoặc ẩn trong khung xem (tối đa ${MAX_SHOWN} file cùng lúc). File của cùng một lần quét (hàm trên, hàm dưới, khớp cắn) nằm đúng vị trí với nhau.`;
+    const tell = () => { if (g.onChange) try { g.onChange([...g.sel]); } catch { /* the page's own business */ } };
     const drawChips = () => {
       if (!chips) return;
-      chips.className = "v3d-chips" + (g.multi ? " multi" : "");
-      chips.setAttribute("role", g.multi ? "group" : "tablist");
-      chips.setAttribute("aria-label", g.multi ? "File trong khung xem" : "Chọn file");
+      chips.className = "v3d-chips multi";
+      chips.setAttribute("role", "group");
+      chips.setAttribute("aria-label", "File trong khung xem");
       chips.innerHTML = list.map((f, i) => {
         const on = g.sel.includes(f.url);
-        return `<button type="button" class="v3d-chip${on ? " on" : ""}" data-f="${i}" title="${esc(f.name)}" ${g.multi ? `aria-pressed="${on}"` : `role="tab" aria-selected="${on}"`}>${esc(f.name)}</button>`;
+        return `<button type="button" class="v3d-chip${on ? " on" : ""}" data-f="${i}" title="${esc(f.name)}" aria-pressed="${on}">${esc(f.name)}</button>`;
       }).join("");
-      chips.querySelectorAll(".v3d-chip").forEach((b) => b.addEventListener("click", () => choose(+b.dataset.f)));
+      chips.querySelectorAll(".v3d-chip").forEach((b) => b.addEventListener("click", () => toggle(list[+b.dataset.f].url)));
       hint.textContent = g.multi ? MULTI_HINT : "";
     };
     const show = (auto) => {
@@ -559,28 +563,89 @@
       g.sc.multi(g.multi);
       g.sc.set(picked);
     };
-    const choose = (i) => {
-      const u = list[i].url;
-      if (!g.multi) g.sel = [u];
-      else if (g.sel.includes(u)) g.sel = g.sel.filter((x) => x !== u);
-      else if (g.sel.length >= MAX_SHOWN) { hint.textContent = `Khung xem đã có ${MAX_SHOWN} file. Bỏ bớt một file rồi thêm file khác.`; return; }
-      else g.sel = [...g.sel, u];
-      drawChips(); show(false);
+    const toggle = (u) => {
+      if (!list.some((f) => f.url === u)) return "off";
+      let res;
+      if (!g.multi) { g.sel = [u]; res = "on"; }
+      else if (g.sel.includes(u)) { g.sel = g.sel.filter((x) => x !== u); res = "off"; }
+      else if (g.sel.length >= MAX_SHOWN) { if (hint) hint.textContent = `Khung xem đã có ${MAX_SHOWN} file. Bỏ bớt một file rồi thêm file khác.`; return "full"; }
+      else { g.sel = [...g.sel, u]; res = "on"; }
+      drawChips(); show(false); tell();
+      return res;
     };
-    pick.querySelectorAll(`input[name="${radio}"]`).forEach((r) => r.addEventListener("change", () => {
-      g.multi = r.value === "multi";
-      if (!g.multi) {   // back to one file: the last one picked that shows (not one that failed), else the newest
-        const good = g.sc ? g.sc.loaded() : [];
-        g.sel = [[...g.sel].reverse().find((u) => good.includes(u)) || g.sel[g.sel.length - 1] || list[0].url];
-      }
-      drawChips(); show(false);
-    }));
-    drawChips(); show(true);
+    g.api = { sel: () => [...g.sel], toggle };
+    drawChips(); show(!opts.go); tell();
+    return g.api;
   }
+  // take a view off the page (models and WebGL context freed); the next gallery() on this host starts afresh
+  function closeGallery(host) {
+    const g = host._g || (host.id ? kept.get(host.id) : null);
+    if (g) { dropGallery(g); g.key = null; g.sel = []; g.api = null; }
+    if (host.id) kept.delete(host.id);
+    host._g = null; host.innerHTML = ""; host.hidden = true;
+  }
+
+  /* ---------------------------------------------------------------- a picture of a model (3D files in the team chat) */
+  const THUMB_W = 320, THUMB_H = 240, THUMB_BYTES = 60 * 1024;
+  const pics = new Map();            // file url → Promise<object URL>
+  let picQ = Promise.resolve();      // one model at a time: a phone never builds two meshes at once
+  async function picture(m) {
+    const box = document.createElement("div");
+    box.setAttribute("aria-hidden", "true");
+    box.style.cssText = `position:fixed;left:-10000px;top:0;width:${THUMB_W}px;height:${THUMB_H}px;pointer-events:none;contain:strict`;
+    document.body.appendChild(box);
+    let v = null;
+    try {
+      v = new Viewer(box);
+      v.canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
+      v.add(m);
+      v.now();
+      // the viewer's own navy backdrop, the same in light and dark pages
+      const c = document.createElement("canvas"); c.width = THUMB_W; c.height = THUMB_H;
+      const x = c.getContext("2d");
+      const bg = x.createRadialGradient(THUMB_W / 2, THUMB_H * 0.38, 0, THUMB_W / 2, THUMB_H * 0.38, THUMB_W * 0.7);
+      bg.addColorStop(0, "#24324a"); bg.addColorStop(1, "#101a2b");
+      x.fillStyle = bg; x.fillRect(0, 0, THUMB_W, THUMB_H);
+      x.drawImage(v.canvas, 0, 0, THUMB_W, THUMB_H);
+      for (const q of [0.82, 0.7, 0.55]) {
+        const b = await new Promise((r) => c.toBlob(r, "image/jpeg", q));
+        if (b && b.size <= THUMB_BYTES) return b;
+      }
+      throw new Error("Ảnh xem trước quá lớn.");
+    } finally { if (v) v.destroy(); box.remove(); }
+  }
+  // A picture for a 3D file, as an object URL; asked again for the same file, the same answer. o:
+  //   server: the picture's address on the server (already made by someone) — fetched, nothing drawn;
+  //   file:   the File being sent (drawn from it, nothing downloaded); otherwise the model is downloaded from url;
+  //   want(): still needed when its turn comes; save(blob): send the drawn picture to the server (once, by its maker).
+  function thumb(url, o) {
+    if (pics.has(url)) return pics.get(url);
+    let p;
+    if (o.server) {
+      p = fetch(o.server, { credentials: "same-origin", headers: D8.authHeaders ? D8.authHeaders() : {} })
+        .then((r) => (r.ok ? r.blob() : Promise.reject(Object.assign(new Error("Chưa có ảnh."), { skip: true }))))
+        .then((b) => URL.createObjectURL(b));
+    } else {
+      p = picQ = picQ.catch(() => {}).then(async () => {
+        if (o.want && !o.want()) throw Object.assign(new Error("Không cần nữa."), { skip: true });
+        const buf = o.file ? await o.file.arrayBuffer() : await fetchBuf(url);
+        await yieldUI();
+        const blob = await picture(await readModel(buf, o.name || (o.file && o.file.name) || "model.stl"));
+        if (o.save) Promise.resolve().then(() => o.save(blob)).catch(() => {});
+        return URL.createObjectURL(blob);
+      });
+    }
+    pics.set(url, p);
+    // skipped or not on the server yet: asked again later; a file that cannot be read is not tried again on this page
+    p.catch((e) => { if (e && e.skip && pics.get(url) === p) pics.delete(url); });
+    return p;
+  }
+  thumb.has = (url) => pics.has(url);
+
   // a page left for another one: free its view (models and the WebGL context) if no redraw took it over
   window.addEventListener("hashchange", () => setTimeout(() => kept.forEach((g, id) => { if (!g.host.isConnected) { dropGallery(g); kept.delete(id); } }), 1500));
 
-  D8.view3d = { is: (name) => IS3D.test(String(name || "")), open, gallery, mount, read: readModel };
+  D8.view3d = { is: (name) => IS3D.test(String(name || "")), open, gallery, close: closeGallery, thumb, mount, read: readModel, MAX_SHOWN };
   // any element with data-v3d="url" opens the viewer (chat file chips, case file lists)
   document.addEventListener("click", (e) => {
     const b = e.target.closest && e.target.closest("[data-v3d]");

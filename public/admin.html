@@ -401,6 +401,37 @@
   .ochat-file .fs { flex: 0 0 auto; font-size: 11px; opacity: .75; }
   .ochat-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .ochat-files[hidden] { display: none; }
+  .trait-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+  .trait-list li { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+  .trait-list li form { margin: 0; }
+  .trait-text { overflow-wrap: anywhere; font-size: 14px; }
+  .trait-list small { color: var(--muted); font-size: 12px; }
+  .trait-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* 3D files in a chat message: a picture each; the pictures switch files on and off in the message's view */
+  .ochat-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; margin-top: 8px; white-space: normal; }
+  .ochat-thumb { margin: 0; min-width: 0; border-radius: 10px; background: rgba(127, 127, 127, .14); overflow: hidden; box-shadow: 0 0 0 0 transparent; transition: box-shadow .2s ease-out; }
+  .ochat-thumb.on { box-shadow: 0 0 0 2px #8fc0ff; }
+  .ot-pic { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; border: 0; border-radius: 0; background: radial-gradient(ellipse at 50% 38%, #24324a 0%, #101a2b 100%); color: #9fb0c8; cursor: pointer; overflow: hidden; }
+  .ot-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .ot-pic:focus-visible { outline: 2px solid #8fc0ff; outline-offset: -2px; }
+  .ot-ph { display: grid; place-items: center; width: 100%; height: 100%; }
+  .ot-ph svg { width: 34px; height: 34px; opacity: .65; }
+  .ot-pic:not(.has):not(.nopic) .ot-ph svg { animation: otPulse 1.4s ease-out infinite alternate; }
+  @keyframes otPulse { from { opacity: .35; } to { opacity: .8; } }
+  .ot-pic.on::after { content: ""; position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; border-radius: 50%; background: #8fc0ff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23101a2b' stroke-width='2.4'%3E%3Cpath d='M5 10.5l3.2 3L15 7'/%3E%3C/svg%3E") center / 14px no-repeat; }
+  .ochat-thumb figcaption { display: flex; align-items: center; gap: 6px; padding: 5px 4px 5px 8px; font-size: 12px; line-height: 1.3; }
+  .ochat-thumb .fn { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .ochat-thumb .fs { flex: 0 0 auto; font-size: 11px; opacity: .75; }
+  .ot-dl { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: inherit; }
+  .ot-dl:hover { background: rgba(127, 127, 127, .24); }
+  .ochat-3dall { display: inline-block; margin-top: 8px; padding: 4px 12px; border: 1px solid rgba(127, 127, 127, .45); border-radius: 999px; background: transparent; color: inherit; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .ochat-3dall:hover { background: rgba(127, 127, 127, .2); }
+  .ochat-3dall[hidden] { display: none; }
+  .ochat-gal { margin-top: 8px; min-width: 0; white-space: normal; }
+  .ochat-gal[hidden], .ochat-gal:empty { display: none; }
+  .ochat-gal .v3d, .ochat-gal .v3d.multi { height: 300px; }
+  .ochat-gal .card-head-row, .ochat-gal .v3d-pick { display: none; }
+  @media (prefers-reduced-motion: reduce) { .ochat-thumb { transition: none; } .ot-pic .ot-ph svg { animation: none !important; } }
   .ochat-files li { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; min-width: 0; }
   .ochat-files li span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ochat-files li small { color: var(--muted); flex: 0 0 auto; }
@@ -561,7 +592,9 @@
     .of-item-h { display: none !important; }
     .of-item { padding-bottom: 10px; border-bottom: 1px solid var(--line); }
     .of-amt { justify-content: flex-start; }
-    .o-filt select.input { flex: 1 1 140px; max-width: none; }
+    .o-filt { width: 100%; min-width: 0; }
+    .o-filt > * { min-width: 0; max-width: 100%; }
+    .o-filt select.input { flex: 1 1 140px; max-width: none; min-width: 0; }
     .o-tbl-wrap { overflow: visible; margin: 0; }
     table.o-tbl { min-width: 0; }
     .o-tbl thead { display: none; }
@@ -593,12 +626,12 @@
 </style>
 <script src="/shell.js?v=2026-10-31.1" defer></script>
 <script src="/xlsx.js?v=2026-10-26.2" defer></script>
-<script src="/orders.js?v=2026-10-26.2" defer></script>
-<script src="/books.js?v=2026-10-29.1" defer></script>
+<script src="/orders.js?v=2026-11-01.1" defer></script>
+<script src="/books.js?v=2026-11-01.1" defer></script>
 <script src="/tech.js?v=2026-10-26.2" defer></script>
-<script src="/viewer3d.js?v=2026-10-31.1" defer></script>
+<script src="/viewer3d.js?v=2026-11-01.1" defer></script>
 <script src="/snap.js?v=2026-10-31.1" defer></script>
-<script src="/admin.js?v=2026-10-31.1" defer></script>
+<script src="/admin.js?v=2026-11-01.1" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
