@@ -103,6 +103,8 @@ with sync_playwright() as p:
         pg.goto(B + f"/portal#/case/{jid}"); pg.wait_for_timeout(1000)
         pg.reload(); pg.wait_for_timeout(1000)
         ok(pg.is_visible("#approve"), name + ": approve button")
+        rl = pg.inner_text(".rev-left").lower()
+        ok(("free until you approve" in rl or "miễn phí cho đến khi bạn duyệt" in rl) and "left for this case" not in rl and "còn lại" not in rl, name + ": the customer reads that revisions are free until approval (" + rl[:50] + ")")
         pg.click("#approve"); pg.wait_for_timeout(200); pg.click("#approve"); pg.wait_for_timeout(900)
         ok("approved" in pg.inner_text(".pt-band .st").lower(), name + ": approved")
         with pg.expect_download() as dl: pg.click(".files li a.iconbtn")

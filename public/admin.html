@@ -53,6 +53,10 @@
   .rev-form .btn { grid-column: 1 / -1; justify-self: start; }
   .rev-num { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; margin-top: 14px; }
   .rev-num > div { width: 240px; }
+  .rev-num > div[hidden] { display: none; }
+  .proof-who { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin-top: 10px; }
+  .proof-q textarea { width: 100%; resize: vertical; }
+  @media (max-width: 640px) { .proof-who { grid-template-columns: 1fr; } }
   .stat-form select { width: auto; min-width: 200px; height: 42px; }
   .tpl { display: flex; gap: 6px; flex-wrap: wrap; }
   .tpl button { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--white); color: var(--navy); cursor: pointer;
@@ -627,11 +631,11 @@
 <script src="/shell.js?v=2026-10-31.1" defer></script>
 <script src="/xlsx.js?v=2026-10-26.2" defer></script>
 <script src="/orders.js?v=2026-11-01.1" defer></script>
-<script src="/books.js?v=2026-11-01.1" defer></script>
+<script src="/books.js?v=2026-11-12.1" defer></script>
 <script src="/tech.js?v=2026-10-26.2" defer></script>
 <script src="/viewer3d.js?v=2026-11-01.1" defer></script>
 <script src="/snap.js?v=2026-10-31.1" defer></script>
-<script src="/admin.js?v=2026-11-01.1" defer></script>
+<script src="/admin.js?v=2026-11-12.1" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>

@@ -967,6 +967,7 @@
             <p style="margin:6px 0 0">Chưa tạo thì: Storage &amp; Databases › D1 SQL Database › <b>Create</b>, tên <code>d8-db</code>, rồi làm bước 1 và 2 ở trên. Bảng dữ liệu tự tạo ở lần mở đầu tiên.</p></div></div>`}</section>
       ${domainCard(s)}
       ${revCard(s)}
+      ${proofCard(s)}
       ${storeCard(s)}
       <section class="card"><h2 class="h-caps">Thanh toán của khách</h2>
         <label class="switch"><input type="checkbox" id="setPay"${s.settings.onlinePay ? " checked" : ""}${can("staff.manage") ? "" : " disabled"}><span></span><b>Thanh toán online trên cổng khách hàng (PayPal / Stripe)</b></label>
@@ -983,8 +984,20 @@
     const rs = $("revSave");
     if (rs) rs.addEventListener("click", async () => {
       D8.busy(rs, true);
-      try { const r = await api("/api/settings", { method: "POST", body: { freeRevisions: Number($("revDefault").value) } }); $("revDefault").value = r.settings.freeRevisions; D8.done(rs, "Đã lưu"); }
+      const open = host.querySelector('input[name="revMode"]:checked').value === "open";
+      try { const r = await api("/api/settings", { method: "POST", body: { revOpen: open, freeRevisions: Number($("revDefault").value) } }); $("revDefault").value = r.settings.freeRevisions; D8.done(rs, "Đã lưu"); }
       catch (err) { D8.toast(err.message); } finally { D8.busy(rs, false); }
+    });
+    host.querySelectorAll('input[name="revMode"]').forEach((r) => r.addEventListener("change", () => { $("revCount").hidden = r.value !== "count"; }));
+    // proof on the homepage: cases designed and customers' own words (hidden on the site while empty)
+    const ps = $("proofSave");
+    if (ps) ps.addEventListener("click", async () => {
+      const quotes = [...host.querySelectorAll(".proof-q")].map((q) => ({ text: q.querySelector("[data-q=text]").value.trim(), who: q.querySelector("[data-q=who]").value.trim(), where: q.querySelector("[data-q=where]").value.trim() }));
+      const half = quotes.find((q) => (q.text || q.where) && !(q.text && q.who));
+      if (half) { D8.toast("Mỗi lời nhận xét cần đủ nội dung và tên người nói."); return; }
+      D8.busy(ps, true);
+      try { await api("/api/settings", { method: "POST", body: { proofCases: Number($("proofCases").value || 0), quotes: quotes.filter((q) => q.text) } }); D8.done(ps, "Đã lưu"); }
+      catch (err) { D8.toast(err.message); } finally { D8.busy(ps, false); }
     });
     const save = $("asSave");
     if (save) save.addEventListener("click", async () => {
@@ -1031,14 +1044,32 @@
     return `<section class="card" id="domCard"><h2 class="h-caps">Tên miền</h2>${body}</section>`;
   }
 
-  // Free revisions per case: the usual number (shown on the website and in the portal); each case can have its own.
+  // Free revisions: until the customer approves (owner's rule 2026-11-11), or a usual number; each case can have its own number.
   function revCard(s) {
-    const n = s.settings.freeRevisions ?? 2, edit = can("staff.manage");
+    const n = s.settings.freeRevisions ?? 2, open = s.settings.revOpen !== false, edit = can("staff.manage"), dis = edit ? "" : " disabled";
     return `<section class="card" id="revCard"><h2 class="h-caps">Sửa file miễn phí</h2>
-      <p style="margin:10px 0 0">Số lần sửa miễn phí thường lệ cho mỗi ca. Con số này hiện trên trang web, trong Điều khoản và trong cổng khách hàng. Ở trang từng ca, bạn đặt được số lần khác cho riêng ca đó.</p>
-      <div class="rev-num"><div><label class="field-label" for="revDefault">Mỗi ca được sửa miễn phí</label>
-        <input class="input" id="revDefault" type="number" min="0" max="20" step="1" inputmode="numeric" value="${esc(n)}"${edit ? "" : " disabled"}></div>
+      <p style="margin:10px 0 0">Chính sách sửa hiện trên trang web, trong Điều khoản, cổng khách hàng và trợ lý chat. Ở trang từng ca, bạn vẫn đặt được giới hạn riêng cho ca đó.</p>
+      <div class="seg" role="radiogroup" aria-label="Chính sách sửa miễn phí" style="margin-top:14px;max-width:460px">
+        <label><input type="radio" name="revMode" value="open"${open ? " checked" : ""}${dis}><span>Đến khi khách duyệt</span></label>
+        <label><input type="radio" name="revMode" value="count"${open ? "" : " checked"}${dis}><span>Số lần cố định</span></label></div>
+      <p class="hint" style="margin:8px 0 0">"Đến khi khách duyệt": sửa miễn phí cho đến khi khách duyệt thiết kế; sau khi duyệt hoặc đổi yêu cầu ban đầu thì báo giá theo mức độ.</p>
+      <div class="rev-num"><div id="revCount"${open ? " hidden" : ""}><label class="field-label" for="revDefault">Mỗi ca được sửa miễn phí</label>
+        <input class="input" id="revDefault" type="number" min="0" max="20" step="1" inputmode="numeric" value="${esc(n)}"${dis}></div>
         ${edit ? '<button class="btn btn-primary small" type="button" id="revSave">Lưu</button>' : ""}</div></section>`;
+  }
+
+  // Proof on the homepage: how many cases D.EIGHT has designed, and up to three customers' own words. Empty = nothing shows.
+  function proofCard(s) {
+    const edit = can("staff.manage"), dis = edit ? "" : " disabled", qs = (s.settings.quotes || []).concat([{}, {}, {}]).slice(0, 3);
+    return `<section class="card" id="proofCard"><h2 class="h-caps">Bằng chứng trên trang chủ</h2>
+      <p style="margin:10px 0 0">Số ca đã thiết kế và lời nhận xét của khách hiện ở mục "Khách hàng nói gì" trên trang chủ. Để trống thì mục đó không hiện. Chỉ đăng con số thật và lời nhận xét đã được khách đồng ý cho công khai.</p>
+      <div class="rev-num"><div style="width:auto;min-width:240px"><label class="field-label" for="proofCases">Số ca đã thiết kế (0 = không hiện)</label>
+        <input class="input" id="proofCases" type="number" min="0" max="1000000" step="1" inputmode="numeric" value="${esc(s.settings.proofCases || 0)}"${dis}></div></div>
+      ${qs.map((q, i) => `<div class="proof-q"><p class="grp" style="margin:18px 0 6px">Lời nhận xét ${i + 1}</p>
+        <label class="field-label" for="pq${i}t">Nội dung (nguyên văn lời khách, tối đa 320 ký tự)</label><textarea class="input" id="pq${i}t" data-q="text" rows="3" maxlength="320"${dis}>${esc(q.text || "")}</textarea>
+        <div class="proof-who"><div><label class="field-label" for="pq${i}w">Người nói (tên, chức danh)</label><input class="input" id="pq${i}w" data-q="who" maxlength="80" value="${esc(q.who || "")}"${dis}></div>
+          <div><label class="field-label" for="pq${i}p">Phòng khám / labo, nơi</label><input class="input" id="pq${i}p" data-q="where" maxlength="80" value="${esc(q.where || "")}"${dis}></div></div></div>`).join("")}
+      ${edit ? '<div style="margin-top:16px"><button class="btn btn-primary small" type="button" id="proofSave">Lưu</button></div>' : ""}</section>`;
   }
 
   // Where case files live: R2 keeps them with the case; KV deletes them after 60 days.

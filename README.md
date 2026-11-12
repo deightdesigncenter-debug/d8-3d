@@ -7,7 +7,10 @@ Một trang web duy nhất gồm trang giới thiệu (tiếng Anh / tiếng Vi�
 - Quản trị: `/admin` (Đơn hàng, Ca cổng khách, Khách hàng, Mã hàng & bảng giá, Báo cáo, Nhập Excel, Nhân sự, Cài đặt, Link xem 3D, Tin nhắn) và `/stl`
 - Link gửi bác sĩ: `/v/<mã>`
 - Giới thiệu: `/about` (ca tiêu biểu toàn hàm, 3 video quay màn hình, 17 ảnh màn hình CAD có lọc, thêm 6 ca; không đăng ảnh sản phẩm hoàn thiện vì D.EIGHT chỉ thiết kế; bố cục theo kiểu luminadental.com.au)
-- Sửa file miễn phí: số lần thường lệ đặt ở **Cài đặt › Sửa file miễn phí** (mặc định 2, hiện trên trang chủ, Điều khoản và cổng khách); từng ca đặt riêng được ở trang ca (người có quyền billing.edit). Chuyển ca từ "Chờ duyệt" về "Đang thiết kế" tự tính 1 lần sửa; khách thấy "đã dùng X/N" trong ca.
+- Cam kết công khai (từ 11/11/2026): **ca đơn 6–8 giờ, ca full-arch 8–12 giờ, tính từ khi đủ hồ sơ, nhận ca 24/7; sửa miễn phí đến khi khách duyệt** (sau khi duyệt hoặc đổi yêu cầu ban đầu thì báo giá theo mức độ). Các con số này nằm trên trang chủ, Điều khoản, cổng khách và trợ lý chat.
+- Sửa file miễn phí: **Cài đặt › Sửa file miễn phí** chọn "Đến khi khách duyệt" (mặc định) hoặc "Số lần cố định"; trang chủ, Điều khoản và cổng khách tự đổi câu chữ theo lựa chọn. Từng ca vẫn đặt giới hạn riêng được ở trang ca (người có quyền billing.edit). Chuyển ca từ "Chờ duyệt" về "Đang thiết kế" tự tính 1 lần sửa.
+- Trang chủ: khối **"Biết trước giờ nhận thiết kế"** ngay dưới ảnh đầu trang tính sẵn giờ có file theo đồng hồ và múi giờ của người xem (ca đơn, ca full-arch); ưu đãi **ca full-arch đầu tiên của phòng khám implant mới: duyệt trên 3D rồi mới thanh toán**.
+- **Cài đặt › Bằng chứng trên trang chủ**: nhập số ca đã thiết kế và tối đa 3 lời nhận xét của khách (đã được khách đồng ý cho công khai). Để trống thì mục "Được tin giao những ca thật" trên trang chủ không hiện.
 - Đội ngũ trên trang Giới thiệu: Danny Do (liên hệ khách hàng), Nhut Hoa (kỹ thuật viên thiết kế).
 - Font: chỉ dùng Be Vietnam Pro (tiêu đề đậm, viết thường như câu; nhãn nhỏ và nút in hoa). Dòng chữ nghiêng có chân (slogan) vẫn là Noto Serif Display.
 - Pháp lý: `/privacy`, `/terms` (Google yêu cầu khi cho khách đăng nhập)

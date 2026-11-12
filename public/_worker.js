@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-11-01.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-11-12.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -56,7 +56,7 @@ const isLocal = (h) => h === "localhost" || h === "127.0.0.1";
 function siteOf(settings, url) {
   const main = settings.siteHost || "";
   const origin = !main ? url.origin : isLocal(main) ? `${url.protocol}//${main}${url.port ? ":" + url.port : ""}` : "https://" + main;
-  return { main, here: !!main && url.hostname === main, origin };
+  return { main, here: !!main && url.hostname === main, origin, revOpen: settings.revOpen !== false, rev: settings.freeRevisions };
 }
 function robotsOpen(origin) {
   return ["# Search engines may read the homepage, the About page and the legal pages; the portal, the workspace and the tools stay private.",
@@ -73,6 +73,12 @@ async function publicPage(res, site, env) {
   // legal pages say how long files are kept: with the case in R2, 60 days in KV
   const keep = env && env.FILES ? "r2" : "kv";
   html = html.replace(/<!--store:(r2|kv)-->([\s\S]*?)<!--\/store:\1-->/g, (m, k, inner) => (k === keep ? inner : ""));
+  // revisions: "until you approve" (the page as written) or a fixed number. The fixed-number wording sits in comments
+  // <!--rev:count ... /rev:count--> next to each <!--rev:open-->...<!--/rev:open--> block.
+  html = site.revOpen
+    ? html.replace(/<!--rev:count[\s\S]*?\/rev:count-->/g, "").replace(/<!--\/?rev:open-->/g, "")
+    : html.replace(/<!--rev:open-->[\s\S]*?<!--\/rev:open-->/g, "").replace(/<!--rev:count\s?([\s\S]*?)\/rev:count-->/g, "$1")
+      .replace(/(<span class="rev-n">)\d+(<\/span>)/g, "$1" + (Number.isInteger(site.rev) ? site.rev : 2) + "$2");
   if (site.here) html = html.replace(/<meta name="robots" content="noindex[^"]*">\n?/, "");
   const headers = new Headers(res.headers);
   headers.delete("Content-Length"); headers.delete("ETag");
@@ -203,7 +209,8 @@ async function handleApi(request, env, url) {
   if (path === "/api/config" && method === "GET") {
     const pc = payConf(env), on = (await loadSettings(env)).onlinePay;
     return json({ googleClientId: conf(env).clientId, trialCases: TRIAL_CASES, trialCredit: TRIAL_CREDIT_USD, translate: !!env.AI, fileStore: activeStore(env),
-      freeRevisions: (await loadSettings(env)).freeRevisions,
+      freeRevisions: (await loadSettings(env)).freeRevisions, revOpen: (await loadSettings(env)).revOpen !== false,
+      proof: { cases: (await loadSettings(env)).proofCases || 0, quotes: (await loadSettings(env)).quotes || [] },
       ...(turnstileOn(env) ? { turnstile: env.TURNSTILE_SITE_KEY } : {}),
       pay: { paypal: on && !!pc.paypal, stripe: on && !!pc.stripe }, db: !!env.DB },
       200, { "Cache-Control": "public, max-age=300" });
@@ -1389,9 +1396,10 @@ async function jobView(env, job, who = null) {
   }
   const { ai, payTries, price, due, team, designer, qcBy, stage, qc, revFree, revUsed, needsOrder, ...rest } = job;
   if (rest.order) rest.order = normCode(rest.order);
-  // free revisions: the number set for this case, else the usual number from Settings; used = times sent back to design
-  const custom = typeof revFree === "number";
-  rest.rev = { free: custom ? revFree : (await loadSettings(env)).freeRevisions, used: revUsed || 0, custom };
+  // free revisions: the number set for this case; else what Settings say: until the customer approves (open), or the usual
+  // number. used = times sent back to design
+  const custom = typeof revFree === "number", st = await loadSettings(env);
+  rest.rev = { free: custom ? revFree : st.freeRevisions, used: revUsed || 0, custom, open: !custom && st.revOpen !== false };
   rest.files = (rest.files || []).map((f) => (f.st === "r2" && f.exp ? { ...f, exp: 0 } : f)); // R2 files are kept with the case
   const num = (v) => (typeof v === "number" ? v : null);
   if (who) {
@@ -2160,7 +2168,12 @@ function insertNextCode(DB, cols, o, tail = "") {
 }
 
 /* ---- settings (KV, work without the database) */
-const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false, spamWords: "", blockEmails: "", siteHost: "", freeRevisions: 2 };
+// revOpen (owner's rule 2026-11-11): revisions are free until the customer approves; off = the fixed number freeRevisions.
+// proofCases / quotes: what the homepage may show as proof (cases designed, customers' own words); empty = that part stays hidden.
+const SETTINGS_DEFAULT = { onlinePay: false, autoTrial: false, spamWords: "", blockEmails: "", siteHost: "", freeRevisions: 2, revOpen: true, proofCases: 0, quotes: [] };
+const QUOTES_MAX = 3;
+// how long a design takes, counted from a complete case (owner's rule 2026-11-11; cases come in 24/7). The pages carry the same figures.
+const TURNAROUND = { single: "6–8", arch: "8–12" };
 const REV_MAX = 20; // free revisions: the owner sets the usual number (Settings) and can change it per case
 async function loadSettings(env) {
   const c = cacheGet("@settings");
@@ -2449,6 +2462,15 @@ async function handleBook(request, env, url, who) {
         const n = Number(b.freeRevisions);
         if (!Number.isInteger(n) || n < 0 || n > REV_MAX) return json({ error: "Số lần sửa miễn phí phải từ 0 đến " + REV_MAX + "." }, 400);
         next.freeRevisions = n;
+      }
+      if (b.proofCases !== undefined) {
+        const n = Number(b.proofCases);
+        if (!Number.isInteger(n) || n < 0 || n > 1000000) return json({ error: "Số ca đã thiết kế phải là số nguyên từ 0 trở lên (0 = không hiện)." }, 400);
+        next.proofCases = n;
+      }
+      if (b.quotes !== undefined) { // customers' own words, with their agreement (the owner's responsibility); a line without text or name is dropped
+        if (!Array.isArray(b.quotes) || b.quotes.length > QUOTES_MAX) return json({ error: "Tối đa " + QUOTES_MAX + " lời nhận xét." }, 400);
+        next.quotes = b.quotes.map((q) => ({ text: clip(q && q.text, 320), who: clip(q && q.who, 80), where: clip(q && q.where, 80) })).filter((q) => q.text && q.who);
       }
       for (const k of ["spamWords", "blockEmails"]) if (typeof b[k] === "string") next[k] = b[k].split(/[\n,;]+/).map((x) => x.trim().toLowerCase().slice(0, 80)).filter(Boolean).slice(0, 300).join("\n");
       await env.CASES.put("cfg:settings", JSON.stringify(next));
@@ -3942,15 +3964,18 @@ const ASSIST_PER_HOUR = 40, ASSIST_DAILY = 400, ASSIST_TURNS = 12, ASSIST_CHARS 
 // a question about design, a quote or getting in touch also offers the details form
 const ASSIST_LEAD = /design|thiết kế|quote|báo giá|bảng giá|price|pricing|\bgiá|cost|how much|bao nhiêu|order|consult|tư vấn|contact|liên hệ|whatsapp|human|người thật|nhân viên|interested|quan tâm|want you|muốn|send (a |my |the )?case|gửi ca/i;
 // a reply that names a price is replaced: the team quotes after reading the case
-const ASSIST_PRICE = /[$€£]|\b(usd|vnd|vnđ|đồng|dollars?|euros?)\b|\d[\d.,]*\s?(k|đ|vnd|usd)(?![a-z])/i;
+// (a letter after "k" or "đ" means a word, not money: "6 đến 8 giờ" is a time)
+const ASSIST_PRICE = /[$€£]|\b(usd|vnd|vnđ|đồng|dollars?|euros?)\b|\d[\d.,]*\s?(k|đ|vnd|usd)(?![a-z\u00C0-\u1EF9])/i;
 
-const assistSystem = (rev) => [
+const revOpen = (st) => st.revOpen !== false;
+const assistSystem = (st) => [
   "You are the website assistant of D.EIGHT DESIGN CENTER, a remote dental CAD design team. You answer visitors on the About page and help them ask for our design work.",
   "Facts you may use:",
   "- D.EIGHT designs only. We create the digital design (CAD) from the scans or photos the dentist or lab sends, and deliver production-ready STL files. The customer's own lab or milling centre makes the final restoration. We do not mill, print or ship finished products.",
   "- Services: " + Object.keys(RX_FIELDS).join(", ") + ".",
-  "- Turnaround: the website states delivery within 24 hours. Say that the exact time depends on the case and that our team confirms it when the case arrives.",
-  "- Free revisions: " + rev + " per case. More revisions are quoted separately.",
+  "- Turnaround, counted from a complete case (cases are received 24/7): single cases in " + TURNAROUND.single + " hours, full-arch cases in " + TURNAROUND.arch + " hours. Say that our team confirms the time for the case when it arrives.",
+  revOpen(st) ? "- Revisions: free until the customer approves the design. Changes asked for after approval, or changes to the original prescription, are quoted by scope before work starts."
+    : "- Free revisions: " + st.freeRevisions + " per case. More revisions are quoted separately.",
   "- How to send a case: sign in with Google at /portal, start a new case, upload the scan files, fill in the case details and send. Our team replies in the case chat.",
   "- Contact: Danny Do (client contact), WhatsApp +84 703 233 263, email d.eightdesigncenter@gmail.com.",
   "Rules:",
@@ -3964,7 +3989,8 @@ const assistSystem = (rev) => [
 ].join("\n");
 
 // Fixed answers to the same questions: used when Workers AI is off or fails, and whenever its reply names a price.
-function assistFallback(q, vi, rev) {
+function assistFallback(q, vi, st) {
+  const rev = st.freeRevisions;
   const E = (en, v) => (vi ? v : en), t = String(q).toLowerCase(), has = (re) => re.test(t);
   if (has(/price|pricing|cost|fee|quote|how much|discount|payment|\bpay\b|bảng giá|báo giá|\bgiá|bao nhiêu|chi phí|chiết khấu|thanh toán|tiền/))
     return E("Prices depend on each case, so our team quotes after reading it. Leave your details below and we will reply with a quote.",
@@ -3973,11 +3999,14 @@ function assistFallback(q, vi, rev) {
     return E("Sign in with Google at /portal, start a new case, upload your scan files, fill in the case details and send. Our team replies in the case chat.",
       "Đăng nhập Google tại /portal, tạo ca mới, tải file quét lên, điền thông tin ca rồi gửi. Đội ngũ sẽ trả lời trong khung chat của ca.");
   if (has(/how long|turnaround|how fast|deadline|when|time|bao lâu|mấy ngày|thời gian|khi nào|bao giờ|giao/))
-    return E("The website states delivery within 24 hours. The exact time depends on the case, and our team confirms it when the case arrives.",
-      "Trang web ghi giao trong 24 giờ. Thời gian cụ thể tuỳ từng ca, đội ngũ sẽ xác nhận khi nhận được ca.");
+    return E(`Single cases are delivered in ${TURNAROUND.single} hours and full-arch cases in ${TURNAROUND.arch} hours, counted from a complete case. We receive cases 24/7, and our team confirms the time for your case when it arrives.`,
+      `Ca đơn giao trong ${TURNAROUND.single} giờ, ca full-arch trong ${TURNAROUND.arch} giờ, tính từ khi nhận đủ hồ sơ. Chúng tôi nhận ca 24/7, và đội ngũ xác nhận thời gian cho ca của bạn khi nhận được.`);
   if (has(/revision|revise|chỉnh sửa|sửa lại|sửa đổi/))
-    return E(`Each case includes ${rev} free revision${rev === 1 ? "" : "s"}. More revisions are quoted separately.`,
-      `Mỗi ca có ${rev} lần chỉnh sửa miễn phí. Chỉnh sửa thêm sẽ được báo giá riêng.`);
+    return revOpen(st)
+      ? E("Revisions are free until you approve the design. Changes after approval, or to the original prescription, are quoted by scope before we start.",
+        "Chỉnh sửa miễn phí cho đến khi bạn duyệt thiết kế. Thay đổi sau khi đã duyệt, hoặc khác với phiếu chỉ định ban đầu, sẽ được báo giá theo mức độ trước khi làm.")
+      : E(`Each case includes ${rev} free revision${rev === 1 ? "" : "s"}. More revisions are quoted separately.`,
+        `Mỗi ca có ${rev} lần chỉnh sửa miễn phí. Chỉnh sửa thêm sẽ được báo giá riêng.`);
   if (has(/contact|reach|phone|email|whatsapp|human|person|liên hệ|người thật|nhân viên|số điện thoại/))
     return E("You can reach Danny Do on WhatsApp at +84 703 233 263, or by email at d.eightdesigncenter@gmail.com.",
       "Bạn có thể liên hệ Danny Do qua WhatsApp +84 703 233 263, hoặc email d.eightdesigncenter@gmail.com.");
@@ -4036,13 +4065,13 @@ async function assistChat(request, env) {
   let reply = "", ai = false;
   if (env.AI) {
     try {
-      const out = await aiChat(env, [{ role: "system", content: assistSystem(settings.freeRevisions) }, ...turns.map((m) => ({ role: m.role, content: m.text }))],
+      const out = await aiChat(env, [{ role: "system", content: assistSystem(settings) }, ...turns.map((m) => ({ role: m.role, content: m.text }))],
         { maxTokens: 320, vi });
-      if (ASSIST_PRICE.test(out)) reply = assistFallback("price", vi, settings.freeRevisions);
+      if (ASSIST_PRICE.test(out)) reply = assistFallback("price", vi, settings);
       else { reply = out.slice(0, 1200); ai = true; }
     } catch (err) { console.error("assist", err && err.message); }
   }
-  if (!reply) reply = assistFallback(last.text, vi, settings.freeRevisions);
+  if (!reply) reply = assistFallback(last.text, vi, settings);
   return json({ reply, ai, lead: ASSIST_LEAD.test(last.text) });
 }
 

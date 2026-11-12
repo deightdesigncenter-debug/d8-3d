@@ -66,6 +66,28 @@ with sync_playwright() as p:
             v.close()
         pg.click("#domOff"); pg.wait_for_selector("#domSet", timeout=6000)
         ok(main() == "", tag + ": cleared")
+        # the owner's two cards for the public promise: how revisions work, and the proof the homepage may show
+        ok(pg.is_checked('#revCard input[value="open"]') and pg.eval_on_selector("#revCount", "e => e.hidden"), tag + ": revisions are free until the customer approves (the default)")
+        ok(pg.locator("#proofCard .proof-q").count() == 3 and pg.input_value("#proofCases") == "0", tag + ": proof card starts empty")
+        pg.locator("#revCard").scroll_into_view_if_needed()
+        pg.screenshot(path=f"{OUT}/settings-rev-proof-{tag}.png", full_page=True)
+        if tag == "light":
+            setting = lambda: rq.get("/api/settings", headers=H).json()["settings"]
+            pg.click('#revCard .seg label:has(input[value="count"])'); pg.wait_for_timeout(150)
+            ok(pg.is_visible("#revDefault"), "fixed number: the number field shows")
+            pg.fill("#revDefault", "4"); pg.click("#revSave"); pg.wait_for_timeout(900)
+            ok(setting()["revOpen"] is False and setting()["freeRevisions"] == 4, "owner saves a fixed number of 4")
+            pg.click('#revCard .seg label:has(input[value="open"])'); pg.wait_for_timeout(150)
+            ok(pg.eval_on_selector("#revCount", "e => e.hidden"), "free until approval: the number field is put away")
+            pg.click("#revSave"); pg.wait_for_timeout(900)
+            ok(setting()["revOpen"] is True, "and switches back to free until approval")
+            rq.post("/api/settings", data=json.dumps({"freeRevisions": 2}), headers=H)
+            pg.fill("#proofCases", "1240"); pg.fill("#pq0t", "Fits first time."); pg.click("#proofSave"); pg.wait_for_timeout(500)
+            ok(setting()["proofCases"] == 0, "a quote without a name is not saved")
+            pg.fill("#pq0w", "Dr A. Example"); pg.fill("#pq0p", "Example Dental, Denver"); pg.click("#proofSave"); pg.wait_for_timeout(900)
+            st = setting()
+            ok(st["proofCases"] == 1240 and len(st["quotes"]) == 1 and st["quotes"][0]["who"] == "Dr A. Example", "owner saves the number of cases and one quote")
+            rq.post("/api/settings", data=json.dumps({"proofCases": 0, "quotes": []}), headers=H)
         c.close()
     ktv = f"ktvdom{stamp}@d8.example"
     rq.post("/api/staff", data=json.dumps({"email": ktv, "role": "designer"}), headers=H)

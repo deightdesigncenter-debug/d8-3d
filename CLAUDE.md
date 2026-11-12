@@ -54,10 +54,24 @@ The owner wants the site to run without errors or jank, and every new feature ch
 - Homepage, Lumina-style: "Why D.EIGHT" is a 4×2 picture/text chequerboard of real CAD screens (2 columns on tablet,
   stacked on phone); a full-width strip of the 3 screen recordings (`#recordings`, same play-on-screen and no-button rules, logic in
   `site/home.js`; captions are `pointer-events: none`) links to `/about#screens` and `/about#clips`.
-- Free revisions (owner's rule 2026-10-26): the owner decides. Settings `freeRevisions` (default 2, 0–20, staff.manage) is public in
-  `/api/config` and printed into `.rev-n` spans (home, terms) by `D8.fillRev`; per case `job.revFree` / `job.revUsed` via
-  `POST /api/jobs/<id>/revisions` (billing.edit only); review → in_design adds one used. `jobView` sends `rev: {free, used, custom}`
-  to staff and the customer (raw fields stay internal). Tests: `dev/tests/revisions.test.mjs` (also with `R2=1`).
+- Public promise (owner's rules 2026-11-11, after the market review): **single cases in 6–8 hours, full-arch in 8–12 hours, counted
+  from a complete case, cases received 24/7; revisions free until the customer approves** (after approval, or a change to the
+  original prescription: quoted by scope). The figures are written in `index.html` + `site/home-dict.js`, `terms.html`, the assistant
+  (`TURNAROUND` in `_worker.js`) and the clock card (`HOURS` in `site/home.js`): change them in all four. Never put "24 hours" or a
+  count of revisions back without the owner saying so; `revisions.test.mjs` and `site_ui.py` check the wording.
+- Free revisions: Settings `revOpen` (default true = until approval) or the usual number `freeRevisions` (0–20), both staff.manage and
+  public in `/api/config`. Pages carry the "until you approve" wording in `<!--rev:open-->…<!--/rev:open-->` and the fixed-number
+  wording inside a comment `<!--rev:count … /rev:count-->`; `publicPage` keeps the one that matches and writes the number into
+  `.rev-n` (so no `--` inside those blocks). Per case `job.revFree` / `job.revUsed` via `POST /api/jobs/<id>/revisions` (billing.edit
+  only); review → in_design adds one used. `jobView` sends `rev: {free, used, custom, open}` (raw fields stay internal); the portal
+  says "free until you approve" when `open`. Tests: `dev/tests/revisions.test.mjs` (also with `R2=1`), `domain_ui.py` (Settings cards).
+- Homepage (2026-11-12): under the hero a turnaround band `#turnaround` with a clock card: "if you send a complete case now", the
+  ready-by window for a single case and a full-arch case on the visitor's own clock and time zone (redrawn every 30 s and on
+  `d8:lang`; without script it shows the hours; two text lines are reserved so nothing moves). Trial section: second offer
+  `.offer2`, a new implant clinic pays its first full-arch case only after approving the 3D design (decided 2026-11-11, one case
+  per clinic, handled by hand). `#proof` (cases designed + up to 3 customer quotes) is filled from Settings `proofCases` / `quotes`
+  (staff.manage, in `/api/config`), shown as text only and hidden while empty: never write a quote or a number yourself.
+  Not on the site yet, waiting for the owner: public starting prices, real quotes and case counts, three anonymised 3D samples.
 - Case files: in R2 (`FILES`) they are kept with the case (`exp: 0`, shown "lưu cùng ca"); in KV they expire after 60 days.
   Files in an order's team chat go the same way: `POST /api/orders/<id>/files/presign` signs the parts (keys `ofp:<id>:<fid>:<n>`),
   the browser PUTs them to R2, then `POST /api/orders/<id>/files` attaches them. Tests: `presign.test.mjs` (both modes).
@@ -127,7 +141,7 @@ The owner wants the site to run without errors or jank, and every new feature ch
   `KV_RATE=1`. Settings › file storage shows `cases` (store, count, left).
 - Website assistant (chat box on the About page; `data-assist` on `<body>`, `public/site/assist.js` + `assist.css`): `POST /api/assist`
   answers from the facts in `assistSystem` (Workers AI); the fixed answers in `assistFallback` are used when AI is off or fails, and
-  whenever a reply names a price (never a price in a reply). `POST /api/assist/lead` sends the visitor's details through
+  whenever a reply names a price (never a price in a reply; `ASSIST_PRICE` must not take "6 đến 8 giờ" for money). `POST /api/assist/lead` sends the visitor's details through
   `submitContact(…, "chat")` into the inbox (Messages), tagged "[Chat trên trang Giới thiệu]". Chat text is not stored. Limits: 40
   questions an hour per address, 400 a day (D1 `assist_hits`, schema v7, address hashed, kept 2 days). Tests: `assist.test.mjs` (also
   `NO_AI=1 NO_DB=1`), `assist_cap.test.mjs` (needs D1), `assist_ui.py` (light and dark).

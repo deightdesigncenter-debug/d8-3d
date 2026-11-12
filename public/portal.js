@@ -255,7 +255,7 @@
       <a class="btn btn-primary small" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(T("p.pv.open"))}</a></div>
       <iframe class="case-frame" src="${esc(p.url)}" title="${esc(p.label || j.title)}" loading="lazy" referrerpolicy="no-referrer"></iframe>`).join("");
     const rv = j.rev || { free: 2, used: 0 }, revLeft = Math.max(0, rv.free - rv.used);
-    const revLine = `<p class="rev-left">${esc(revLeft ? T("p.ap.rev").replace("{l}", revLeft).replace("{n}", rv.free) : T("p.ap.rev0"))}</p>`;
+    const revLine = `<p class="rev-left">${esc(rv.open ? T("p.ap.revopen") : revLeft ? T("p.ap.rev").replace("{l}", revLeft).replace("{n}", rv.free) : T("p.ap.rev0"))}</p>`;
     const approveBox = st === "review" ? `<div class="approve"><p>${T("p.ap.p")}</p>${revLine}<div class="btns">
       <button class="btn small" type="button" id="askChanges">${esc(T("p.ap.change"))}</button>
       <button class="btn btn-ok small" type="button" id="approve">${ICON.check}${esc(T("p.ap.ok"))}</button></div></div>` : "";
@@ -282,7 +282,7 @@
       ["p.dt.material", j.material], ["p.dt.shade", j.shade], ["p.dt.needed", j.neededBy ? D8.fmtDate(Date.parse(j.neededBy + "T12:00:00")) : ""],
       ...(j.order ? [["p.dt.order", j.order]] : []),
       ["p.dt.sent", D8.fmtDate(j.created, true)],
-      ["p.dt.rev", T("p.dt.revv").replace("{u}", rv.used).replace("{n}", rv.free)],
+      ["p.dt.rev", rv.open ? T("p.dt.revopen") : T("p.dt.revv").replace("{u}", rv.used).replace("{n}", rv.free)],
     ].filter((r) => r[1]).map(([k, v]) => [T(k), v]).concat(D8.rxRows(j.rx))
       .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
     // Customers never see a price list or the case price, only a free trial or the amount they are asked to pay.

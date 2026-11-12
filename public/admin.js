@@ -479,15 +479,16 @@
       </section>`;
     }
 
-    // free revisions: the usual number comes from Settings; the owner can set another number for this case
+    // free revisions: Settings say "until the customer approves" (open) or the usual number; the owner can set a number for this case
     const rv = j.rev || { free: 2, used: 0, custom: false };
     const revBlock = `<div class="rev-box" id="revBox"><p class="grp" style="margin:20px 0 6px">Sửa miễn phí</p>
-      <p style="margin:0">Đã dùng <b>${rv.used}</b> / ${rv.free} lần ${rv.custom ? "(riêng ca này)" : "(theo mặc định)"}${rv.used >= rv.free ? '<br><span class="hint" style="margin:0">Hết lượt miễn phí: chỉnh sửa tiếp báo giá theo mức độ.</span>' : ""}</p>
+      <p style="margin:0">${rv.open ? `Miễn phí đến khi khách duyệt (theo mặc định). Đã sửa <b>${rv.used}</b> lần.`
+        : `Đã dùng <b>${rv.used}</b> / ${rv.free} lần ${rv.custom ? "(riêng ca này)" : "(theo mặc định)"}${rv.used >= rv.free ? '<br><span class="hint" style="margin:0">Hết lượt miễn phí: chỉnh sửa tiếp báo giá theo mức độ.</span>' : ""}`}</p>
       ${can("billing.edit") ? `<form id="revForm" class="rev-form">
-        <div><label class="field-label" for="revFree">Số lần miễn phí</label><input class="input" id="revFree" type="number" min="0" max="20" step="1" inputmode="numeric" value="${rv.custom ? rv.free : ""}" placeholder="Mặc định"></div>
+        <div><label class="field-label" for="revFree">Giới hạn riêng ca này</label><input class="input" id="revFree" type="number" min="0" max="20" step="1" inputmode="numeric" value="${rv.custom ? rv.free : ""}" placeholder="Mặc định"></div>
         <div><label class="field-label" for="revUsed">Đã dùng</label><input class="input" id="revUsed" type="number" min="0" max="20" step="1" inputmode="numeric" value="${rv.used}"></div>
         <button class="btn small" type="submit">Lưu</button></form>
-        <p class="hint" style="margin:6px 0 0">Để trống ô đầu là theo mặc định ở Cài đặt. Chuyển ca từ "Chờ duyệt" về "Đang thiết kế" tự tính thêm 1 lần.</p>` : ""}</div>`;
+        <p class="hint" style="margin:6px 0 0">Để trống ô đầu là theo mặc định ở Cài đặt (hiện: ${rv.custom ? "xem Cài đặt" : rv.open ? "sửa đến khi khách duyệt" : rv.free + " lần"}). Điền một số để giới hạn riêng ca này. Chuyển ca từ "Chờ duyệt" về "Đang thiết kế" tự tính thêm 1 lần.</p>` : ""}</div>`;
     show("p-case");
     $("p-case").innerHTML = `
       <div class="adm-head">

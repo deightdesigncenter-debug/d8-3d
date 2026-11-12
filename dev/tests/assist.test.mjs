@@ -46,11 +46,16 @@ ok(r.status === 200 && !/\d/.test(r.data.reply) && /quote/i.test(r.data.reply), 
 
 // the fixed answers are checked when the AI is off (then every reply is a fixed one)
 const aiOn = (await ask("Hello")).data.ai === true;
+if (aiOn) { // a time range in Vietnamese ("6 đến 8 giờ") is not a price: the reply is left as it is
+  r = await ask("Ca đơn giao trong 6 đến 8 giờ phải không?", "vi");
+  ok(/6 đến 8 giờ/.test(r.data.reply), "a Vietnamese time range is not taken for a price (" + r.data.reply.slice(0, 60) + ")");
+}
 if (!aiOn) {
   const fixed = async (text, lang, re, label) => { const x = await ask(text, lang); ok(re.test(x.data.reply), label + " (" + x.data.reply.slice(0, 70) + ")"); };
   await fixed("How do I send a case?", "en", /\/portal/, "fixed: how to send a case names the portal");
-  await fixed("How long does a case take?", "en", /24 hours/, "fixed: turnaround says 24 hours");
-  await fixed("How many revisions do I get?", "en", /\d+ free revision/, "fixed: revisions come from the settings");
+  await fixed("How long does a case take?", "en", /6–8 hours.*8–12 hours.*24\/7/, "fixed: turnaround says 6–8 hours, full-arch 8–12, cases received 24/7");
+  await fixed("Bao lâu thì nhận được file?", "vi", /6–8 giờ.*8–12 giờ/, "fixed: the same times in Vietnamese");
+  await fixed("How many revisions do I get?", "en", /free until you approve/, "fixed: revisions are free until approval (the setting)");
   await fixed("What do you design?", "en", /implant restorations/i, "fixed: the services are listed");
   await fixed("Who can I contact?", "en", /d\.eightdesigncenter@gmail\.com/, "fixed: the contact names the email");
   await fixed("Bên bạn thiết kế những gì?", "vi", /phục hình implant/i, "fixed: the services are listed in Vietnamese");

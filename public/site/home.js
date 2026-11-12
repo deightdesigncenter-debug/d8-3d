@@ -83,6 +83,51 @@
   setWa();
   document.addEventListener("d8:lang", setWa);
 
+  /* ---------------- turnaround: when the design lands, on the visitor's own clock ----------------
+     Counted from now, because cases come in 24/7: single cases 6–8 h, full-arch 8–12 h (the owner's figures, 2026-11-11;
+     the page, the terms and the assistant carry the same numbers). Without this script the card shows the hours alone. */
+  const etaCard = $("etaCard");
+  if (etaCard) {
+    const HOURS = { Single: [6, 8], Arch: [8, 12] };
+    const vi = () => !!(window.D8 && D8.lang === "vi");
+    // Vietnamese: 24-hour clock; English: the visitor's own habit (12 or 24 hours)
+    const clock = (d) => d.toLocaleTimeString(vi() ? "vi-VN" : undefined, { hour: "numeric", minute: "2-digit" });
+    const zone = () => {
+      try {
+        const part = new Intl.DateTimeFormat(vi() ? "vi-VN" : "en-US", { timeZoneName: "longGeneric" }).formatToParts(new Date()).find((x) => x.type === "timeZoneName");
+        return part ? part.value : "";
+      } catch { return ""; }   // an older browser: the time alone
+    };
+    const dayOf = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const drawEta = () => {
+      const now = new Date(), z = zone();
+      $("etaNow").textContent = (z ? t("eta.nowc", "It is {t} your time ({c})") : t("eta.nowu", "It is {t} your time")).replace("{t}", clock(now)).replace("{c}", z);
+      for (const k of Object.keys(HOURS)) {
+        const a = new Date(now.getTime() + HOURS[k][0] * 36e5), b = new Date(now.getTime() + HOURS[k][1] * 36e5);
+        const da = Math.round((dayOf(a) - dayOf(now)) / 864e5), db = Math.round((dayOf(b) - dayOf(now)) / 864e5);
+        $("eta" + k).textContent = clock(a) + " – " + clock(b);
+        $("eta" + k + "Day").textContent = (da !== db ? t("eta.span", "Ready late today or early tomorrow") : da === 0 ? t("eta.today", "Ready today") : t("eta.tomorrow", "Ready tomorrow")) + " · ";
+      }
+    };
+    drawEta();
+    document.addEventListener("d8:lang", drawEta);   // the page's words were just put back in the other language: write the times again
+    setInterval(drawEta, 30000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) drawEta(); });
+  }
+
+  /* ---------------- proof: cases designed and customers' own words, as set in Settings ----------------
+     Nothing set (the default): the section stays hidden. Only what the owner entered is shown, as text. */
+  const proof = $("proof");
+  if (proof && window.D8 && D8.config) D8.config().then((cfg) => {
+    const pf = (cfg && cfg.proof) || {}, quotes = (Array.isArray(pf.quotes) ? pf.quotes : []).filter((q) => q && q.text && q.who);
+    const n = Number.isInteger(pf.cases) && pf.cases > 0 ? pf.cases : 0;
+    if (!n && !quotes.length) return;
+    const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    if (n) { $("pfN").textContent = n.toLocaleString("en-US"); $("pfCount").hidden = false; }
+    $("pfQuotes").innerHTML = quotes.map((q) => `<figure><blockquote>“${esc(q.text)}”</blockquote><figcaption><b>${esc(q.who)}</b>${q.where ? esc(q.where) : ""}</figcaption></figure>`).join("");
+    proof.hidden = false;
+  }).catch(() => {});
+
   /* ---------------- links that preset the contact topic ---------------- */
   document.addEventListener("click", (e) => {
     const a = e.target.closest("[data-topic]");

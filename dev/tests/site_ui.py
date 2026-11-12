@@ -75,11 +75,43 @@ with sync_playwright() as p:
     w = pg.evaluate("document.documentElement.scrollWidth")
     ok(w <= 1920, f"wide screen: no sideways scroll ({w})")
     pg.screenshot(path=f"{OUT}/home-1920.png", full_page=True)
+    # the owner's figures (2026-11-11): single cases 6–8 h, full-arch 8–12 h, cases received 24/7, revisions free until approval
+    body = pg.inner_text("body")
+    ok("within 24 hours" not in body and "24-hour" not in body and "as standard" not in body, "nothing left of the 24-hour and 2-revision wording")
+    ok("6–8 h" in pg.inner_text("#services .facts") and "until you approve" in pg.inner_text("#services .facts") and "8–12 h" in pg.inner_text("#process .turn"), "facts and process show the new times and the revision promise")
+    faq = pg.text_content("#faq")   # the answers are folded away: read the text, not what is on screen
+    ok(pg.eval_on_selector_all("#faq details", "els => els.length") == 10 and "By people" in faq and "never physical work" in faq and "free until you approve" in faq, "FAQ: ten questions, with who designs, that nothing is shipped, and free revisions until approval")
+    ok("approve it in 3D before you pay" in pg.inner_text("#trial .offer2"), "trial: the first full-arch case is paid after approval")
+    # the clock card: when a case sent now would be ready, on the visitor's own clock
+    WIN = "(h) => { const f = (ms) => new Date(ms).toLocaleTimeString(document.documentElement.lang === 'vi' ? 'vi-VN' : undefined, { hour: 'numeric', minute: '2-digit' }); const out = []; for (const back of [0, 60000]) out.push(f(Date.now() - back + h[0] * 36e5) + ' – ' + f(Date.now() - back + h[1] * 36e5)); return out; }"
+    ok(pg.inner_text("#etaSingle") in pg.evaluate(WIN, [6, 8]) and pg.inner_text("#etaArch") in pg.evaluate(WIN, [8, 12]), "clock card: single case ready in 6–8 hours from now, full-arch in 8–12 (" + pg.inner_text("#etaSingle") + ")")
+    ok(pg.inner_text("#etaNow").startswith("It is ") and pg.inner_text("#etaSingleDay").startswith("Ready "), "clock card says what time it is for the visitor and which day the file is ready")
+    ok(half("#turnaround .eta-card") and pg.eval_on_selector("#proof", "e => e.hidden"), "turnaround band fills its row; the proof section is hidden while nothing is set")
     pg.click(".sh-top .sh-lang button[data-lang=vi]"); pg.wait_for_timeout(300)
-    ok("vẫn còn thắc mắc?" in pg.inner_text("#faq").lower() and "lần sửa miễn phí mỗi ca" in pg.inner_text("#services").lower() and "gửi ca đầu tiên" in pg.inner_text("#trial").lower(), "new homepage text has its Vietnamese copy")
+    ok("vẫn còn thắc mắc?" in pg.inner_text("#faq").lower() and "sửa đến khi bạn duyệt thiết kế" in pg.inner_text("#services").lower() and "gửi ca đầu tiên" in pg.inner_text("#trial").lower(), "new homepage text has its Vietnamese copy")
+    ok(pg.inner_text("#etaNow").startswith("Bây giờ là") and pg.inner_text("#etaSingle") in pg.evaluate(WIN, [6, 8]) and "Hours, not days" in pg.inner_text("#turnaround") and "ca full-arch" in pg.inner_text("#turnaround").lower(),
+       "clock card and turnaround band in Vietnamese (24-hour clock; the slogan stays in English)")
     # slogans stay in English in the Vietnamese version (owner's choice)
     ok("design to fit." in pg.inner_text("#stage h1").lower() and "precision, by design" in pg.inner_text(".editorial h2").lower() and pg.eval_on_selector("#stage h1", "e => e.lang") == "en", "slogans stay in English in Vietnamese")
     pg.click(".sh-top .sh-lang button[data-lang=en]")
+    c.close()
+    # proof on the homepage: what the owner entered in Settings, shown as text (never as markup); nothing set = hidden
+    SET = "async (b) => (await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-D8': '1' }, body: JSON.stringify(b) })).status"
+    c, pg = page(motion="reduce"); pg.goto(B + "/"); pg.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "Danny Do"])
+    st = pg.evaluate(SET, {"proofCases": 1240, "quotes": [{"text": "Fits first time <img src=x onerror=window.__x=1>", "who": "Dr A. Example", "where": "Example Dental, Denver"}, {"text": "Fast and careful.", "who": "Lab owner", "where": "Sydney"}]})
+    c.close()
+    for vp, mob, tag in [({"width": 1366, "height": 860}, False, "desktop"), ({"width": 390, "height": 844}, True, "phone")]:
+        c, pg = page(vp, mob, motion="reduce"); pg.goto(B + "/")
+        try: pg.wait_for_selector("#proof:not([hidden])", timeout=6000)
+        except Exception: pass
+        ok(st == 200 and pg.is_visible("#proof") and "1,240" in pg.inner_text("#pfCount") and "Fits first time <img" in pg.inner_text("#pfQuotes") and "Lab owner" in pg.inner_text("#pfQuotes")
+           and pg.query_selector("#pfQuotes img") is None and not pg.evaluate("window.__x"), tag + ": proof shows the number and the quotes as plain text")
+        ok(pg.evaluate("document.documentElement.scrollWidth") <= vp["width"], tag + ": proof section fits the width")
+        pg.evaluate("document.getElementById('proof').scrollIntoView()"); pg.wait_for_timeout(200)
+        pg.locator("#proof").screenshot(path=f"{OUT}/home-proof-{tag}.png")
+        c.close()
+    c, pg = page(motion="reduce"); pg.goto(B + "/"); pg.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "Danny Do"])
+    ok(pg.evaluate(SET, {"proofCases": 0, "quotes": []}) == 200, "proof cleared again")
     c.close()
     # legal pages switch language; a customer sees no Workspace link, staff do
     c, pg = page(); pg.goto(B + "/terms"); pg.wait_for_timeout(400)

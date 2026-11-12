@@ -6,11 +6,11 @@
 <script>try{var t=localStorage.getItem("d8-theme");if(t!=="dark"&&t!=="light")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <meta name="robots" content="noindex, nofollow">
 <title>D.EIGHT DESIGN CENTER | Remote dental CAD design, production-ready STL</title>
-<meta name="description" content="Remote dental CAD design for labs and clinics: implant crowns, bridges, All-on-X and surgical guides, delivered as production-ready STL within 24 hours.">
+<meta name="description" content="Remote dental CAD design for labs and clinics: implant crowns, bridges, All-on-X and surgical guides, delivered as production-ready STL. Single cases in 6–8 hours, full-arch in 8–12, received 24/7.">
 <link rel="canonical" href="https://d8-3d.pages.dev/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="D.EIGHT DESIGN CENTER — Design to fit">
-<meta property="og:description" content="Remote dental CAD design for labs and clinics. From scan to STL in 24 hours.">
+<meta property="og:description" content="Remote dental CAD design for labs and clinics. Single cases in 6–8 hours, full-arch in 8–12.">
 <meta property="og:image" content="https://d8-3d.pages.dev/site/og.jpg">
 <meta property="og:url" content="https://d8-3d.pages.dev/">
 <meta name="twitter:card" content="summary_large_image">
@@ -302,6 +302,48 @@
   .offer .btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
   .btn-wa { background: var(--white); border-color: var(--navy); color: var(--navy); }
   .offer .fine { margin: 16px 0 0; font-size: 13px; color: var(--muted); }
+  /* the second offer: a new implant clinic sees its first full-arch design in 3D before paying */
+  .offer2 { margin-top: 40px; padding: 28px 32px; border-radius: 22px; border: 1px solid var(--line); background: var(--paper);
+            display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 40px; align-items: center; }
+  .offer2 h3 { margin: 10px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.015em; font-size: clamp(20px, 2.2vw, 28px); line-height: 1.2; color: var(--navy); }
+  .offer2 p { margin: 10px 0 0; font-size: 15.5px; line-height: 1.7; color: var(--muted); max-width: 640px; }
+  .offer2-cta { text-align: right; }
+  .offer2-cta .fine { margin: 10px 0 0 auto; font-size: 13px; max-width: 240px; }
+
+  /* ---------- turnaround: when the design lands, in the visitor's own time ---------- */
+  .eta-in { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 56px; align-items: center; }
+  .eta h2 { margin: 12px 0 0; font-family: var(--f-display); font-weight: 700; letter-spacing: -.02em; font-size: clamp(28px, 3.4vw, 46px); line-height: 1.12; color: var(--navy); }
+  .eta .serif { margin: 8px 0 0; color: var(--steel); font-size: clamp(26px, 3.4vw, 40px); }
+  .eta p.intro { margin: 18px 0 0; font-size: 16px; line-height: 1.7; color: var(--muted); max-width: 560px; }
+  .eta-list { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 18px; max-width: 580px; }
+  .eta-list li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .eta-list .ic { width: 40px; height: 40px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--white); border: 1px solid var(--line); color: var(--navy); }
+  .eta-list h3 { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 16px; line-height: 1.35; color: var(--navy); }
+  .eta-list p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.65; color: var(--muted); }
+  .eta-card { position: relative; overflow: hidden; padding: 36px 40px 32px; border-radius: 22px; color: var(--on-brand);
+              background: radial-gradient(120% 120% at 85% 15%, #0B3F86 0%, var(--brand) 55%, var(--brand-800) 100%); }
+  .eta-cap { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--on-brand-2); }
+  .eta-now { margin: 10px 0 0; min-height: 1.5em; font-size: 17px; line-height: 1.5; color: var(--on-brand); }
+  .eta-row { position: relative; z-index: 1; margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(143, 172, 203, .28); }
+  .eta-top { display: flex; justify-content: space-between; gap: 12px; font-family: var(--f-display); font-weight: 600; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--on-brand-2); }
+  .eta-v { display: block; margin-top: 8px; min-height: 1.15em; font-family: var(--f-display); font-weight: 300; font-size: clamp(26px, 3vw, 40px); line-height: 1.15; letter-spacing: -.01em;
+           white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .eta-row small { display: block; margin-top: 6px; min-height: 3.1em; font-size: 13px; line-height: 1.55; color: #C9D6E4; }   /* two lines kept: the day is written in front by the script */
+  .eta-card .btn { position: relative; z-index: 1; margin-top: 26px; }
+  .eta-foot { position: relative; z-index: 1; margin: 16px 0 0; font-size: 12.5px; line-height: 1.6; color: #C9D6E4; }
+  .eta-card .mark { position: absolute; right: -50px; bottom: -40px; width: 200px; opacity: .08; pointer-events: none; }
+
+  /* ---------- proof: cases designed, customers' own words (from Settings) ---------- */
+  .proof[hidden] { display: none; }
+  .pf-count { margin: 0; justify-self: end; display: flex; align-items: baseline; gap: 14px; max-width: 420px; font-size: 15px; line-height: 1.5; color: var(--muted); }
+  .pf-count[hidden] { display: none; }
+  .pf-count b { font-family: var(--f-display); font-weight: 300; font-size: clamp(40px, 5vw, 64px); line-height: 1; letter-spacing: -.02em; color: var(--navy); font-variant-numeric: tabular-nums; }
+  .pf-quotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .pf-quotes:empty { display: none; }
+  .pf-quotes figure { margin: 0; padding: 28px 28px 24px; border-radius: 18px; background: var(--white); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; }
+  .pf-quotes blockquote { margin: 0; font-size: 16px; line-height: 1.7; color: var(--ink); overflow-wrap: anywhere; }
+  .pf-quotes figcaption { margin-top: auto; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+  .pf-quotes figcaption b { display: block; font-family: var(--f-display); font-weight: 600; font-size: 14px; color: var(--navy); }
 
   @media (max-width: 1080px) {
     .head-split { grid-template-columns: 1fr; align-items: start; gap: 28px; }
@@ -318,6 +360,11 @@
   }
   @media (max-width: 900px) {
     .offer-in { grid-template-columns: 1fr; gap: 32px; }
+    .eta-in { grid-template-columns: 1fr; gap: 36px; }
+    .offer2 { grid-template-columns: 1fr; }
+    .offer2-cta { text-align: left; }
+    .offer2-cta .fine { margin-left: 0; max-width: none; }
+    .pf-count { justify-self: start; }
     .slide-art, .slide-art.narrow { width: 92vw; right: 4vw; top: 30%; }
     .slide-art.hero1 { width: 112vw; right: -6vw; top: 34%; } /* the full-arch picture fills the width (owner's new hero, 2026-10-29) */
     .stage-copy { bottom: 110px; }
@@ -327,6 +374,11 @@
   @media (max-width: 640px) {
     .offer-fig { padding: 30px 26px; gap: 22px; }
     .offer-top { gap: 18px; }
+    .offer2 { padding: 24px 22px; margin-top: 28px; }
+    .offer2-cta .btn { width: 100%; justify-content: center; }
+    .eta-card { padding: 28px 22px 26px; }
+    .eta-card .btn { width: 100%; justify-content: center; }
+    .eta-v { font-size: clamp(22px, 7vw, 30px); }
     .facts > div, .turn > div { padding: 16px; }
     .facts dd, .turn span { font-size: 13px; }
     .lf-btns, .lf-btns .btn-line { width: 100%; justify-content: center; }
@@ -366,7 +418,7 @@
   }
 </style>
 <script>document.documentElement.classList.add("js");</script>
-<script src="/site/home-dict.js?v=2026-10-26.4"></script>
+<script src="/site/home-dict.js?v=2026-11-12.1"></script>
 <script src="/shell.js?v=2026-10-31.1" defer></script>
 </head>
 <body data-page="home" data-title-key="title">
@@ -382,7 +434,7 @@
       <div class="stage-copy"><div class="wrap">
         <span class="chip" data-i="h.chip">Remote dental CAD design team</span>
         <h1 lang="en" data-i="s1.t">Design to fit.</h1>
-        <p class="lede" data-i="s1.p">From scan to production-ready STL in 24 hours, for dental labs and clinics.</p>
+        <p class="lede" data-i="s1.p">From scan to production-ready STL: single cases in 6–8 hours, full-arch in 8–12. Cases received 24/7, for dental labs and clinics.</p>
         <div class="stage-btns">
           <a class="btn btn-cream cta-shine" href="/portal#/new" data-i="b.send">Send a case</a>
           <a class="btn btn-light" href="#services" data-i="b.services">Explore services</a>
@@ -431,6 +483,41 @@
     <a class="scroll-cue" href="#services" aria-label="Scroll down"></a>
   </section>
 
+  <!-- ============ TURNAROUND (when the design lands, in the visitor's own time; owner's figures 2026-11-11) ============ -->
+  <section class="section tight paper-band eta" id="turnaround" aria-labelledby="etaTitle">
+    <div class="wrap eta-in">
+      <div class="reveal">
+        <span class="eyebrow" data-i="eta.eyebrow">Turnaround</span>
+        <h2 id="etaTitle" data-i="eta.h">Know the hour your design lands</h2>
+        <p class="serif" lang="en" data-i="eta.serif">Hours, not days</p>
+        <p class="intro" data-i="eta.p">Single cases are back in 6–8 hours and full-arch cases in 8–12, counted from the moment your case is complete. We receive cases 24 hours a day, every day of the week.</p>
+        <ul class="eta-list">
+          <!--rev:open--><li><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 10a6.5 6.5 0 0 1 11.3-4.4M16.5 10a6.5 6.5 0 0 1-11.3 4.4"/><path d="M15 2.6v3.2h-3.2M5 17.4v-3.2h3.2"/></svg></span><div><h3 data-i="eta.1.t">Free revisions until you approve</h3><p data-i="eta.1.p">Ask for changes in the 3D preview as often as you need. We export the final files when you sign off.</p></div></li><!--/rev:open-->
+          <!--rev:count <li><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 10a6.5 6.5 0 0 1 11.3-4.4M16.5 10a6.5 6.5 0 0 1-11.3 4.4"/><path d="M15 2.6v3.2h-3.2M5 17.4v-3.2h3.2"/></svg></span><div><h3 data-i="eta.1n.t">Free revisions on every case</h3><p data-i="eta.1n.p">Each case includes <span class="rev-n">2</span> free revisions before final export, as standard.</p></div></li> /rev:count-->
+          <li><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.6V10l3 1.8"/></svg></span><div><h3 data-i="eta.2.t">Sent before you close, ready when you open</h3><p data-i="eta.2.p">From the US, send before you close and the design is waiting when you open. From Australia, send in the morning and have single cases back the same working day.</p></div></li>
+          <li><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 2.5h6.5L15.5 6.5v11H5z"/><path d="M11.5 2.5v4h4M7.5 11h5M7.5 14h5"/></svg></span><div><h3 data-i="eta.3.t">Design files, not imported teeth</h3><p data-i="eta.3.p">We send STL files, never physical work. You approve the design and make it on your own mill or printer.</p></div></li>
+        </ul>
+      </div>
+      <div class="eta-card reveal" id="etaCard">
+        <p class="eta-cap" data-i="eta.cap">If you send a complete case now</p>
+        <p class="eta-now" id="etaNow" data-i="eta.now">Counted from a complete case, any hour of any day</p>
+        <div class="eta-row">
+          <div class="eta-top"><span data-i="eta.single">Single case</span><span data-i="eta.sh">6–8 hours</span></div>
+          <b class="eta-v" id="etaSingle" data-i="eta.sv">6–8 hours from now</b>
+          <small><span id="etaSingleDay"></span><span data-i="eta.sd">crowns, implant crowns, custom abutments, short bridges</span></small>
+        </div>
+        <div class="eta-row">
+          <div class="eta-top"><span data-i="eta.arch">Full-arch case</span><span data-i="eta.ah">8–12 hours</span></div>
+          <b class="eta-v" id="etaArch" data-i="eta.av">8–12 hours from now</b>
+          <small><span id="etaArchDay"></span><span data-i="eta.ad">All-on-X, bars, full-arch bridges</span></small>
+        </div>
+        <a class="btn btn-cream" href="/portal#/new" data-i="b.send">Send a case</a>
+        <p class="eta-foot" data-i="eta.foot">Times are in your own time zone, read from your browser. Unusually large or complex cases: we confirm the time when you send them.</p>
+        <img class="mark" src="/brand/symbol-reversed.svg" alt="">
+      </div>
+    </div>
+  </section>
+
   <!-- ============ FREE TRIAL ============ -->
   <section class="section tight offer" id="trial" aria-labelledby="trTitle">
     <div class="wrap offer-in">
@@ -451,7 +538,7 @@
         <h2 id="trTitle" data-i="tr.h">Try D.EIGHT on us</h2>
         <p class="serif" data-i="tr.serif">Your first 2 cases, up to US$50 in total</p>
         <p class="intro" data-i="tr.p">Send real work and judge the fit, the communication and the turnaround for yourself. Your first two cases are free, up to US$50 in total, whatever the case type.</p>
-        <ul><li class="chip" data-i="tr.c1">Any case type</li><li class="chip" data-i="tr.c2">Same designers, same 24-hour turnaround</li><li class="chip" data-i="tr.c3">No commitment</li></ul>
+        <ul><li class="chip" data-i="tr.c1">Any case type</li><li class="chip" data-i="tr.c2">Same designers, same turnaround</li><li class="chip" data-i="tr.c3">No commitment</li></ul>
         <div class="btns">
           <a class="btn btn-primary cta-shine" style="--shine-delay:5s" href="/portal#/new" data-i="tr.b">Start your free trial</a>
           <a class="btn btn-wa wa-link" href="https://wa.me/84703233263" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2.2a7.8 7.8 0 0 0-6.7 11.8L2.2 17.8l3.9-1.1A7.8 7.8 0 1 0 10 2.2Z"/><path d="M7.1 6.3c.3-.3.8-.3 1 .1l.7 1.4c.1.3 0 .6-.2.8l-.5.5a5 5 0 0 0 2.8 2.8l.5-.5c.2-.2.5-.3.8-.2l1.4.7c.4.2.4.7.1 1-.6.7-1.5 1-2.4.7a7.4 7.4 0 0 1-4.9-4.9c-.3-.9 0-1.8.7-2.4Z"/></svg><span data-i="tr.wa">Ask on WhatsApp</span></a>
@@ -459,6 +546,14 @@
         <p class="fine" data-i="tr.fine">For new customers. Sign in with Google and send your first case to start.</p>
       </div>
     </div>
+    <div class="wrap"><div class="offer2 reveal">
+      <div>
+        <span class="eyebrow steel" data-i="tr2.eyebrow">New implant clinics</span>
+        <h3 data-i="tr2.h">Your first full-arch case: approve it in 3D before you pay</h3>
+        <p data-i="tr2.p">We design your first All-on-X or full-arch case and send you the private 3D link. You pay only after you approve the design.</p>
+      </div>
+      <div class="offer2-cta"><a class="btn btn-primary" href="/portal#/new" data-i="tr2.b">Send a full-arch case</a><p class="fine" data-i="tr2.fine">For the first full-arch case of each new clinic.</p></div>
+    </div></div>
   </section>
 
   <!-- ============ LINEUP ============ -->
@@ -473,8 +568,9 @@
         </div>
         <dl class="facts">
           <div><dt>70+</dt><dd data-i="lu.f1">case types, from single crowns to full arch</dd></div>
-          <div><dt>24 h</dt><dd data-i="lu.f2">delivery after a complete case</dd></div>
-          <div><dt><span class="rev-n">2</span></dt><dd data-i="lu.f3">free revisions per case, as standard</dd></div>
+          <div><dt>6–8 h</dt><dd data-i="lu.f2">single cases, from a complete case; full-arch in 8–12 h</dd></div>
+          <!--rev:open--><div><dt data-i="lu.d3">Free</dt><dd data-i="lu.f3">revisions until you approve the design</dd></div><!--/rev:open-->
+          <!--rev:count <div><dt><span class="rev-n">2</span></dt><dd data-i="lu.f3n">free revisions per case, as standard</dd></div> /rev:count-->
           <div><dt>STL</dt><dd data-i="lu.f4">mill- and print-ready, named by case ID</dd></div>
         </dl>
       </div>
@@ -541,20 +637,34 @@
       <div class="head-split reveal">
         <div class="sec-head">
           <span class="eyebrow" data-i="why.eyebrow">Why D.EIGHT</span>
-          <h2 id="whyTitle" data-i="why.h">Built for labs that care about fit</h2>
+          <h2 id="whyTitle" data-i="why.h">Built for labs and clinics that care about fit</h2>
         </div>
-        <p class="head-lead" data-i="why.lead">We only design. Every file follows your Rx and your libraries, is checked before export, and is ready when your lab opens.</p>
+        <p class="head-lead" data-i="why.lead">We send design files, never physical work: nothing is made or imported on our side. Every file follows your Rx and your libraries, is checked by a technician before export, and is ready when you open.</p>
       </div>
       <div class="checker reveal">
         <figure class="ck-pic"><img src="/site/about/s-margin.webp" alt="Margin checked on a cross-section in exocad" width="1200" height="591" loading="lazy"></figure>
-        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r=".8" fill="currentColor"/></svg></span><h3 data-i="why.1.t">Precision over shortcuts</h3><p data-i="why.1.p">Every design is checked for margins, contacts, occlusion and emergence before export.</p></div>
+        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><circle cx="10" cy="10" r="4"/><circle cx="10" cy="10" r=".8" fill="currentColor"/></svg></span><h3 data-i="why.1.t">Precision over shortcuts</h3><p data-i="why.1.p">Every case is designed and checked by a dental technician: margins, contacts, occlusion and emergence, before export. No autopilot on complex cases.</p></div>
         <figure class="ck-pic"><img src="/site/about/s-implant-pos.webp" alt="Choosing the implant library and position" width="760" height="447" loading="lazy"></figure>
         <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h9M15 5h2M3 10h3M9 10h8M3 15h7M13 15h4"/><circle cx="13.5" cy="5" r="1.6"/><circle cx="7.5" cy="10" r="1.6"/><circle cx="11.5" cy="15" r="1.6"/></svg></span><h3 data-i="why.2.t">Your parameters, your libraries</h3><p data-i="why.2.p">Material, cement gap, minimum thickness and implant libraries follow your Rx. FDI or Universal numbering.</p></div>
         <figure class="ck-pic"><img src="/site/about/s-fullmouth.webp" alt="Full-mouth wax-up on the design screen" width="1200" height="767" loading="lazy"></figure>
-        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2Z"/></svg></span><h3 data-i="why.3.t">Built across time zones</h3><p data-i="why.3.p">Based in Vietnam (UTC+7), we work while your lab is closed, with set delivery windows for Europe and the Americas.</p></div>
+        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="8"/><path d="M2 10h16M10 2c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S7.6 4.2 10 2Z"/></svg></span><h3 data-i="why.3.t">Around the clock, across time zones</h3><p data-i="why.3.p">Based in Vietnam (UTC+7), we receive cases 24/7. Single cases are back in 6–8 hours and full-arch in 8–12, ready for your next working day.</p></div>
         <figure class="ck-pic"><img src="/site/about/s-waxup.webp" alt="Transparent wax-up over preps and abutments" width="1200" height="768" loading="lazy"></figure>
-        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="9" width="12" height="9" rx="2"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg></span><h3 data-i="why.4.t">Confidential by default</h3><p data-i="why.4.p">Patient files are handled confidentially and named by case ID. Previews use private links that expire.</p></div>
+        <div class="ck-txt"><span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="9" width="12" height="9" rx="2"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg></span><h3 data-i="why.4.t">Confidential by default</h3><p data-i="why.4.p">Cases are named by case ID, so no patient name is needed. Previews use private links that expire, and we sign an NDA on request.</p></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ PROOF: cases designed and customers' own words, from Settings; hidden while empty ============ -->
+  <section class="section paper-band proof" id="proof" aria-labelledby="pfTitle" hidden>
+    <div class="wrap">
+      <div class="head-split">
+        <div class="sec-head">
+          <span class="eyebrow" data-i="pf.eyebrow">From our customers</span>
+          <h2 id="pfTitle" data-i="pf.h">Trusted with real cases</h2>
+        </div>
+        <p class="pf-count" id="pfCount" hidden><b id="pfN"></b><span data-i="pf.cases">cases designed for labs and clinics</span></p>
+      </div>
+      <div class="pf-quotes" id="pfQuotes"></div>
     </div>
   </section>
 
@@ -564,19 +674,19 @@
       <div class="head-split reveal">
         <div class="sec-head">
           <span class="eyebrow" data-i="pr.eyebrow">How it works</span>
-          <h2 id="prTitle" data-i="pr.h">Four steps, one day</h2>
+          <h2 id="prTitle" data-i="pr.h">Four steps, a few hours</h2>
           <p class="serif" lang="en" data-i="pr.serif">Remote, but never out of reach</p>
         </div>
         <div class="turn">
-          <div><b>24 h</b><span data-i="pr.t1">from a complete case to your STL</span></div>
-          <div><b>UTC+7</b><span data-i="pr.t2">we design while your lab is closed</span></div>
+          <div><b>6–8 h</b><span data-i="pr.t1">single cases, from a complete case to your STL</span></div>
+          <div><b>8–12 h</b><span data-i="pr.t2">full-arch cases; we receive cases 24/7</span></div>
         </div>
       </div>
       <ol class="steps reveal">
         <li><span class="n">01</span><h3 data-i="pr.1.t">Send your case</h3><p data-i="pr.1.p">Upload STL or PLY scans with your Rx in the portal. DICOM/CBCT for guides.</p></li>
         <li><span class="n">02</span><h3 data-i="pr.2.t">We design</h3><p data-i="pr.2.p">In exocad, 3Shape, Implant Studio or exoplan, using your parameters and implant libraries.</p></li>
-        <li><span class="n">03</span><h3 data-i="pr.3.t">Review &amp; approve</h3><p data-i="pr.3.p">Open the private 3D link, ask for changes or approve with one click. Free revisions per case: <span class="rev-n">2</span> as standard.</p></li>
-        <li><span class="n">04</span><h3 data-i="pr.4.t">Receive files</h3><p data-i="pr.4.p">Download production-ready STL for milling or printing, named by case ID, within 24 hours.</p></li>
+        <li><span class="n">03</span><h3 data-i="pr.3.t">Review &amp; approve</h3><!--rev:open--><p data-i="pr.3.p">Open the private 3D link, ask for changes or approve with one click. Revisions are free until you approve.</p><!--/rev:open--><!--rev:count <p data-i="pr.3.pn">Open the private 3D link, ask for changes or approve with one click. Free revisions per case: <span class="rev-n">2</span> as standard.</p> /rev:count--></li>
+        <li><span class="n">04</span><h3 data-i="pr.4.t">Receive files</h3><p data-i="pr.4.p">Download production-ready STL for milling or printing, named by case ID. Single cases in 6–8 hours, full-arch in 8–12.</p></li>
       </ol>
       <div class="assure reveal">
         <span class="chip" data-i="pr.c1">STL / PLY in</span><span class="chip" data-i="pr.c2">Mill- &amp; print-ready STL out</span><span class="chip" data-i="pr.c3">FDI or Universal</span><span class="chip" data-i="pr.c4">Patient files kept confidential</span>
@@ -692,12 +802,15 @@
       <div class="faq reveal">
         <details><summary><span data-i="fq.q0">Can I try D.EIGHT before committing?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a0">Yes. Your first two cases are free, up to US$50 in total, whatever the case type. Sign in to the customer portal and send your first case to start.</div></details>
         <details><summary><span data-i="fq.q1">What do you need to start a case?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a1">Intraoral or model scans (STL or PLY) and your Rx: tooth numbers, material, cement gap and any implant or library details. For surgical guides, add the DICOM/CBCT data.</div></details>
-        <details><summary><span data-i="fq.q2">How fast is delivery?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a2">Designs are delivered within 24 hours of receiving a complete case. If a large full-arch or guide case needs more time, we confirm the timing when you send it.</div></details>
-        <details><summary><span data-i="fq.q3">How do revisions work?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a3">Each case includes free revisions before final export, <span class="rev-n">2</span> as standard; we confirm the number for your case and you can see it in the portal. Changes beyond that, or after approval, are quoted by scope before we start.</div></details>
+        <details><summary><span data-i="fq.q2">How fast is delivery?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a2">Single cases (a crown, an implant crown, a custom abutment, a short bridge) are delivered in 6–8 hours, and full-arch cases (All-on-X, bars, full-arch bridges) in 8–12 hours. Both are counted from the moment your case is complete, and we receive cases 24/7. If a case is unusually large or complex, we confirm the time when you send it.</div></details>
+        <details><summary><span data-i="fq.q9">Can you deliver faster than that?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a9">Often, yes. Tell us your deadline when you send the case. We confirm what is possible, and any rush fee, before we start.</div></details>
+        <!--rev:open--><details><summary><span data-i="fq.q3">How do revisions work?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a3">Revisions are free until you approve the design. Ask for changes in the 3D preview as often as you need, and we export the final files once you sign off. Changes asked for after approval, or that depart from the original prescription, are quoted by scope before we start.</div></details><!--/rev:open-->
+        <!--rev:count <details><summary><span data-i="fq.q3">How do revisions work?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a3n">Each case includes free revisions before final export, <span class="rev-n">2</span> as standard; we confirm the number for your case and you can see it in the portal. Changes beyond that, or after approval, are quoted by scope before we start.</div></details> /rev:count-->
         <details><summary><span data-i="fq.q4">Do I need an account?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a4">Just your Google account. Sign in to the customer portal to send cases, follow their status, approve designs and download files.</div></details>
-        <details><summary><span data-i="fq.q5">Do you mill, print or ship?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a5">No. D.EIGHT is a design-only service. You receive production-ready STL files for your own mill, printer or production partner.</div></details>
+        <details><summary><span data-i="fq.q5">Is anything made or shipped from overseas?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a5">No. D.EIGHT is a design-only service: we send design files, never physical work. You approve the design and make it on your own mill or printer, or with your own production partner.</div></details>
+        <details><summary><span data-i="fq.q8">Are designs made by people or generated automatically?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a8">By people. Every case is designed and checked by a dental technician in exocad or 3Shape, following your Rx. That matters most where automatic design falls short: All-on-X, bars, surgical guides and smile design.</div></details>
         <details><summary><span data-i="fq.q6">How is pricing set?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a6">Per unit or per case, in USD. Use the form below to request our current price list or a quote for a specific case.</div></details>
-        <details><summary><span data-i="fq.q7">How do you handle patient data?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a7">Files are handled confidentially and named by case ID. Please leave patient names out of case references and messages.</div></details>
+        <details><summary><span data-i="fq.q7">How do you handle patient data?</span><span class="pm" aria-hidden="true"></span></summary><div class="ans" data-i="fq.a7">Cases are named by case ID, so we never need the patient's name: please leave names out of file names, case references and messages. Previews use private links that expire, files are kept as set out in our <a href="/privacy">Privacy policy</a>, and we sign an NDA on request.</div></details>
       </div>
       <aside class="faq-help reveal" aria-labelledby="fhTitle">
         <img class="mark" src="/brand/symbol-reversed.svg" alt="">
@@ -790,6 +903,6 @@
 </a>
 
 <div id="d8-footer"></div>
-<script src="/site/home.js?v=2026-10-26.4" defer></script>
+<script src="/site/home.js?v=2026-11-12.1" defer></script>
 </body>
 </html>
