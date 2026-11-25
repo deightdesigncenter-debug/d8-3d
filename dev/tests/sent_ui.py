@@ -222,6 +222,34 @@ with sync_playwright() as p:
     ok(bp.query_selector(f'.pt-list a[href="#/order/{POID}"]') is not None, "the other account sees that case as an order of the lab")
     ap.goto(B + f"/portal#/order/{POID}"); ap.wait_for_timeout(1500)
     ok(ap.evaluate("location.hash") == f"#/case/{JID}", "the account that sent the case is taken to the case page")
+
+    # ---------- "view as customer": a manager opens the portal as this customer, read only; a KTV cannot
+    MGR = f"smgr{stamp}@team.example"
+    key("/api/staff", {"email": MGR, "role": "admin"})
+    mc = ctx(); mp = page(mc, MGR, "Manager Xem Thử")
+    mp.goto(B + f"/admin#cust/{CID}"); mp.wait_for_selector("#cuPreview", timeout=15000)
+    ok(mp.get_attribute("#cuPreview", "href") == f"/portal?as={CID}", "customer record: a 'Xem như khách' button")
+    mp.goto(B + f"/portal?as={CID}#/"); mp.wait_for_selector(".pv-bar", timeout=15000); mp.wait_for_selector(".pt-list", timeout=15000); mp.wait_for_timeout(800)
+    bar = text(mp, ".pv-bar")
+    ok("XEM THỬ" in bar and "2 tài khoản" in bar and "đang hiện giá" in bar, "preview: the bar says whose portal this is")
+    ok(mp.query_selector(f'.pt-list a[href="#/order/{OID}"]') is not None and mp.query_selector(f'.pt-list a[href="#/case/{JID}"]') is not None, "preview: the customer's orders and portal case")
+    ok(mp.query_selector('.pt-band a[href="#/new"]') is None and "US$" in text(mp, ".pt-balance"), "preview: no 'new case' button; the balance shows")
+    mp.screenshot(path=f"{OUT}/preview-list.png", full_page=True)
+    mp.goto(B + f"/portal?as={CID}#/order/{OID}"); mp.wait_for_selector(".pt-charges", timeout=15000); mp.wait_for_timeout(800)
+    ok("crown-21.stl" in text(mp, "#oFiles") and mp.get_attribute('#oFiles a.iconbtn[download="crown-21.stl"]', "href") == f"/api/my/preview/{CID}/orders/{OID}/files/SentUiStl1",
+       "preview order page: the files, downloaded through the preview")
+    with mp.expect_download() as dl: mp.click('#oFiles a.iconbtn[download="crown-21.stl"]')
+    ok(open(dl.value.path(), "rb").read() == STL1, "preview: the file downloads byte for byte")
+    mp.screenshot(path=f"{OUT}/preview-order.png", full_page=True)
+    mp.goto(B + f"/portal?as={CID}#/case/{JID}"); mp.wait_for_selector("#flH", timeout=15000); mp.wait_for_timeout(800)
+    ok(mp.is_disabled("#composer") and mp.is_disabled("#sendMsg") and mp.query_selector("#addFiles") is None, "preview case page: no message or upload")
+    mp.goto(B + f"/portal?as={CID}#/new"); mp.wait_for_timeout(800)
+    ok("không gửi ca mới" in text(mp, "#view") and mp.query_selector("#newForm, form#nf") is None, "preview: no new case")
+    mc.close()
+    kc3 = ctx(); kp3 = page(kc3, KTV, "KTV Gửi File", "/portal?as=" + str(CID))
+    kp3.wait_for_timeout(1500)
+    ok("không có quyền xem thử" in (kp3.text_content("#view") or ""), "a KTV cannot open the preview")
+    kc3.close()
     b.close()
 
 errs = [e for e in errors if "favicon" not in e]

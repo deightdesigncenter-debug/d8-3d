@@ -142,4 +142,43 @@ for (const p of ["/api/orders/" + oid, `/api/orders/${oid}/chat?after=0`, "/api/
   ok(res.status === 401 || res.status === 403, "customer: no staff page " + p + " (" + res.status + ")");
 }
 
+// ---------- "view as customer": staff who see customers and money see exactly the customer's portal, read only
+const mgrMail = uniq("pm") + "@team.example";
+await key("/api/staff", { method: "POST", body: { email: mgrMail, role: "admin" } });
+const mgr = await signin(mgrMail, "Manager Preview");
+const pv = "/api/my/preview/" + cid;
+for (const [who, label] of [[ktv, "the KTV"], [qc, "the QC"], [ktv2, "another KTV"], [A, "the customer"]]) {
+  for (const p of [pv, pv + "/orders", pv + "/orders/" + oid, pv + "/jobs", pv + "/jobs/" + jid, pv + `/orders/${oid}/files/PriceWall1`]) {
+    const res = await fetch(B + p, { headers: who.headers });
+    if (res.status !== 403) ok(false, label + " must not preview " + p + " (" + res.status + ")");
+  }
+}
+ok(true, "KTV, QC, another KTV and the customer cannot use the preview (403 on every preview page)");
+r = await mgr(pv);
+ok(r.status === 200 && r.data.customer.id === cid && r.data.customer.show_prices === true && r.data.accounts === 1, "a manager opens the preview of the customer");
+const mine = (await A("/api/my/orders")).data, seen = (await mgr(pv + "/orders")).data;
+ok(JSON.stringify(seen.items.map((x) => x.id).sort()) === JSON.stringify(mine.items.map((x) => x.id).sort()) && JSON.stringify(seen.balance) === JSON.stringify(mine.balance),
+  "preview list = what the customer's account sees (same orders, same balance)");
+const a1 = (await A("/api/my/orders/" + oid)).data.order, p1 = (await mgr(pv + "/orders/" + oid)).data.order;
+ok(JSON.stringify(a1) === JSON.stringify(p1), "preview order page = the customer's order page, field for field");
+ok((await mgr(pv + "/orders/" + poid)).data.order.case === jid, "an order from the customer's portal case points to the case in the preview too");
+r = await mgr(pv + "/jobs");
+ok((r.data.items || []).some((x) => x.id === jid), "preview: the customer's portal cases");
+r = await mgr(pv + "/jobs/" + jid);
+const aj = (await A("/api/jobs/" + jid)).data.job;
+ok(r.status === 200 && r.data.job.charges && r.data.job.charges.total === aj.charges.total && !("designer" in r.data.job) && !("team" in r.data.job) && !("ai" in r.data.job),
+  "preview case page = the customer's view (no designer, team notes or AI notes)");
+let res = await fetch(B + pv + `/orders/${oid}/files/PriceWall1`, { headers: mgr.headers });
+ok(res.status === 200 && (await res.arrayBuffer()).byteLength === 2000, "preview: the sent file downloads");
+cleaks = [];
+for (const p of [pv, pv + "/orders", pv + "/orders/" + oid, pv + "/orders/" + poid, pv + "/jobs", pv + "/jobs/" + jid]) {
+  const bad = found(await (await fetch(B + p, { headers: mgr.headers })).text(), { ...TECH, list: CUST.list, mid: CUST.mid, min: CUST.min });
+  if (bad.length) cleaks.push(p + " → " + bad.join(", "));
+}
+ok(!cleaks.length, "preview: no KTV pay, no list or level prices (only what the customer sees)" + (cleaks.length ? " — " + cleaks.join(" | ") : ""));
+r = await mgr(pv + "/orders/" + oid, { method: "POST", body: {} });
+ok(r.status === 405, "preview is read only (" + r.status + ")");
+r = await mgr("/api/my/preview/999999");
+ok(r.status === 404, "preview of an unknown customer: not found");
+
 done();

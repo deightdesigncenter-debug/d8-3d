@@ -30,6 +30,15 @@
   .po-3d { margin-top: 18px; }
   #o3dHost { margin-top: 14px; }
   #o3dHost[hidden] { display: none; }
+  /* staff "view as customer" (read only) */
+  .pv-bar { background: #fff4d6; color: #5a4300; border-bottom: 1px solid #ecd28c; font-size: 14px; line-height: 1.5; }
+  .pv-bar .wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-top: 10px; padding-bottom: 10px; }
+  .pv-bar > .wrap > b { letter-spacing: .1em; font-size: 12px; }
+  .pv-bar span { flex: 1 1 320px; }
+  .pv-bar a { color: inherit; font-weight: 700; white-space: nowrap; }
+  [data-theme="dark"] .pv-bar { background: #3a3013; color: #f3dfa3; border-color: #5c4b1c; }
+  .is-preview .tr-wrap { display: none; }
+  .is-preview a[href="#/new"], .is-preview a[href="#/profile"] { display: none; }
   /* charges and balance, only for customers whose record shows prices */
   .pt-chtbl { overflow-x: auto; margin-top: 14px; }
   .pt-chtbl table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -299,7 +308,7 @@ window.D8_DICT = {
 };
 </script>
 <script src="/shell.js?v=2026-10-31.1" defer></script>
-<script src="/portal.js?v=2026-11-25.2" defer></script>
+<script src="/portal.js?v=2026-11-25.3" defer></script>
 </head>
 <body data-page="portal" data-title-key="title">
 <div id="d8-header"></div>

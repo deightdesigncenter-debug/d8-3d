@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-11-25.2"; // bump with brand.css changes
+const ASSET_VERSION = "2026-11-25.3"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -298,6 +298,11 @@ async function handleApi(request, env, url) {
     const who = staffWho(session, staff, keyOk, can);
     if (path === "/api/my/orders" || path.startsWith("/api/my/orders/")) {
       try { return await myOrders(request, env, url, who); }
+      catch (err) { if (err && err.status) return json({ error: err.message }, err.status); throw err; }
+    }
+    // "view as customer" (owner's request 2026-11-25): staff see the portal exactly as one customer record's accounts see it
+    if (path.startsWith("/api/my/preview/")) {
+      try { return await previewAs(request, env, url, who); }
       catch (err) { if (err && err.status) return json({ error: err.message }, err.status); throw err; }
     }
     return handleJobs(request, env, url, who);
@@ -2301,31 +2306,40 @@ async function customerBalance(DB, cid) {
   for (const p of pays.results || []) if (!out.some((s) => s.currency === p.currency)) out.push({ currency: p.currency, orders: 0, billed: 0, paid: 0, due: 0, credit: rnd(p.a, p.currency) });
   return out;
 }
-async function myOrders(request, env, url, who) {
-  const path = url.pathname, email = String(who.email || "").toLowerCase();
+// pv: "view as customer" (staff preview of one customer record: every account of it at once, read only)
+async function myOrders(request, env, url, who, pv = null) {
+  const email = pv ? "" : String(who.email || "").toLowerCase();
+  const base = pv ? pv.base + "/orders" : "/api/my/orders", sub = url.pathname.slice(base.length);
   if (request.method !== "GET") return json({ error: "Method not allowed." }, 405);
-  if (path === "/api/my/orders") {
-    if (!email || !env.DB) return json({ items: [] });
+  if (!sub) {
+    if ((!email && !pv) || !env.DB) return json({ items: [] });
     const DB = await bookDb(env);
-    const cust = await DB.prepare("SELECT c.id, c.show_prices FROM customer_logins l JOIN customers c ON c.id = l.customer_id WHERE l.email = ?").bind(email).first();
+    const cust = pv ? await DB.prepare("SELECT id, show_prices FROM customers WHERE id = ?").bind(pv.cid).first()
+      : await DB.prepare("SELECT c.id, c.show_prices FROM customer_logins l JOIN customers c ON c.id = l.customer_id WHERE l.email = ?").bind(email).first();
     if (!cust) return json({ items: [] });
+    // an order from a portal case shows as that case to the account that sent it (in a preview: to every account of the record)
+    const notMine = pv ? "o.login NOT IN (SELECT email FROM customer_logins WHERE customer_id = ?)" : "o.login != ?";
     const list = await rows(DB.prepare(`SELECT o.id, o.code, o.status, o.patient, o.ref, o.service, o.received_at, o.updated_at, o.delivered_at,
         o.total, o.paid, o.currency, o.charge,
         (SELECT COUNT(*) FROM order_files f WHERE f.order_id = o.id AND f.final = 1) AS files,
         (SELECT COALESCE(MAX(f.final_at), 0) FROM order_files f WHERE f.order_id = o.id AND f.final = 1) AS files_at
-      FROM orders o WHERE o.customer_id = ? AND (o.job_id = '' OR o.login != ?) AND o.status != 'cancelled'
-      ORDER BY o.received_at DESC, o.id DESC LIMIT 300`).bind(cust.id, email));
+      FROM orders o WHERE o.customer_id = ? AND (o.job_id = '' OR ${notMine}) AND o.status != 'cancelled'
+      ORDER BY o.received_at DESC, o.id DESC LIMIT 300`).bind(cust.id, pv ? cust.id : email));
     if (!cust.show_prices) return json({ items: list.map(myOrderRow) });
     return json({ items: list.map((o) => ({ ...myOrderRow(o), money: myMoney(o) })), balance: await customerBalance(DB, cust.id) });
   }
-  const m = path.match(/^\/api\/my\/orders\/(\d+)(?:\/files\/([A-Za-z0-9]{10})(\/thumb)?)?$/);
+  const m = sub.match(/^\/(\d+)(?:\/files\/([A-Za-z0-9]{10})(\/thumb)?)?$/);
   if (!m) return json({ error: "Not found." }, 404);
   const nf = () => json({ error: "Order not found." }, 404);
-  if (!email || !env.DB) return nf();
+  if ((!email && !pv) || !env.DB) return nf();
   const DB = await bookDb(env), id = +m[1];
-  // the order is theirs: their customer record (any linked account), or the account that sent it as a portal case
-  const o = await DB.prepare(`SELECT o.*, c.pay_first AS pay_first, c.show_prices AS show_prices FROM orders o JOIN customers c ON c.id = o.customer_id
-    WHERE o.id = ? AND (o.customer_id IN (SELECT customer_id FROM customer_logins WHERE email = ?) OR (o.login != '' AND o.login = ?))`).bind(id, email, email).first();
+  // the order is theirs: their customer record (any linked account), or the account that sent it as a portal case;
+  // mine = it came from a portal case sent by this account (a preview: by any account of the record)
+  const o = pv ? await DB.prepare(`SELECT o.*, c.pay_first AS pay_first, c.show_prices AS show_prices,
+      (o.login != '' AND EXISTS (SELECT 1 FROM customer_logins l WHERE l.customer_id = o.customer_id AND l.email = o.login)) AS mine
+      FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ? AND o.customer_id = ?`).bind(id, pv.cid).first()
+    : await DB.prepare(`SELECT o.*, c.pay_first AS pay_first, c.show_prices AS show_prices, (o.login != '' AND o.login = ?) AS mine FROM orders o JOIN customers c ON c.id = o.customer_id
+      WHERE o.id = ? AND (o.customer_id IN (SELECT customer_id FROM customer_logins WHERE email = ?) OR (o.login != '' AND o.login = ?))`).bind(email, id, email, email).first();
   if (!o) return nf();
   if (!m[2]) {
     if (o.status === "cancelled" && !o.job_id) return nf();
@@ -2333,7 +2347,7 @@ async function myOrders(request, env, url, who) {
     const locked = await filesLocked(env, o, !!o.pay_first);
     const row = myOrderRow({ ...o, files: files.length, files_at: files.reduce((t, f) => Math.max(t, f.final_at), 0) });
     // case: the portal case this order came from, when this account sent it (its page has the files, chat and approval)
-    return json({ order: { ...row, doctor: o.doctor, clinic: o.clinic, teeth: o.teeth, material: o.material, shade: o.shade, case: o.job_id && o.login === email ? o.job_id : "",
+    return json({ order: { ...row, doctor: o.doctor, clinic: o.clinic, teeth: o.teeth, material: o.material, shade: o.shade, case: o.job_id && o.mine ? o.job_id : "",
       files: files.map((f) => ({ fid: f.fid, name: f.name, size: f.size, at: f.final_at, ...(f.th ? { th: 1 } : {}) })), locked,
       ...(locked && !o.job_id ? { due: rnd(o.total - o.paid, o.currency), currency: o.currency } : {}),
       ...(o.show_prices ? { charges: await orderCharges(DB, o) } : {}) } });
@@ -2346,6 +2360,40 @@ async function myOrders(request, env, url, who) {
   }
   if (await filesLocked(env, o, !!o.pay_first)) return json({ error: "Please settle this order before downloading its files.", locked: true }, 402);
   return partsResponse(env, f, (n) => orderPartKey(id, f.fid, n));
+}
+
+/* ---- "view as customer" (owner's request 2026-11-25): /api/my/preview/<customer id>[/orders…|/jobs[/<case id>]].
+   Staff who see customers and money see the portal exactly as that customer record's accounts see it, before showing it
+   to the customer: the same lists, pages, charges and files, read only (GET). A KTV or QC never can (prices). */
+async function previewAs(request, env, url, who) {
+  const m = url.pathname.match(/^\/api\/my\/preview\/(\d{1,9})(\/.*)?$/);
+  if (!m) return json({ error: "Not found." }, 404);
+  if (!(who.viaKey || (who.can("customers.view") && who.can("billing.view")))) return json({ error: "Chỉ người xem được khách hàng và tiền mới xem thử cổng khách." }, 403);
+  if (request.method !== "GET") return json({ error: "Chế độ xem thử chỉ để xem." }, 405);
+  if (!env.DB) return json({ error: "Cần sổ đơn hàng (D1) để xem thử." }, 503);
+  const DB = await bookDb(env), cid = +m[1], sub = m[2] || "", base = "/api/my/preview/" + cid;
+  const c = await DB.prepare("SELECT id, code, name, show_prices, pay_first FROM customers WHERE id = ?").bind(cid).first();
+  if (!c) return json({ error: "Không tìm thấy khách hàng." }, 404);
+  const logins = (await rows(DB.prepare("SELECT email FROM customer_logins WHERE customer_id = ?").bind(cid))).map((x) => x.email);
+  if (!sub) return json({ customer: { id: c.id, code: c.code, name: c.name, show_prices: !!c.show_prices, pay_first: !!c.pay_first }, accounts: logins.length });
+  if (sub === "/orders" || sub.startsWith("/orders/")) return myOrders(request, env, url, who, { cid, base });
+  // the portal cases sent by the record's accounts: the list, and one case as its owner sees it (the order's files and
+  // charges through the preview, so they open here too)
+  if (sub === "/jobs") {
+    if (!jobsInD1(env) || !logins.length) return json({ items: [] });
+    const items = (await rows(DB.prepare("SELECT id, meta FROM jobs WHERE owner IN (SELECT value FROM json_each(?)) ORDER BY updated DESC LIMIT 500").bind(JSON.stringify(logins))))
+      .map((r) => ownItem(r.id, JSON.parse(r.meta)));
+    return json({ items });
+  }
+  const jm = sub.match(/^\/jobs\/([^/]+)$/);
+  if (jm) {
+    const job = JOB_ID_RE.test(jm[1]) ? await loadJob(env, jm[1]) : null;
+    if (!job || !logins.includes(job.owner)) return json({ error: "Case not found." }, 404);
+    const v = await jobView(env, job, null), from = "/api/my/orders/";
+    v.sent = (v.sent || []).map((f) => ({ ...f, url: f.url.replace(from, base + "/orders/"), ...(f.thumb ? { thumb: f.thumb.replace(from, base + "/orders/") } : {}) }));
+    return json({ job: v });
+  }
+  return json({ error: "Not found." }, 404);
 }
 
 function orderOut(o, who) {

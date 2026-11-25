@@ -107,6 +107,13 @@ The owner wants the site to run without errors or jank, and every new feature ch
   stats). No price-list page for customers yet (owner: later, when there are more customers). `dev/tests/prices.test.mjs`
   gives every price a number found nowhere else and reads ~38 workspace pages as the KTV, the QC and another KTV, and the
   portal pages as the customer, before and after "show prices": keep it green and add new pages to its list.
+- "View as customer" (owner's request 2026-11-25, to try the portal before showing a customer): customer record button
+  "Xem như khách" opens `/portal?as=<customer id>`. Only staff with customers.view + billing.view (never a KTV or QC: prices).
+  `/api/my/preview/<cid>[/orders…|/jobs[/<case>]]` (`previewAs`, GET only) gives exactly what that record's accounts see
+  (`myOrders(…, pv)`: all accounts at once; portal cases of any of them), files and pictures through the preview. The portal
+  in preview shows a yellow bar, greets the customer, and is read only: no new case or profile, buttons shown switched off,
+  no live poll, typing, payment, approval, upload, message or saved translation. Never link a staff account to a customer
+  record to try the portal (linking moves that account's portal orders to the customer). Tests: `prices.test.mjs`, `sent_ui.py`.
 - Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
   the server; the prefix follows the kind. Price levels: list price (MAX) = prices.customer_id 0, MID = -2, MIN = -3; `customers.tier`
   ('' / mid / min, schema v3). Lookup: customer's own price → their level → list price. `/api/pricelist` imports the owner's Excel layout

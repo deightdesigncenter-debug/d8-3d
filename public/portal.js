@@ -42,6 +42,13 @@
 
   let user = null;
   let filter = "all", query = "";
+  // "View as customer" (owner's request 2026-11-25): /portal?as=<customer id> opens the portal exactly as that customer
+  // record's accounts see it, for staff who see customers and money. Read only: nothing can be sent, approved or paid.
+  const PV = (() => { const m = /[?&]as=(\d{1,9})(?:&|$)/.exec(location.search); return m ? +m[1] : 0; })();
+  let pvInfo = null;
+  // the customer's API paths, or the same pages through the preview
+  const ap = (path) => !PV ? path : path.replace(/^\/api\/my\/(orders|jobs)/, "/api/my/preview/" + PV + "/$1").replace(/^\/api\/jobs\/([^/?]+)$/, "/api/my/preview/" + PV + "/jobs/$1");
+  if (PV) document.body.classList.add("is-preview");
   let caseCount = null;        // number of cases this customer has sent (for the free-trial banner)
   const GIFT = '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2.5" y="7" width="13" height="8.5" rx="1"/><path d="M1.5 4.5h15V7h-15zM9 4.5v11M9 4.5C8 2 5.5 1.8 5.3 3.3 5.1 4.6 7.4 4.5 9 4.5Zm0 0c1-2.5 3.5-2.7 3.7-1.2.2 1.3-2.1 1.2-3.7 1.2Z"/></svg>';
   const trialBanner = () => `<div class="pt-trial">${GIFT}<div>${T("p.trial")}</div></div>`;
@@ -55,8 +62,9 @@
   /* ------------------------------------------------------------ chrome */
   function band(inner) { return `<section class="pt-band"><div class="wrap">${inner}</div></section>`; }
   let animKey = null; // fade new screens in once per route, not on every refresh
+  const pvBar = () => !PV ? "" : `<div class="pv-bar" role="status"><div class="wrap"><b>XEM THỬ</b><span>Bạn đang xem cổng khách đúng như khách <b>${esc(pvInfo ? pvInfo.code + " · " + pvInfo.name : "#" + PV)}</b> thấy${pvInfo ? ` (${pvInfo.accounts ? pvInfo.accounts + " tài khoản gắn" : "chưa gắn tài khoản nào"}${pvInfo.show_prices ? ", đang hiện giá" : ", không hiện giá"})` : ""}. Chỉ xem: các nút gửi, duyệt, thanh toán đã tắt. Bấm EN / VI ở đầu trang để xem bản tiếng Anh khách thấy.</span><a href="/admin#cust/${PV}">Thoát xem thử</a></div></div>`;
   function page(bandHtml, body, isLoading) {
-    view.innerHTML = bandHtml + `<div class="pt-main"><div class="wrap">${body}</div></div>`;
+    view.innerHTML = pvBar() + bandHtml + `<div class="pt-main"><div class="wrap">${body}</div></div>`;
     D8.markSub && D8.markSub();
     const key = location.hash || "#/";
     if (!isLoading && key !== animKey) { animKey = key; D8.animIn(view.querySelector(".pt-main")); }
@@ -78,6 +86,8 @@
     const h = location.hash || "#/";
     let m;
     window.scrollTo(0, 0);
+    if (PV && !pvInfo) return startPreview();
+    if (PV && (h === "#/new" || h === "#/profile")) return pvBlocked();
     if (h === "#/new") return renderNew();
     if (h === "#/profile") return renderProfile();
     const fm = h.match(/^#\/\?f=(all|active|review|done)$/);
@@ -92,6 +102,15 @@
   D8.ready.then((u) => { booted = true; user = u; route(); });
   document.addEventListener("d8:user", (e) => { if (!booted) return; const was = user; user = e.detail; if (!!was !== !!user) route(); });
 
+  async function startPreview() {
+    loading();
+    try { const r = await D8.api("/api/my/preview/" + PV); pvInfo = { ...r.customer, accounts: r.accounts }; route(); }
+    catch (err) { page("", `<div class="pt-empty"><h2 class="h-caps">${esc(err.status === 403 ? "Bạn không có quyền xem thử cổng khách." : err.message)}</h2><p><a href="/admin">Về khu làm việc</a></p></div>`); }
+  }
+  function pvBlocked() {
+    page(band(`<div><a class="pt-back" href="#/">${ICON.back}${esc(T("p.back"))}</a><h1>${esc(T("p.list.h"))}</h1></div>`),
+      `<div class="pt-empty"><h2 class="h-caps">Chế độ xem thử không gửi ca mới hay sửa hồ sơ của khách.</h2><p><a href="#/">Về danh sách đơn</a></p></div>`);
+  }
   function rerender() {
     const h = location.hash || "#/";
     if (current && h === "#/case/" + current.id) return drawCase(current);
@@ -174,7 +193,7 @@
     loading();
     let items;
     try {
-      const [a, b] = await Promise.all([D8.api("/api/my/jobs"), D8.api("/api/my/orders").catch(() => ({ items: [] }))]);
+      const [a, b] = await Promise.all([D8.api(ap("/api/my/jobs")), D8.api(ap("/api/my/orders")).catch(() => ({ items: [] }))]);
       items = a.items || []; orders = b.items || []; balance = b.balance || null;
     }
     catch (err) { if (err.status === 401) { user = null; return renderSignIn(); } return failed(err.message); }
@@ -186,7 +205,7 @@
 
   function drawList(items) {
     const seen = store.get("d8-seen", {}), os = oSeen();
-    const first = String(user.greet || user.name || user.email).slice(0, 48);
+    const first = String(PV && pvInfo ? pvInfo.name : user.greet || user.name || user.email).slice(0, 48); // a preview greets the customer
     const ACTIVE = ["received", "needs_info", "in_design", "approved"];
     const both = [...items, ...orders];
     const counts = {
@@ -232,7 +251,7 @@
          <a class="btn btn-primary cta-shine" href="#/new">${ICON.plus}${esc(T("p.new"))}</a></div>`
       : `<div class="pt-empty"><p style="margin:0">${esc(T("p.nomatch"))}</p></div>`;
     page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><h1>${esc(T("p.list.h"))}</h1><p class="serif">${esc(T("p.list.hi").replace("{name}", first))}</p></div>
-      <a class="btn btn-cream" href="#/new">${ICON.plus}${esc(T("p.new"))}</a>`), `
+      ${PV ? "" : `<a class="btn btn-cream" href="#/new">${ICON.plus}${esc(T("p.new"))}</a>`}`), `
       ${both.length < 2 ? trialBanner() : ""}
       ${balanceCard(balance)}
       ${both.length ? `<div class="pt-tools"><div class="pt-filters" role="group" aria-label="Filter">${["all", "active", "review", "done"].map((f) =>
@@ -251,12 +270,13 @@
   async function renderCase(id) {
     stopPoll(); curOrder = null;
     if (!current || current.id !== id) { current = null; loading("case"); }
-    try { [current] = await Promise.all([D8.api("/api/jobs/" + id).then((r) => r.job), D8.config().then((c) => { payCfg = (c && c.pay) || {}; })]); }
+    try { [current] = await Promise.all([D8.api(ap("/api/jobs/" + id)).then((r) => r.job), D8.config().then((c) => { payCfg = (c && c.pay) || {}; })]); }
     catch (err) {
       if (err.status === 401) { user = null; return renderSignIn(); }
       return failed(err.status === 404 ? T("p.err.nf") : err.message);
     }
     drawCase(current);
+    if (PV) return; // a preview reads only: no live poll, no payment check
     startLive(id);
     if (payBack && payBack.id === id) {
       const pb = payBack; payBack = null;
@@ -318,9 +338,10 @@
       <iframe class="case-frame" src="${esc(p.url)}" title="${esc(p.label || j.title)}" loading="lazy" referrerpolicy="no-referrer"></iframe>`).join("");
     const rv = j.rev || { free: 2, used: 0 }, revLeft = Math.max(0, rv.free - rv.used);
     const revLine = `<p class="rev-left">${esc(rv.open ? T("p.ap.revopen") : revLeft ? T("p.ap.rev").replace("{l}", revLeft).replace("{n}", rv.free) : T("p.ap.rev0"))}</p>`;
+    const off = PV ? " disabled" : ""; // a preview shows the buttons the customer gets, switched off
     const approveBox = st === "review" ? `<div class="approve"><p>${T("p.ap.p")}</p>${revLine}<div class="btns">
-      <button class="btn small" type="button" id="askChanges">${esc(T("p.ap.change"))}</button>
-      <button class="btn btn-ok small" type="button" id="approve">${ICON.check}${esc(T("p.ap.ok"))}</button></div></div>` : "";
+      <button class="btn small" type="button" id="askChanges"${off}>${esc(T("p.ap.change"))}</button>
+      <button class="btn btn-ok small" type="button" id="approve"${off}>${ICON.check}${esc(T("p.ap.ok"))}</button></div></div>` : "";
 
     const files = j.files || [];
     const outs = files.filter((f) => f.kind === "output"), ins = files.filter((f) => f.kind !== "output");
@@ -328,7 +349,7 @@
     const htmlOuts = outs.filter((f) => /\.html?$/i.test(f.name));
     const fileRow = (f) => {
       const ext = (f.name.split(".").pop() || "").slice(0, 4);
-      const canDel = f.kind !== "output" && CLIENT_DELETE.includes(st);
+      const canDel = !PV && f.kind !== "output" && CLIENT_DELETE.includes(st);
       return `<li class="${f.kind === "output" ? "out" : ""}"><span class="ext">${esc(ext)}</span><div class="nm"><b title="${esc(f.name)}">${esc(f.name)}</b>
         <small>${esc(D8.size(f.size))} · ${esc(D8.fmtDate(f.at))} · ${esc(f.exp ? T("p.fl.exp").replace("{d}", D8.fmtDate(f.exp)) : T("p.fl.keep"))}</small></div>
         <a class="iconbtn" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}" download="${esc(f.name)}" aria-label="${esc(T("p.fl.dl"))} ${esc(f.name)}" title="${esc(T("p.fl.dl"))}">${ICON.dl}</a>
@@ -344,7 +365,7 @@
           : `<a class="iconbtn" href="${esc(f.url)}" download="${esc(f.name)}" aria-label="${esc(T("p.fl.dl"))} ${esc(f.name)}" title="${esc(T("p.fl.dl"))}">${ICON.dl}</a>`}</li>`;
     };
     const nZip = files.length + (sentLocked ? 0 : sent.length);
-    const canUpload = CLIENT_UPLOAD.includes(st);
+    const canUpload = !PV && CLIENT_UPLOAD.includes(st);
 
     const readLang = D8.lang === "vi" ? "vi" : "en";
     const thread = D8.threadHtml(j, "client", readLang);
@@ -367,8 +388,8 @@
     let payBox = "";
     if (j.pay === "due") {
       const btns = [];
-      if (payCfg.paypal) btns.push(`<button class="btn btn-primary cta-shine" type="button" data-pay="paypal">${ICON.wallet}${esc(T("pay.pp"))}</button>`);
-      if (payCfg.stripe) btns.push(`<button class="btn${payCfg.paypal ? "" : " btn-primary cta-shine"}" type="button" data-pay="stripe">${ICON.card}${esc(T("pay.card"))}</button>`);
+      if (payCfg.paypal) btns.push(`<button class="btn btn-primary cta-shine" type="button" data-pay="paypal"${off}>${ICON.wallet}${esc(T("pay.pp"))}</button>`);
+      if (payCfg.stripe) btns.push(`<button class="btn${payCfg.paypal ? "" : " btn-primary cta-shine"}" type="button" data-pay="stripe"${off}>${ICON.card}${esc(T("pay.card"))}</button>`);
       const amt = typeof j.amount === "number" && j.amount > 0;
       payBox = `<section class="pay-card" aria-labelledby="payH">
         <div class="pay-amt"><span class="eyebrow" id="payH">${esc(T("pay.due.h"))}</span><b>${esc(amt ? money(j.amount) : T("pay.tbd"))}</b><small>${esc(T("pay.for").replace("{id}", j.id))}</small></div>
@@ -376,7 +397,7 @@
           ? `<div class="btns">${btns.join("")}</div><p class="hint">${ICON.lock}<span>${esc(T("pay.safe"))}</span></p>`
           : `<p class="hint">${esc(T("pay.none"))} <a href="${esc(D8.waLink(T("pay.wamsg").replace("{id}", j.id)))}" target="_blank" rel="noopener">WhatsApp · Danny Do</a></p>`}
           ${j.payHeld ? `<p class="hint">${esc(T("pay.held"))}</p>` : ""}
-          ${amt ? `<details class="pay-other"><summary>${esc(T("pay.other"))}</summary>
+          ${amt && !PV ? `<details class="pay-other"><summary>${esc(T("pay.other"))}</summary>
             <form id="claimForm"><label class="field-label" for="claimNote">${esc(T("pay.other.l"))}</label>
               <input class="input" id="claimNote" maxlength="300" placeholder="${esc(T("pay.other.ph"))}">
               <button class="btn small" type="submit" id="claimBtn">${esc(T("pay.other.b"))}</button></form></details>` : ""}</div></section>`;
@@ -422,8 +443,8 @@
             ${D8.typingHtml(typingNow)}
             <form class="compose" id="composeForm">
               <label class="sr-only" for="composer">${esc(T("p.ms.ph"))}</label>
-              <textarea class="input" id="composer" maxlength="4000" placeholder="${esc(T("p.ms.ph"))}"></textarea>
-              <div class="compose-foot"><p class="hint">${esc(T("p.ms.hint"))}</p><button class="btn btn-primary small" type="submit" id="sendMsg">${esc(T("p.ms.send"))}</button></div>
+              <textarea class="input" id="composer" maxlength="4000" placeholder="${esc(T("p.ms.ph"))}"${off}></textarea>
+              <div class="compose-foot"><p class="hint">${esc(T("p.ms.hint"))}</p><button class="btn btn-primary small" type="submit" id="sendMsg"${off}>${esc(T("p.ms.send"))}</button></div>
               <p class="error" id="msgErr" hidden></p>
             </form>
           </section>
@@ -440,7 +461,7 @@
 
     const th = document.getElementById("thread");
     if (atBottom) th.scrollTop = th.scrollHeight;
-    D8.wireThread(th, j, readLang);
+    if (!PV) D8.wireThread(th, j, readLang); // (a translation is saved on the case: not from a preview)
     D8.chatBub.wire(j, "client");
     wireCase(j);
     const nb = document.getElementById("composer");
@@ -476,6 +497,7 @@
       } catch (err) { D8.toast(err.message); }
       zip.disabled = false; zip.innerHTML = ICON.dl + esc(T("zip.btn"));
     });
+    if (PV) return; // a preview: downloads only (no payment, approval, file change, message or typing signal)
     // pay: the server creates the PayPal order / Stripe Checkout session and we go there
     view.querySelectorAll("[data-pay]").forEach((b) => b.addEventListener("click", async () => {
       const all = view.querySelectorAll("[data-pay]");
@@ -580,7 +602,7 @@
   async function renderOrder(id) {
     current = null;
     if (!curOrder || curOrder.id !== id) { curOrder = null; loading("case"); }
-    try { curOrder = (await D8.api("/api/my/orders/" + id)).order; }
+    try { curOrder = (await D8.api(ap("/api/my/orders/" + id))).order; }
     catch (err) {
       if (err.status === 401) { user = null; return renderSignIn(); }
       return failed(err.status === 404 ? T("p.o.nf") : err.message);
@@ -591,7 +613,7 @@
   function drawOrder(o) {
     const s = oSeen(); s[o.id] = o.filesAt || 0; const ks = Object.keys(s); if (ks.length > 300) delete s[ks[0]]; store.set("d8-oseen", s);
     if (orders.length) bellOrders(s);
-    const st = o.status, base = `/api/my/orders/${o.id}/files/`;
+    const st = o.status, base = ap(`/api/my/orders/${o.id}`) + "/files/";
     const idx = st === "needs_info" ? 0 : STEPS.indexOf(st);
     const steps = STEPS.map((k, i) => {
       const cls = st === "cancelled" ? "" : i < idx || (i === idx && k === "delivered") ? "done" : i === idx ? "cur" : "";
