@@ -109,6 +109,11 @@ The owner wants the site to run without errors or jank, and every new feature ch
   stats). No price-list page for customers yet (owner: later, when there are more customers). `dev/tests/prices.test.mjs`
   gives every price a number found nowhere else and reads ~38 workspace pages as the KTV, the QC and another KTV, and the
   portal pages as the customer, before and after "show prices": keep it green and add new pages to its list.
+- 3D link message to the doctor (owner's request 2026-11-26): for staff with billing.view a "Tổng chi phí case" box above the
+  EN / VI messages adds "Total for this case: US$…" (VI "Tổng chi phí ca này: …"; 0 = "no charge"; empty = no line). The amount
+  comes from the link's order (`orderId`), else from orders whose patient or reference matches the case name (MichaelRomero =
+  Michael Romero; several → a choice), else typed by hand; it is the order total at the customer's price, surcharge included.
+  A KTV never gets the box or the line. Tests: `orders_ui.py` (3D link section).
 - "View as customer" (owner's request 2026-11-25, to try the portal before showing a customer): customer record button
   "Xem như khách" (top of the record, next to "+ Đơn mới") opens `/portal?as=<customer id>`. Only staff with customers.view + billing.view (never a KTV or QC: prices).
   `/api/my/preview/<cid>[/orders…|/jobs[/<case>]]` (`previewAs`, GET only) gives exactly what that record's accounts see

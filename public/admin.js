@@ -1244,15 +1244,86 @@
       $("ogOrderHint").textContent = "Đơn " + o.code + " · " + o.customer_name + (o.patient ? " · " + o.patient : "");
     } catch (err) { $("ogOrderHint").textContent = err.message; }
   });
+  // The case total in the message (owner's request 2026-11-26): found from the link's order, or from an order whose patient or
+  // reference matches the case name, or typed by hand. Only for those who see money: a KTV making a link never gets the line.
+  const priceOn = () => can("billing.view");
+  const fmtCase$ = (n, c) => c === "VND" ? Math.round(n).toLocaleString("vi-VN") + " ₫"
+    : (c === "USD" ? "US$" : "") + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (c === "USD" ? "" : " " + c);
+  function casePrice() {
+    if (!priceOn() || $("msgPriceBox").hidden) return null;
+    const raw = $("msgPrice").value.trim(), c = $("msgCur").value;
+    if (!raw) return null;
+    // 95.37 · 95,37 · $1,250.50 · 1.250.000 (VND)
+    let s = raw.replace(/[^\d.,]/g, "");
+    if (c === "VND") s = s.replace(/[.,]/g, "");
+    else if (/,\d{1,2}$/.test(s) && !s.includes(".")) s = s.replace(",", ".");
+    else s = s.replace(/,/g, "");
+    const n = Number(s);
+    return s && isFinite(n) && n >= 0 ? { n, c } : null;
+  }
+  const priceEn = () => { const p = casePrice(); return !p ? "" : p.n === 0 ? "There is no charge for this case.\n\n" : "Total for this case: " + fmtCase$(p.n, p.c) + "\n\n"; };
+  const priceVi = () => { const p = casePrice(); return !p ? "" : p.n === 0 ? "Ca này không tính phí.\n\n" : "Tổng chi phí ca này: " + fmtCase$(p.n, p.c) + "\n\n"; };
   function messageEn(item) {
     const what = item.title || item.label || "your case";
     return "Hi Dr. [Name],\n\nThe 3D design for " + what + " is ready for your review. It opens in any browser on your phone or computer, no software needed:\n\n" +
-      item.url + "\n\nThe link is available until " + fmtDateEn(item.expires) + ". Let me know if you would like any adjustments.\n\nD.EIGHT DESIGN CENTER";
+      item.url + "\n\n" + priceEn() + "The link is available until " + fmtDateEn(item.expires) + ". Let me know if you would like any adjustments.\n\nD.EIGHT DESIGN CENTER";
   }
   function messageVi(item) {
     const what = item.title || item.label || "ca của bác sĩ";
     return "Chào bác sĩ [Tên],\n\nThiết kế 3D cho " + what + " đã sẵn sàng để bác sĩ xem. Bác sĩ mở được bằng bất kỳ trình duyệt nào trên điện thoại hoặc máy tính, không cần cài phần mềm:\n\n" +
-      item.url + "\n\nLink dùng được đến " + fmtDateVi(item.expires) + ". Nếu cần chỉnh sửa gì, bác sĩ cứ báo cho tôi.\n\nD.EIGHT DESIGN CENTER";
+      item.url + "\n\n" + priceVi() + "Link dùng được đến " + fmtDateVi(item.expires) + ". Nếu cần chỉnh sửa gì, bác sĩ cứ báo cho tôi.\n\nD.EIGHT DESIGN CENTER";
+  }
+  const drawMessages = () => { if (shown) { $("msgEn").textContent = messageEn(shown); $("msgVi").textContent = messageVi(shown); } };
+  // an order's money as the box shows it
+  const normName = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]/g, "");
+  const ordLabel = (o) => o.code + " · " + (o.customer_name || o.customer_code || "") + (o.patient ? " · " + o.patient : o.ref ? " · " + o.ref : "") + " · " + (o.charge !== "charge" ? "miễn phí" : fmtCase$(o.total || 0, o.currency));
+  function useOrder(o, how) {
+    if (!$("msgCur").querySelector(`option[value="${o.currency}"]`)) $("msgCur").insertAdjacentHTML("beforeend", `<option value="${esc(o.currency)}">${esc(o.currency)}</option>`);
+    $("msgCur").value = o.currency || "USD";
+    $("msgPrice").value = o.charge !== "charge" ? "0" : String(o.total || 0);
+    $("msgPriceHint").textContent = how + " đơn " + o.code + (o.patient ? " (" + o.patient + ")" : "") + ": " + (o.charge !== "charge" ? "đơn không tính phí" : fmtCase$(o.total || 0, o.currency) + " theo đơn giá của khách" + (o.adj_pct ? ", đã gồm phụ phí " + o.adj_pct + "%" : "")) + ". Sửa số nếu cần.";
+    drawMessages();
+  }
+  // the link's own order, or orders whose patient or reference is the case name (MichaelRomero = Michael Romero)
+  async function ordersFor(item) {
+    if (item.orderId) { try { const o = (await api("/api/orders/" + item.orderId)).order; if (o && o.status !== "cancelled") return { list: [o], how: "Lấy từ" }; } catch {} }
+    const t = String(item.label || item.title || "").replace(/^Patient:\s*/i, "").split(" · ")[0].trim();
+    const want = normName(t);
+    if (want.length < 3) return { list: [] };
+    const words = t.replace(/([a-zà-ỹ])([A-ZÀ-Ỹ])/g, "$1 $2").replace(/[_.\-]+/g, " ").replace(/\s+/g, " ").trim();
+    const found = new Map();
+    for (const q of [...new Set([t, words, words.split(" ").pop()])].filter((x) => x.length >= 3)) {
+      const r = await api("/api/orders?status=&limit=20&q=" + encodeURIComponent(q));
+      for (const o of r.items || []) if (o.status !== "cancelled") found.set(o.id, o);
+      if (found.size) break;
+    }
+    const score = (o) => Math.max(...[o.patient, o.ref].map(normName).map((x) => !x ? 0 : x === want ? 2 : Math.min(x.length, want.length) >= 4 && (x.includes(want) || want.includes(x)) ? 1 : 0));
+    const list = [...found.values()].map((o) => [score(o), o]).filter((x) => x[0] > 0).sort((a, b) => b[0] - a[0] || String(b[1].code).localeCompare(String(a[1].code))).map((x) => x[1]);
+    return { list, how: "Tự tìm theo tên ca:" };
+  }
+  let priceSeq = 0;
+  async function findPrice(item) {
+    const box = $("msgPriceBox");
+    box.hidden = !priceOn();
+    $("msgPrice").value = ""; $("msgOrdWrap").hidden = true; $("msgOrd").innerHTML = "";
+    if (box.hidden) return;
+    const seq = ++priceSeq;
+    $("msgPriceHint").textContent = "Đang tìm đơn của ca này…";
+    let r;
+    try { r = await ordersFor(item); } catch (err) { r = { list: [], err: err.message }; }
+    if (seq !== priceSeq || shown !== item) return;
+    if (!r.list.length) { $("msgPriceHint").textContent = r.err || "Không tìm thấy đơn khớp tên ca. Nhập tổng tiền tay, hoặc nhập mã đơn ở ô \"Mã đơn\" khi tạo link."; drawMessages(); return; }
+    if (r.list.length > 1) {
+      $("msgOrd").innerHTML = r.list.map((o, i) => `<option value="${i}">${esc(ordLabel(o))}</option>`).join("") + '<option value="">Không đơn nào, tôi tự nhập</option>';
+      $("msgOrdWrap").hidden = false;
+      $("msgOrd").onchange = () => { const o = r.list[+$("msgOrd").value]; if ($("msgOrd").value !== "" && o) useOrder(o, "Lấy từ"); else { $("msgPrice").value = ""; $("msgPriceHint").textContent = "Nhập tổng tiền tay."; drawMessages(); } };
+    }
+    useOrder(r.list[0], r.how);
+    if (r.list.length > 1) $("msgPriceHint").textContent += " Có " + r.list.length + " đơn khớp: chọn đúng đơn ở ô bên cạnh.";
+  }
+  if ($("msgPrice")) {
+    $("msgPrice").addEventListener("input", drawMessages);
+    $("msgCur").addEventListener("change", drawMessages);
   }
   let shown = null;
   function showResult(item) {
@@ -1260,6 +1331,7 @@
     $("result").hidden = false;
     $("resUrl").textContent = item.url; $("resUrl").href = item.url; $("openLink").href = item.url;
     $("resSub").textContent = (item.label || "Chưa đặt tên ca") + ", dùng được đến " + fmtDateVi(item.expires);
+    findPrice(item);
     $("msgEn").textContent = messageEn(item);
     $("msgVi").textContent = messageVi(item);
     renderQr(item);

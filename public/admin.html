@@ -83,6 +83,13 @@
   .qr { align-self: start; background: var(--white); border-radius: 12px; padding: 12px 12px 10px; width: 164px; text-align: center; }
   .qr .code svg { width: 140px; height: 140px; }
   .qr a { display: inline-block; margin-top: 6px; font-family: var(--f-display); font-weight: 600; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--navy); text-decoration: none; }
+  /* the case total in the message to the doctor (only for those who see money) */
+  .msg-price { margin-top: 16px; padding: 18px 20px; border-radius: 14px; background: var(--white); border: 1px solid var(--line); }
+  .msg-price-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: end; }
+  .msg-price-in { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; }
+  .msg-price-ord[hidden] { display: none; }
+  .msg-price .hint { margin: 8px 0 0; min-height: 1.5em; }
+  @media (max-width: 760px) { .msg-price-row { grid-template-columns: 1fr; } }
   .message { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .message figure { margin: 0; padding: 20px; border-radius: 14px; background: var(--white); border: 1px solid var(--line); }
   .message figure.vi { background: var(--soft); }
@@ -675,7 +682,7 @@
 <script src="/tech.js?v=2026-10-26.2" defer></script>
 <script src="/viewer3d.js?v=2026-11-25.1" defer></script>
 <script src="/snap.js?v=2026-10-31.1" defer></script>
-<script src="/admin.js?v=2026-11-12.1" defer></script>
+<script src="/admin.js?v=2026-11-26.1" defer></script>
 </head>
 <body data-page="admin">
 <div id="d8-header"></div>
@@ -805,6 +812,14 @@
               </div>
             </div>
             <div class="qr" id="qrBox" hidden><div class="code" id="qrCode"></div><a id="qrDownload" download>Tải ảnh QR</a></div>
+          </div>
+          <div class="msg-price" id="msgPriceBox" hidden>
+            <div class="msg-price-row">
+              <div class="msg-price-amt"><label class="field-label" for="msgPrice">Tổng chi phí case <span class="opt">(thêm một dòng vào tin nhắn; để trống thì không có dòng này)</span></label>
+                <div class="msg-price-in"><input class="input" type="text" id="msgPrice" inputmode="decimal" autocomplete="off" maxlength="20" placeholder="Tổng tiền ca này là bao nhiêu?"><select class="input" id="msgCur" aria-label="Tiền tệ"><option value="USD">USD</option><option value="VND">VND</option></select></div></div>
+              <div class="msg-price-ord" id="msgOrdWrap" hidden><label class="field-label" for="msgOrd">Đơn của ca này</label><select class="input" id="msgOrd"></select></div>
+            </div>
+            <p class="hint" id="msgPriceHint"></p>
           </div>
           <div class="message">
             <figure><figcaption><span class="chip">Tiếng Anh · được sao chép</span></figcaption><pre id="msgEn"></pre></figure>

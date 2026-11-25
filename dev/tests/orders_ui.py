@@ -533,6 +533,40 @@ with sync_playwright() as p:
     ok('og:title" content="Patient: CHUANG TSUNG WEI' in page, "doctor link carries the preview title")
     st, od = op.evaluate(API, ["/api/orders/" + OID])
     ok(lid in od["order"]["previews"], "3D link attached to the order")
+    # the case total in the message to the doctor (owner's request 2026-11-26): taken from the link's order, editable, by hand
+    tot, cur = od["order"].get("total"), od["order"].get("currency")
+    want = ("US$" + f"{tot:,.2f}") if cur == "USD" else (f"{round(tot):,}".replace(",", ".") + " ₫")
+    for _ in range(20):
+        if op.input_value("#msgPrice"): break
+        op.wait_for_timeout(250)
+    ok(op.is_visible("#msgPriceBox") and float(op.input_value("#msgPrice") or -1) == tot and op.input_value("#msgCur") == cur, "case total found from the link's order: " + str(tot) + " " + str(cur))
+    ok("Total for this case: " + want in text(op, "#msgEn") and "Tổng chi phí ca này: " + want in text(op, "#msgVi"), "the total line in both messages: " + want)
+    ok(code_preview in text(op, "#msgPriceHint"), "the hint names the order: " + text(op, "#msgPriceHint"))
+    op.fill("#msgPrice", "123,5"); op.wait_for_timeout(200)
+    ok(("123.50" in text(op, "#msgEn") or "123,50" in text(op, "#msgEn") or "124" in text(op, "#msgEn")), "a total typed by hand goes into the message")
+    copied = op.evaluate("async () => { const b = document.getElementById('copyMsg'); let t = ''; const w = navigator.clipboard.writeText.bind(navigator.clipboard); navigator.clipboard.writeText = async (s) => { t = s; }; b.click(); await new Promise(r => setTimeout(r, 300)); navigator.clipboard.writeText = w; return t; }")
+    ok("Total for this case:" in copied and "Tổng chi phí" not in copied, "the copied English message carries the total")
+    op.fill("#msgPrice", ""); op.wait_for_timeout(200)
+    ok("Total for this case" not in text(op, "#msgEn"), "empty total: no line")
+    op.fill("#msgPrice", f"{tot:.2f}" if cur == "USD" else str(round(tot))); op.wait_for_timeout(200)
+    ok("Total for this case: " + want in text(op, "#msgEn"), "the total typed back in: " + want)
+    for sel, name in (("#msgPriceBox", "link-message-total-box"), ("#result .message", "link-message-total")):
+        op.locator(sel).evaluate("e => e.scrollIntoView({block: 'center'})"); op.wait_for_timeout(150)  # clear of the sticky header
+        op.locator(sel).screenshot(path=f"{OUT}/{name}.png")
+    vp = op.viewport_size
+    op.set_viewport_size({"width": 390, "height": 844}); op.wait_for_timeout(300)
+    op.locator("#result").screenshot(path=f"{OUT}/link-message-total-phone.png")
+    op.set_viewport_size(vp); op.wait_for_timeout(200)
+    # a KTV making a link never gets a price
+    st_k = kp.evaluate("""async (oid) => { const r = await fetch('/api/upload', {method: 'POST', headers: {'X-D8': '1', 'X-Case-Label': 'KtvPriceCheck', 'X-Expire-Days': '7', 'X-Content-Encoding': 'identity',
+      'X-Original-Size': '80', 'Content-Type': 'application/octet-stream', 'X-Order-Id': String(oid)}, body: '<!DOCTYPE html><html><body>exocad webview test</body></html>'}); return r.status; }""", int(OID))
+    if st_k in (200, 201):
+        kp.goto(B + "/admin#links"); kp.wait_for_timeout(1500)
+        btn = kp.query_selector('#cases [data-act="qr"]')
+        if btn: btn.click(); kp.wait_for_timeout(1200)
+        ok(btn is not None and not kp.is_visible("#msgPriceBox") and "Total for this case" not in text(kp, "#msgEn") and "Tổng chi phí" not in text(kp, "#msgVi"), "KTV: no case total box, no total in the message")
+    else:
+        ok(st_k in (401, 403), "KTV may not make links here (" + str(st_k) + ")")
 
     # phone layout
     mc = ctx({"width": 390, "height": 844}, True); mp = mc.new_page(); watch(mp, "mobile")
