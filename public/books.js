@@ -177,9 +177,12 @@
           <p class="hint" style="margin:6px 0 12px">Điều cần nhớ riêng về khách này. Chỉ xem ở đây, không tự chèn vào đơn hay ca.</p>
           ${traits.traits.length ? `<ul class="trait-list">${traits.traits.map((t) => `<li data-t="${t.id}"><span class="trait-text">${esc(t.text)}</span><small>${esc(t.by === "password" ? "" : t.by)}${t.by === "password" ? "" : " · "}${esc(D8.fmtDate(t.updated || t.at, true))}</small>${can("customers.edit") ? `<span class="trait-acts"><button class="btn small" type="button" data-tedit="${t.id}">Sửa</button><button class="btn small" type="button" data-tdel="${t.id}">Xóa</button></span>` : ""}</li>`).join("")}</ul>` : '<p class="muted" style="margin:0 0 10px">Chưa có đặc tính nào.</p>'}
           ${can("customers.edit") ? `<form class="add-row" id="ctAdd"><input class="input" id="ctText" maxlength="300" placeholder="Ví dụ: thích răng sứ màu A2, hay gửi gấp" aria-label="Đặc tính mới" required><button class="btn small" type="submit">Thêm</button></form>` : ""}</section>
-        <section class="card"><h2 class="h-caps">Tài khoản cổng khách</h2>
+        <section class="card" id="cuPortal"><h2 class="h-caps">Tài khoản cổng khách</h2>
+          <p class="hint" style="margin:6px 0 12px">Mỗi tài khoản gắn ở đây thấy mọi đơn của khách và tải các file KTV đã gửi khách. Chat nội bộ và tên KTV không hiện cho khách.</p>
           ${d.logins.length ? `<ul class="logins">${d.logins.map((l) => `<li><span>${esc(l.email)}</span>${can("customers.edit") ? `<button class="iconbtn del" type="button" data-unlink="${esc(l.email)}" aria-label="Bỏ gắn">${D8.ORDER_ICON.x}</button>` : ""}</li>`).join("")}</ul>` : '<p class="muted" style="margin:0 0 10px">Chưa gắn tài khoản nào.</p>'}
           ${can("customers.edit") ? `<form class="add-row" id="clAdd" style="margin-top:10px"><input class="input" type="email" id="clEmail" placeholder="Email Google của khách là gì?" required><button class="btn small" type="submit">Gắn</button></form>` : ""}
+          ${"pay_first" in c && (can("billing.view") || can("customers.edit")) ? `<label class="switch cu-payfirst"><input type="checkbox" id="cuPayFirst"${c.pay_first ? " checked" : ""}${can("customers.edit") || can("billing.edit") ? "" : " disabled"}><span></span><b>Phải thanh toán trước khi tải file</b></label>
+          <p class="hint cu-payfirst-hint">${c.pay_first ? "Khách thấy tên file ngay, nhưng chỉ tải được khi đơn đã trả đủ." : "Đang tắt: khách tải file ngay khi KTV gửi, kể cả đơn chưa thanh toán."}</p>` : ""}
           ${can("customers.edit") && !d.stats.some((s) => s.orders || s.paid || s.credit) ? `<button class="btn small btn-danger" type="button" id="cuDel" style="margin-top:16px">Xóa khách này</button>` : ""}</section>
       </aside></div>`;
     host.querySelectorAll("tr[data-href]").forEach((tr) => tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = tr.dataset.href; }));
@@ -222,6 +225,15 @@
     });
     host.querySelectorAll("[data-pdel]").forEach((b) => W.armed(b, async () => { await api("/api/payments/" + b.dataset.pdel, { method: "DELETE" }); D8.toast("Đã xóa khoản thu."); drawCustomer(id); }));
     host.querySelectorAll("[data-unlink]").forEach((b) => W.armed(b, async () => { await api(`/api/customers/${c.id}/logins`, { method: "POST", body: { email: b.dataset.unlink, remove: true } }); drawCustomer(id); }));
+    const pfs = $("cuPayFirst");
+    if (pfs) pfs.addEventListener("change", async () => {
+      pfs.disabled = true;
+      try {
+        await api(`/api/customers/${c.id}/payfirst`, { method: "POST", body: { on: pfs.checked } });
+        D8.toast(pfs.checked ? "Khách " + c.code + " phải thanh toán trước khi tải file." : "Khách " + c.code + " tải file ngay khi KTV gửi.");
+        drawCustomer(id);
+      } catch (err) { pfs.checked = !pfs.checked; pfs.disabled = false; D8.toast(err.message); }
+    });
     const la = $("clAdd");
     if (la) la.addEventListener("submit", async (e) => { e.preventDefault(); try { await api(`/api/customers/${c.id}/logins`, { method: "POST", body: { email: $("clEmail").value.trim() } }); D8.toast("Đã gắn tài khoản."); drawCustomer(id); } catch (err) { D8.toast(err.message); } });
     const del = $("cuDel");

@@ -441,6 +441,44 @@
   .ochat-files li small { color: var(--muted); flex: 0 0 auto; }
   .ochat-form.drop textarea { outline: 2px dashed var(--steel); outline-offset: 2px; }
   .ochat-prog { margin: 0; }
+  /* files sent to the customer: a button on each file in the chat (two clicks), a badge on its picture, a card on the order page */
+  .ochat-frow { display: flex; align-items: center; gap: 6px; margin-top: 6px; max-width: 360px; }
+  .ochat-frow .ochat-file { margin-top: 0; flex: 1 1 auto; min-width: 0; }
+  .ot-send, .of-send { flex: 0 0 auto; display: inline-grid; grid-auto-flow: column; place-items: center; gap: 5px; height: 28px; min-width: 28px; padding: 0 6px; border: 1px solid transparent;
+                       border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer;
+                       transition: background-color .2s ease-out, border-color .2s ease-out, color .2s ease-out; }
+  .of-send { height: 34px; padding: 0 10px; background: rgba(127, 127, 127, .14); }
+  button.ot-send:hover, button.of-send:hover { background: rgba(127, 127, 127, .24); }
+  .ot-send.is-sent, .of-send.is-sent { background: var(--ok-fill); color: #fff; }
+  span.ot-send, span.of-send { cursor: default; }
+  button.ot-send.armed, button.of-send.armed { border-color: currentColor; background: rgba(127, 127, 127, .3); }
+  button.ot-send.is-sent.armed, button.of-send.is-sent.armed { background: var(--err-fill); border-color: var(--err-fill); color: #fff; }
+  .ot-send:disabled, .of-send:disabled { opacity: .6; cursor: progress; }
+  .ochat-thumb { position: relative; }
+  /* with a send button the name gets a line of its own (the tile is narrow) */
+  .ochat-thumb figcaption:has(.ot-send) { flex-wrap: wrap; row-gap: 0; }
+  .ochat-thumb figcaption:has(.ot-send) .fn { flex: 1 1 100%; }
+  .ochat-thumb figcaption:has(.ot-send) .fs { margin-right: auto; }
+  .ot-badge { position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 999px; background: var(--ok-fill); color: #fff; font-size: 11px; font-weight: 600; line-height: 1.5; pointer-events: none; }
+  .ochat-thumb.sent { box-shadow: 0 0 0 2px var(--ok-fill); }
+  .ochat-thumb.sent.on { box-shadow: 0 0 0 2px #8fc0ff; }
+  .o-sent-where, .o-sent-pay { margin: 0 0 12px; }
+  .o-sent-alert { margin: 0 0 14px; padding: 12px 16px; font-size: 14px; }
+  .o-sent-alert a { color: inherit; font-weight: 600; }
+  .o-sent-none { margin: 0 0 12px; font-size: 14px; }
+  .o-sent-list { list-style: none; margin: 0 0 12px; padding: 0; }
+  .o-sent-list li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); min-width: 0; }
+  .o-sent-list .ic { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ok-bg); color: var(--ok-fg); }
+  .o-sent-list .tx { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+  .o-sent-list .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 14px; color: var(--ink); text-decoration: none; }
+  .o-sent-list .fn:hover { text-decoration: underline; }
+  .o-sent-list small { color: var(--muted); font-size: 12px; }
+  .o-sent-up { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .o-sent-up label { cursor: pointer; }
+  .o-sent-up label.is-busy { opacity: .6; pointer-events: none; }
+  .o-sent-prog { margin: 0; }
+  .o-sent-prog[hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) { .ot-send, .of-send { transition: none; } }
   /* KPI tiles, dashboard money */
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
   .kpis + .kpis { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -549,6 +587,8 @@
   .imp-x { color: var(--err-fg2); font-weight: 700; }
   .imp-d { color: var(--warn-fg); font-weight: 700; }
   /* customers, catalog */
+  .cu-payfirst { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .cu-payfirst-hint { margin: 8px 0 0; }
   .logins { list-style: none; margin: 0; padding: 0; }
   .logins li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; word-break: break-all; }
   .cf .of-grid2 { margin-top: 0; grid-template-columns: 1fr; }
@@ -630,10 +670,10 @@
 </style>
 <script src="/shell.js?v=2026-10-31.1" defer></script>
 <script src="/xlsx.js?v=2026-10-26.2" defer></script>
-<script src="/orders.js?v=2026-11-01.1" defer></script>
-<script src="/books.js?v=2026-11-12.1" defer></script>
+<script src="/orders.js?v=2026-11-25.1" defer></script>
+<script src="/books.js?v=2026-11-25.1" defer></script>
 <script src="/tech.js?v=2026-10-26.2" defer></script>
-<script src="/viewer3d.js?v=2026-11-01.1" defer></script>
+<script src="/viewer3d.js?v=2026-11-25.1" defer></script>
 <script src="/snap.js?v=2026-10-31.1" defer></script>
 <script src="/admin.js?v=2026-11-12.1" defer></script>
 </head>

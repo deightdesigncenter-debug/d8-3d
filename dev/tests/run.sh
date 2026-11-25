@@ -35,6 +35,7 @@ run pay       node dev/tests/pay.test.mjs
 run contact   node dev/tests/contact.test.mjs
 run revisions node dev/tests/revisions.test.mjs
 run traits    node dev/tests/traits.test.mjs
+run sent      node dev/tests/sent.test.mjs
 run traits-ui python3 dev/tests/traits_ui.py "$OUT/traits"
 run contact-ui python3 dev/tests/contact_ui.py "$OUT/contact"
 run domain    node dev/tests/domain.test.mjs
@@ -43,6 +44,8 @@ run workspace python3 dev/tests/workspace_ui.py "$OUT/workspace" light
 run workspace-dark python3 dev/tests/workspace_ui.py "$OUT/workspace-dark" dark
 run orders-ui python3 dev/tests/orders_ui.py "$OUT/orders" light
 run orders-ui-dark python3 dev/tests/orders_ui.py "$OUT/orders-dark" dark
+run sent-ui   python3 dev/tests/sent_ui.py "$OUT/sent" light
+run sent-ui-dark python3 dev/tests/sent_ui.py "$OUT/sent-dark" dark
 run access    python3 dev/tests/access_ui.py "$OUT/access"
 run portal    python3 dev/tests/portal_ui.py "$OUT/portal"
 run site      python3 dev/tests/site_ui.py "$OUT/site"
@@ -81,6 +84,7 @@ stop
 start R2=1
 run revisions-r2 node dev/tests/revisions.test.mjs
 run filecopy-r2 node dev/tests/filecopy.test.mjs
+run sent-r2   node dev/tests/sent.test.mjs
 run filecopy-ui python3 dev/tests/filecopy_ui.py "$OUT/filecopy"
 stop
 

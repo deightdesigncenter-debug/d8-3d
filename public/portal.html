@@ -19,6 +19,17 @@
 <link rel="stylesheet" href="/case.css?v=2026-10-31.1">
 <style>
   body { background: var(--paper); }
+  /* orders the team entered: final files sent by the designer (owner's rule 2026-11-25) */
+  .pt-fchip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--ok-bg); color: var(--ok-fg); font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .pt-fchip svg { width: 13px; height: 13px; }
+  .files .ext.pic { width: 64px; height: 48px; padding: 0; overflow: hidden; background: #101a2b; }
+  .files .ext.pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .iconbtn.is-locked, .iconbtn.is-locked:hover { color: var(--muted); background: transparent; cursor: default; }
+  .pt-lockline { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; }
+  .pt-lockline svg { flex: 0 0 auto; }
+  .po-3d { margin-top: 18px; }
+  #o3dHost { margin-top: 14px; }
+  #o3dHost[hidden] { display: none; }
 </style>
 <script>
 window.D8_DICT = {
@@ -48,6 +59,36 @@ window.D8_DICT = {
   "nt.info": ["cases needing more information from you", "ca cần bạn bổ sung thông tin"],
   "nt.reply": ["cases with a new update from D.EIGHT", "ca có cập nhật mới từ D.EIGHT"],
   "p.f.done": ["Completed", "Đã hoàn thành"],
+  "nt.files": ["orders with new files from D.EIGHT", "đơn có file mới từ D.EIGHT"],
+  "p.o.untitled": ["Order", "Đơn hàng"],
+  "p.o.recv": ["Received {d}", "Nhận {d}"],
+  "p.o.nfiles": ["{n} file(s) ready", "{n} file sẵn sàng"],
+  "p.o.nofiles": ["Files not ready yet", "Chưa có file"],
+  "p.o.ready": ["Files ready", "Có file"],
+  "p.o.newfiles": ["New files", "File mới"],
+  "p.o.nf": ["We couldn't find this order. It may belong to another account.", "Không tìm thấy đơn này. Có thể đơn thuộc tài khoản khác."],
+  "p.o.ready.p": ["Your final files are ready to download.", "File hoàn chỉnh đã sẵn sàng để tải về."],
+  "p.o.nofiles.p": ["We'll post the final files here as soon as the design is done.", "File hoàn chỉnh sẽ hiện ở đây ngay khi thiết kế xong."],
+  "p.o.locked": ["Your files are ready. You can download them once this order is paid.", "File đã sẵn sàng. Bạn tải được ngay khi đơn này được thanh toán."],
+  "p.o.due": ["Amount due: {amt}", "Cần thanh toán: {amt}"],
+  "p.o.payask": ["Ask Danny Do how to pay", "Hỏi Danny Do cách thanh toán"],
+  "p.o.paywa": ["Hi Danny, I'd like to pay for order {c}.", "Chào Danny, mình muốn thanh toán đơn {c}."],
+  "p.o.lockshort": ["Available after payment", "Tải được sau khi thanh toán"],
+  "p.o.lockcase": ["These files can be downloaded once this case is paid.", "Các file này tải được khi ca đã thanh toán."],
+  "p.o.hold": ["This order is on hold while we wait for more information. Message us if you have questions.", "Đơn đang tạm dừng để chờ thêm thông tin. Nhắn cho chúng tôi nếu bạn cần hỏi."],
+  "p.o.v3d": ["View in 3D", "Xem 3D"],
+  "p.o.v3dn": ["View {n} files in 3D", "Xem {n} file 3D cùng lúc"],
+  "p.o.v3dclose": ["Close the 3D view", "Đóng khung 3D"],
+  "p.o.dt": ["Order details", "Thông tin đơn"],
+  "p.o.ref": ["Your reference", "Mã của bạn"],
+  "p.o.patient": ["Patient", "Bệnh nhân"],
+  "p.o.doctor": ["Doctor", "Bác sĩ"],
+  "p.o.clinic": ["Clinic", "Nha khoa"],
+  "p.o.received": ["Received", "Ngày nhận"],
+  "p.o.delivered": ["Delivered", "Ngày giao"],
+  "p.o.ask.h": ["Questions?", "Cần hỏi?"],
+  "p.o.ask.p": ["Message Danny Do about this order. Quote the order number so we find it fast.", "Nhắn Danny Do về đơn này. Ghi mã đơn để chúng tôi tìm nhanh."],
+  "p.o.wamsg": ["Hi Danny, about order {c}: ", "Chào Danny, về đơn {c}: "],
   "bill.unpaid": ["Unpaid", "Chưa thanh toán"],
   "p.c.assigned": ["A designer has taken this case. You can review the files and message us right here.", "Ca đã có KTV nhận. Bạn có thể xem file và trao đổi ngay tại đây."],
   "p.search": ["Search cases", "Tìm ca"],
@@ -216,7 +257,7 @@ window.D8_DICT = {
 };
 </script>
 <script src="/shell.js?v=2026-10-31.1" defer></script>
-<script src="/portal.js?v=2026-11-12.1" defer></script>
+<script src="/portal.js?v=2026-11-25.1" defer></script>
 </head>
 <body data-page="portal" data-title-key="title">
 <div id="d8-header"></div>

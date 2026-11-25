@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-11-12.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-11-25.1"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -296,6 +296,10 @@ async function handleApi(request, env, url) {
   if (path.startsWith("/api/my/") || path.startsWith("/api/jobs/")) {
     if (!session && !keyOk) return json({ error: "Please sign in." }, 401);
     const who = staffWho(session, staff, keyOk, can);
+    if (path === "/api/my/orders" || path.startsWith("/api/my/orders/")) {
+      try { return await myOrders(request, env, url, who); }
+      catch (err) { if (err && err.status) return json({ error: err.message }, err.status); throw err; }
+    }
     return handleJobs(request, env, url, who);
   }
 
@@ -1414,6 +1418,15 @@ async function jobView(env, job, who = null) {
   }
   // the customer: no internal files, notes, workflow, price or payment attempts
   rest.files = (rest.files || []).filter((f) => f.kind !== "design").map(({ by, ...f }) => f);
+  // files the team sent from the order's team chat (owner's rule 2026-11-25), downloaded from the customer's order
+  rest.sent = [];
+  if (job.orderId && env.DB) try {
+    const DB = await bookDb(env), base = "/api/my/orders/" + job.orderId + "/files/";
+    const [fl, pf] = await DB.batch([DB.prepare(MY_ORDER_FILES).bind(job.orderId),
+      DB.prepare("SELECT c.pay_first AS pay_first FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ?").bind(job.orderId)]);
+    rest.sent = (fl.results || []).map((f) => ({ fid: f.fid, name: f.name, size: f.size, at: f.final_at, url: base + f.fid, ...(f.th ? { thumb: base + f.fid + "/thumb" } : {}) }));
+    rest.sentLocked = !!((pf.results || [])[0] || {}).pay_first && (job.pay === "due" || job.pay === "check");
+  } catch (err) { console.error("sent files", err && err.message); }
   delete rest.orderId;
   const amount = (job.pay === "paid" || job.pay === "check") && job.paid ? job.paid.amount : job.pay === "due" ? amountDue(job) || null : null;
   const payOpen = job.pay === "due" && (payTries || []).some((t) => t.state === "open" || t.state === "held");
@@ -1956,7 +1969,7 @@ async function caseRequest(request, env, url, who, m, memo) {
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
@@ -2104,6 +2117,17 @@ async function migrateV9(DB) {
     catch (err) { if (!/duplicate column|already exists/i.test(String(err && err.message))) throw err; }
   }
 }
+// v10 (owner's rule 2026-11-25): files the team sends to the customer (final = 1) show in the customer portal at once;
+// a customer record can say "pay first", then an order's files download only once it is paid
+const SCHEMA_V10 = [`ALTER TABLE order_files ADD COLUMN final INTEGER NOT NULL DEFAULT 0`, `ALTER TABLE order_files ADD COLUMN final_at INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE order_files ADD COLUMN final_by TEXT NOT NULL DEFAULT ''`, `ALTER TABLE customers ADD COLUMN pay_first INTEGER NOT NULL DEFAULT 0`,
+  `CREATE INDEX IF NOT EXISTS f_final ON order_files (order_id, final)`];
+async function migrateV10(DB) {
+  for (const sql of SCHEMA_V10) {
+    try { await DB.prepare(sql).run(); }
+    catch (err) { if (!/duplicate column|already exists/i.test(String(err && err.message))) throw err; }
+  }
+}
 async function migrateV3(DB) {
   for (const sql of SCHEMA_V3) {
     try { await DB.prepare(sql).run(); }
@@ -2141,6 +2165,7 @@ async function bookDb(env) {
     if (v < 7) await migrateV7(env.DB);
     if (v < 8) await migrateV8(env.DB);
     if (v < 9) await migrateV9(env.DB);
+    if (v < 10) await migrateV10(env.DB);
     if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }
@@ -2196,6 +2221,94 @@ function seesOrder(who, o) {
   if (!who.email) return false;
   return o.designer === who.email || o.qc === who.email || (who.can("cases.qc") && o.status === "qc" && !o.qc);
 }
+// Files for the customer (owner's rule 2026-11-25): the KTV of the order, or whoever may deliver, sends a team-chat file to the
+// customer; it shows in the customer portal at once. The team chat, the staff and every other file stay internal.
+const canSendFiles = (who, o) => who.viaKey || who.can("cases.deliver") || (who.can("cases.design") && !!who.email && o.designer === who.email);
+// "Pay first" on the customer record: the files of an order download only once it is paid. An order of the book is paid
+// when its total is covered; a portal case pays in the portal, so its own payment state decides (due or waiting = locked).
+async function filesLocked(env, o, payFirst) {
+  if (!payFirst || o.status === "cancelled") return false;
+  if (o.job_id) { const j = await loadJob(env, o.job_id); return !!j && (j.pay === "due" || j.pay === "check"); }
+  return o.charge === "charge" && o.total - o.paid > 0.004;
+}
+// a file sent for an order that came from a portal case: the case shows it, so the case counts as updated by D.EIGHT
+// (the customer's list says "New update" and an open case page redraws with the file)
+async function touchJobForFiles(env, jobId, now) {
+  if (!jobId) return;
+  try { await updateJob(env, jobId, (j) => { j.updated = Math.max(now, (j.updated || 0) + 1); j.lastBy = "admin"; }); }
+  catch (err) { console.error("touch case", jobId, err && err.message); }
+}
+// a stored file (parts in KV or R2, maybe gzip) as one download
+async function partsResponse(env, f, keyOf) {
+  const store = partStore(env, f.st || "kv");
+  const first = await store.stream(keyOf(0));
+  if (!first) return json({ error: "File đã hết hạn lưu." }, 410);
+  const { readable, writable } = new TransformStream();
+  (async () => {
+    try {
+      await first.pipeTo(writable, { preventClose: true });
+      for (let i = 1; i < f.parts; i++) { const s2 = await store.stream(keyOf(i)); if (!s2) throw new Error("missing part " + i); await s2.pipeTo(writable, { preventClose: true }); }
+      await writable.close();
+    } catch (e) { try { await writable.abort(e); } catch {} }
+  })();
+  const headers = new Headers({ "Content-Type": "application/octet-stream", "Content-Disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(f.name),
+    "Cache-Control": "private, no-store", ...PRIVATE_HEADERS });
+  if (f.gz) headers.set("Content-Encoding", "gzip");
+  return new Response(readable, { headers, encodeBody: f.gz ? "manual" : "automatic" });
+}
+
+/* ---- the customer's orders (portal): every Google account linked to the customer record sees the orders of that lab or
+   clinic and downloads the files the team sent. An order that came from a portal case shows as that case to the account
+   that sent it, and as an order to the other accounts of the customer. */
+// (ready = passed QC, not yet put to the doctor: still "in design" for the customer)
+const MY_ORDER_STATUS = { new: "received", design: "in_design", fix: "in_design", revise: "in_design", qc: "in_design", ready: "in_design", review: "review",
+  approved: "approved", delivered: "delivered", hold: "needs_info", cancelled: "cancelled" };
+const myOrderRow = (o) => ({ id: o.id, code: o.code, title: o.ref || o.patient || "", patient: o.patient, ref: o.ref, service: o.service,
+  status: MY_ORDER_STATUS[o.status] || "received", received: o.received_at, delivered: o.delivered_at || 0,
+  updated: Math.max(o.updated_at || 0, o.files_at || 0), files: o.files || 0, filesAt: o.files_at || 0 });
+const MY_ORDER_FILES = "SELECT fid, name, size, final_at, thumb != '' AS th FROM order_files WHERE order_id = ? AND final = 1 ORDER BY final_at, id";
+async function myOrders(request, env, url, who) {
+  const path = url.pathname, email = String(who.email || "").toLowerCase();
+  if (request.method !== "GET") return json({ error: "Method not allowed." }, 405);
+  if (path === "/api/my/orders") {
+    if (!email || !env.DB) return json({ items: [] });
+    const DB = await bookDb(env);
+    const list = await rows(DB.prepare(`SELECT o.id, o.code, o.status, o.patient, o.ref, o.service, o.received_at, o.updated_at, o.delivered_at,
+        (SELECT COUNT(*) FROM order_files f WHERE f.order_id = o.id AND f.final = 1) AS files,
+        (SELECT COALESCE(MAX(f.final_at), 0) FROM order_files f WHERE f.order_id = o.id AND f.final = 1) AS files_at
+      FROM orders o WHERE o.customer_id IN (SELECT customer_id FROM customer_logins WHERE email = ?) AND (o.job_id = '' OR o.login != ?) AND o.status != 'cancelled'
+      ORDER BY o.received_at DESC, o.id DESC LIMIT 300`).bind(email, email));
+    return json({ items: list.map(myOrderRow) });
+  }
+  const m = path.match(/^\/api\/my\/orders\/(\d+)(?:\/files\/([A-Za-z0-9]{10})(\/thumb)?)?$/);
+  if (!m) return json({ error: "Not found." }, 404);
+  const nf = () => json({ error: "Order not found." }, 404);
+  if (!email || !env.DB) return nf();
+  const DB = await bookDb(env), id = +m[1];
+  // the order is theirs: their customer record (any linked account), or the account that sent it as a portal case
+  const o = await DB.prepare(`SELECT o.*, c.pay_first AS pay_first FROM orders o JOIN customers c ON c.id = o.customer_id
+    WHERE o.id = ? AND (o.customer_id IN (SELECT customer_id FROM customer_logins WHERE email = ?) OR (o.login != '' AND o.login = ?))`).bind(id, email, email).first();
+  if (!o) return nf();
+  if (!m[2]) {
+    if (o.status === "cancelled" && !o.job_id) return nf();
+    const files = await rows(DB.prepare(MY_ORDER_FILES).bind(id));
+    const locked = await filesLocked(env, o, !!o.pay_first);
+    const row = myOrderRow({ ...o, files: files.length, files_at: files.reduce((t, f) => Math.max(t, f.final_at), 0) });
+    // case: the portal case this order came from, when this account sent it (its page has the files, chat and approval)
+    return json({ order: { ...row, doctor: o.doctor, clinic: o.clinic, teeth: o.teeth, material: o.material, shade: o.shade, case: o.job_id && o.login === email ? o.job_id : "",
+      files: files.map((f) => ({ fid: f.fid, name: f.name, size: f.size, at: f.final_at, ...(f.th ? { th: 1 } : {}) })), locked,
+      ...(locked && !o.job_id ? { due: rnd(o.total - o.paid, o.currency), currency: o.currency } : {}) } });
+  }
+  const f = await DB.prepare("SELECT fid, name, parts, gz, st, thumb FROM order_files WHERE order_id = ? AND fid = ? AND final = 1").bind(id, m[2]).first();
+  if (!f) return json({ error: "File not found." }, 404);
+  if (m[3]) { // the picture of a 3D file: shown even while the files are locked
+    if (!f.thumb) return json({ error: "No preview picture." }, 404);
+    return new Response(b64urlDecode(f.thumb), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=604800", ...PRIVATE_HEADERS } });
+  }
+  if (await filesLocked(env, o, !!o.pay_first)) return json({ error: "Please settle this order before downloading its files.", locked: true }, 402);
+  return partsResponse(env, f, (n) => orderPartKey(id, f.fid, n));
+}
+
 function orderOut(o, who) {
   const out = {
     id: o.id, code: o.code, base: o.base, kind: o.kind, parent_id: o.parent_id || null, customer_id: o.customer_id, stage: (parseCode(o.code) || {}).stage || 1,
@@ -2624,6 +2737,14 @@ async function handleBook(request, env, url, who) {
       FROM json_each(?) j WHERE customers.id = json_extract(j.value, '$.id')`).bind(now, JSON.stringify(changed.slice(i, i + 300))).run();
     return json({ ok: true, changed: changed.map(({ id, from, code }) => ({ id, from, code })) });
   }
+  // "pay first": the customer downloads an order's files only once it is paid (owner's choice per customer, 2026-11-25)
+  if ((m = path.match(/^\/api\/customers\/(\d+)\/payfirst$/)) && method === "POST") {
+    if (!(who.can("customers.edit") || who.can("billing.edit"))) return deny();
+    const on = (await body()).on === true;
+    const r = await DB.prepare("UPDATE customers SET pay_first = ?, updated_at = ? WHERE id = ?").bind(on ? 1 : 0, now, +m[1]).run();
+    if (!r.meta || !r.meta.changes) return json({ error: "Không tìm thấy khách hàng." }, 404);
+    return json({ ok: true, pay_first: on });
+  }
   if ((m = path.match(/^\/api\/customers\/(\d+)\/tier$/)) && method === "POST") {
     if (!who.can("pricing.manage")) return deny();
     const b = await body();
@@ -2695,7 +2816,7 @@ async function handleBook(request, env, url, who) {
         return { currency: s.currency, orders: s.n, units: s.units, ...(canMoney(who) ? { billed: s.billed, paid: s.paid_in, due: rnd(s.billed - s.paid_in, s.currency), credit: rnd(Math.max(0, inn - s.paid_in), s.currency) } : {}) };
       });
       for (const p of pays.results || []) if (canMoney(who) && !stats.some((s) => s.currency === p.currency)) stats.push({ currency: p.currency, orders: 0, units: 0, billed: 0, paid: 0, due: 0, credit: rnd(p.a, p.currency) });
-      return json({ customer: custOut(c, who, []), logins: lg.results || [], stats });
+      return json({ customer: { ...custOut(c, who, []), pay_first: !!c.pay_first }, logins: lg.results || [], stats });
     }
     if (method === "DELETE") {
       if (!who.can("customers.edit")) return deny();
@@ -2821,10 +2942,26 @@ async function handleBook(request, env, url, who) {
     }
     return json({ error: "Method not allowed." }, 405);
   }
-  // files in the team chat: PUT parts /files/<fid>/<n>, then POST /files {files, text}; GET /files/<fid> downloads
+  // send a team-chat file to the customer, or take it back: POST /files/<fid>/send {on}. The customer portal shows it at once.
+  if ((m = path.match(/^\/api\/orders\/(\d+)\/files\/([A-Za-z0-9]{10})\/send$/)) && method === "POST") {
+    const id = +m[1];
+    const o = await DB.prepare("SELECT id, designer, qc, status, job_id FROM orders WHERE id = ?").bind(id).first();
+    if (!o || !seesOrder(who, o)) return json({ error: "Không tìm thấy đơn hàng." }, 404);
+    if (!who.can("cases.notes") || !canSendFiles(who, o)) return json({ error: "Chỉ KTV của đơn hoặc người có quyền giao file mới gửi file cho khách." }, 403);
+    const f = await DB.prepare("SELECT fid, name, final FROM order_files WHERE order_id = ? AND fid = ?").bind(id, m[2]).first();
+    if (!f) return json({ error: "Không tìm thấy file." }, 404);
+    const on = (await body()).on !== false;
+    if (!!f.final === on) return json({ ok: true, final: on, changed: false });
+    await DB.batch([DB.prepare("UPDATE order_files SET final = ?, final_at = ?, final_by = ? WHERE order_id = ? AND fid = ?").bind(on ? 1 : 0, on ? now : 0, on ? actor : "", id, f.fid),
+      ...chatSys(DB, id, actor, actorName, (on ? "Đã gửi khách: " : "Đã thu hồi khỏi cổng khách: ") + f.name, now)]);
+    await touchJobForFiles(env, o.job_id, now);
+    return json({ ok: true, final: on, changed: true });
+  }
+  // files in the team chat: PUT parts /files/<fid>/<n>, then POST /files {files, text, final}; GET /files/<fid> downloads.
+  // final: true = sent to the customer as well (the KTV of the order, or whoever may deliver)
   if ((m = path.match(/^\/api\/orders\/(\d+)\/files(?:\/([A-Za-z0-9]{10})(?:\/(\d{1,2}))?)?$/))) {
     const id = +m[1];
-    const o = await DB.prepare("SELECT id, designer, qc, status FROM orders WHERE id = ?").bind(id).first();
+    const o = await DB.prepare("SELECT id, designer, qc, status, job_id FROM orders WHERE id = ?").bind(id).first();
     if (!o || !seesOrder(who, o)) return json({ error: "Không tìm thấy đơn hàng." }, 404);
     if (!who.can("cases.notes")) return deny();
     const pkey = (fid, n) => orderPartKey(id, fid, n);
@@ -2840,6 +2977,8 @@ async function handleBook(request, env, url, who) {
     }
     if (!m[2] && method === "POST") {
       const b = await body();
+      const final = b.final === true;
+      if (final && !canSendFiles(who, o)) return json({ error: "Chỉ KTV của đơn hoặc người có quyền giao file mới gửi file cho khách." }, 403);
       const st = activeStore(env), store = partStore(env, st);
       const files = [];
       for (const x of (Array.isArray(b.files) ? b.files : []).slice(0, 10)) {
@@ -2852,29 +2991,18 @@ async function handleBook(request, env, url, who) {
       if (!files.length) return json({ error: "Không nhận được file. Thử gửi lại." }, 400);
       const text = clip(b.text, 4000);
       const msg = await DB.prepare("INSERT INTO order_msgs (order_id, at, by, name, kind, text) VALUES (?, ?, ?, ?, 'msg', ?) RETURNING id").bind(id, now, actor, actorName, text).first();
-      await DB.batch([jsonInsert(DB, "order_files", ["order_id", "msg_id", "fid", "name", "size", "stored", "parts", "gz", "st", "by", "at"], files.map((f) => ({ ...f, msg_id: msg.id }))),
+      await DB.batch([jsonInsert(DB, "order_files", ["order_id", "msg_id", "fid", "name", "size", "stored", "parts", "gz", "st", "by", "at", "final", "final_at", "final_by"],
+          files.map((f) => ({ ...f, msg_id: msg.id, final: final ? 1 : 0, final_at: final ? now : 0, final_by: final ? actor : "" }))),
         DB.prepare("UPDATE orders SET last_msg_at = ?, last_msg_by = ? WHERE id = ?").bind(now, actor, id),
-        DB.prepare("INSERT OR REPLACE INTO order_reads (email, order_id, at) VALUES (?, ?, ?)").bind(actor, id, now)]);
-      return json({ ok: true, files: files.length });
+        DB.prepare("INSERT OR REPLACE INTO order_reads (email, order_id, at) VALUES (?, ?, ?)").bind(actor, id, now),
+        ...(final ? chatSys(DB, id, actor, actorName, "Đã gửi khách: " + files.map((f) => f.name).join(", "), now + 1) : [])]);
+      if (final) await touchJobForFiles(env, o.job_id, now);
+      return json({ ok: true, files: files.length, fids: files.map((f) => f.fid) });
     }
     if (m[2] && !m[3] && method === "GET") {
       const f = await DB.prepare("SELECT fid, name, parts, gz, st FROM order_files WHERE order_id = ? AND fid = ?").bind(id, m[2]).first();
       if (!f) return json({ error: "Không tìm thấy file." }, 404);
-      const store = partStore(env, f.st || "kv");
-      const first = await store.stream(pkey(f.fid, 0));
-      if (!first) return json({ error: "File đã hết hạn lưu." }, 410);
-      const { readable, writable } = new TransformStream();
-      (async () => {
-        try {
-          await first.pipeTo(writable, { preventClose: true });
-          for (let i = 1; i < f.parts; i++) { const s2 = await store.stream(pkey(f.fid, i)); if (!s2) throw new Error("missing part " + i); await s2.pipeTo(writable, { preventClose: true }); }
-          await writable.close();
-        } catch (e) { try { await writable.abort(e); } catch {} }
-      })();
-      const headers = new Headers({ "Content-Type": "application/octet-stream", "Content-Disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(f.name),
-        "Cache-Control": "private, no-store", ...PRIVATE_HEADERS });
-      if (f.gz) headers.set("Content-Encoding", "gzip");
-      return new Response(readable, { headers, encodeBody: f.gz ? "manual" : "automatic" });
+      return partsResponse(env, f, (n) => pkey(f.fid, n));
     }
     return json({ error: "Method not allowed." }, 405);
   }
@@ -2885,13 +3013,21 @@ async function handleBook(request, env, url, who) {
 
     if (sub === "" && method === "GET") {
       const root = o.code.replace(/[RC].*$/, "");
-      const [it, rel, rd] = await DB.batch([
+      const [it, rel, rd, sf, pc] = await DB.batch([
         DB.prepare("SELECT * FROM order_items WHERE order_id = ? ORDER BY sort, id").bind(id),
         DB.prepare("SELECT id, code, kind, status, day, parent_id FROM orders WHERE code = ? OR code LIKE ? ORDER BY cday, seq, code").bind(root, root + "%"),
         DB.prepare("SELECT at FROM order_reads WHERE email = ? AND order_id = ?").bind(who.email, id),
+        DB.prepare("SELECT fid, name, size, final_at, final_by, thumb != '' AS th FROM order_files WHERE order_id = ? AND final = 1 ORDER BY final_at, id").bind(id),
+        DB.prepare("SELECT (SELECT COUNT(*) FROM customer_logins WHERE customer_id = ?1) AS accounts, (SELECT pay_first FROM customers WHERE id = ?1) AS pay_first").bind(o.customer_id),
       ]);
       const related = (rel.results || []).filter((x) => x.code === root || /^[RC]/.test(x.code.slice(root.length)));
       const out = { order: orderOut(o, who), items: (it.results || []).map((x) => itemOut(x, canMoney(who))), related, readAt: (rd.results[0] || {}).at || 0 };
+      // what the customer gets: the files sent to them, whether they have a portal account to see them, and the "pay first" lock
+      const p = (pc.results || [])[0] || {};
+      out.sent = (sf.results || []).map((f) => ({ fid: f.fid, name: f.name, size: f.size, at: f.final_at, by: f.final_by, ...(f.th ? { th: 1 } : {}) }));
+      // (whether it is paid is money: only for those who see money, never for a KTV)
+      out.portal = { accounts: p.accounts || 0, canSend: !!(who.can("cases.notes") && canSendFiles(who, o)),
+        ...(canMoney(who) ? { payFirst: !!p.pay_first, locked: await filesLocked(env, o, !!p.pay_first) } : {}) };
       if (who.can("customers.view")) out.customer = await DB.prepare("SELECT id, code, name, kind, country, currency, contact, email, phone FROM customers WHERE id = ?").bind(o.customer_id).first();
       if (canMoney(who)) out.payments = await rows(DB.prepare("SELECT id, day, amount, currency, method, ref, note FROM payments WHERE order_id = ? ORDER BY day").bind(id));
       return json(out);
@@ -2946,13 +3082,15 @@ async function handleBook(request, env, url, who) {
       }
       if (method === "GET") {
         const after = parseInt(P.get("after") || "0", 10) || 0;
-        const [ml, fl] = await DB.batch([DB.prepare(`SELECT id, at, by, name, kind, text, img != '' AS img FROM order_msgs WHERE order_id = ? AND id > ? ORDER BY id DESC LIMIT 300`).bind(id, after),
-          DB.prepare("SELECT msg_id, fid, name, size, thumb != '' AS th FROM order_files WHERE order_id = ? AND msg_id > ? ORDER BY id").bind(id, after)]);
+        const [ml, fl, sent] = await DB.batch([DB.prepare(`SELECT id, at, by, name, kind, text, img != '' AS img FROM order_msgs WHERE order_id = ? AND id > ? ORDER BY id DESC LIMIT 300`).bind(id, after),
+          DB.prepare("SELECT msg_id, fid, name, size, thumb != '' AS th, final FROM order_files WHERE order_id = ? AND msg_id > ? ORDER BY id").bind(id, after),
+          DB.prepare("SELECT fid FROM order_files WHERE order_id = ? AND final = 1").bind(id)]);
         const list = ml.results || [], byMsg = new Map();
-        for (const f of fl.results || []) { if (!byMsg.has(f.msg_id)) byMsg.set(f.msg_id, []); byMsg.get(f.msg_id).push({ fid: f.fid, name: f.name, size: f.size, ...(f.th ? { th: 1 } : {}) }); }
+        for (const f of fl.results || []) { if (!byMsg.has(f.msg_id)) byMsg.set(f.msg_id, []); byMsg.get(f.msg_id).push({ fid: f.fid, name: f.name, size: f.size, ...(f.th ? { th: 1 } : {}), ...(f.final ? { final: 1 } : {}) }); }
         for (const x of list) if (byMsg.has(x.id)) x.files = byMsg.get(x.id);
         if (P.get("read") !== "0" && who.email) await DB.prepare("INSERT OR REPLACE INTO order_reads (email, order_id, at) VALUES (?, ?, ?)").bind(who.email, id, now).run();
-        return json({ msgs: list.reverse() });
+        // finals: every file of the order sent to the customer, so a file sent from another screen shows as sent here too
+        return json({ msgs: list.reverse(), finals: (sent.results || []).map((x) => x.fid) });
       }
       if (method === "POST") {
         const b = await body();

@@ -49,6 +49,9 @@
     chat: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 5h14v9H8l-4 3v-3H3z"/></svg>',
     clip: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M15.5 9.5 10 15a3.5 3.5 0 0 1-5-5l6-6a2.3 2.3 0 0 1 3.3 3.3l-6 6a1.2 1.2 0 0 1-1.7-1.7L12 6.2"/></svg>',
     warn: '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 18 17H2z"/><path d="M10 8.5v4M10 14.6v.1"/></svg>',
+    send: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 2.5 9 11M17.5 2.5 12 17.5l-3-6.5-6.5-3z"/></svg>',
+    sent: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg>',
+    up: '<svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 15V5M6 9l4-4 4 4M4 16.5h12"/></svg>',
   };
   D8.ORDER_ICON = ICON;
   const parseHash = () => {
@@ -570,6 +573,8 @@
       ${portal ? `<p class="hint"><a href="#jobs/${esc(o.job_id)}">Mở trang ca ›</a></p>` : `<div id="oLinkNew"></div>`}</section>` : "";
     const chatCard = can("cases.notes") ? `<section class="card o-chat-card"><div class="card-head-row"><h2 class="h-caps">Chat nội bộ · ${esc(o.code)}</h2></div>
       <div id="oChat"></div></section>` : "";
+    // files the customer downloads from the portal (owner's rule 2026-11-25)
+    const sentCard = d.portal && (can("cases.notes") || d.portal.canSend) ? `<section class="card o-sent" id="oSent"></section>` : "";
     W.show("p-order");
     $("p-order").innerHTML = `
       ${fam}
@@ -591,6 +596,7 @@
             ${acts.length ? `<div class="o-acts">${needNote ? '<label class="field-label" for="oNote">Ghi chú (bắt buộc khi QC không đạt hoặc hủy)</label><textarea class="input" id="oNote" rows="2" maxlength="2000"></textarea>' : '<label class="field-label" for="oNote">Ghi chú kèm theo (không bắt buộc)</label><textarea class="input" id="oNote" rows="2" maxlength="2000"></textarea>'}
               <div class="wf-actions">${acts.map(([a, l, c]) => `<button class="btn small ${c}" type="button" data-act="${a}">${esc(l)}</button>`).join("")}</div></div>` : ""}
           </section>
+          ${sentCard}
           <section class="card o3d" id="o3d" hidden></section>
           <section class="card"><div class="card-head-row"><h2 class="h-caps">Hạng mục</h2><span class="chip">${esc(o.units)} đơn vị</span></div>${itemsHtml}${moneyHtml}</section>
           <section class="card"><h2 class="h-caps" style="margin-bottom:14px">Thông tin</h2><dl class="dl">${det}</dl>
@@ -633,10 +639,62 @@
       row.innerHTML = `<span class="ic">${ICON.next}</span><div class="tx"><b>${esc(link.url)}</b></div><a class="btn small" href="${esc(link.url)}" target="_blank" rel="noopener">Mở</a>`;
       $("oLinks").appendChild(row);
     } });
+    if ($("oSent")) drawSent(o, d);
     if ($("oChat")) {
       $("oChat").addEventListener("d8:models", (e) => { if ($("o3d") && D8.view3d) D8.view3d.gallery($("o3d"), e.detail); });
-      D8.orderChat($("oChat"), o.id);
+      $("oChat").addEventListener("d8:sent", () => refreshSent(o.id));
+      D8.orderChat($("oChat"), o.id, { canSend: !!(d.portal && d.portal.canSend) });
     }
+  }
+
+  /* ------------------------------------------------------------ files sent to the customer */
+  // The customer sees and downloads them in the portal at once; the KTV of the order (or whoever may deliver) sends them,
+  // here or from a file in the team chat, and can take one back.
+  async function refreshSent(id) {
+    if (!$("oSent")) return;
+    try { const d = await api("/api/orders/" + id); if (cur && cur.order && cur.order.id === id) cur = { ...cur, sent: d.sent, portal: d.portal }; drawSent(d.order, d); } catch {}
+  }
+  function drawSent(o, d) {
+    const host = $("oSent"); if (!host) return;
+    const sent = d.sent || [], p = d.portal || {}, send = !!p.canSend, base = `/api/orders/${o.id}/files`;
+    const where = o.job_id ? "Khách thấy các file này trong trang ca trên cổng khách ngay khi gửi."
+      : p.accounts ? `Khách thấy và tải các file này trên cổng khách ngay khi gửi (${p.accounts} tài khoản).` : "";
+    const noAcc = !o.job_id && !p.accounts ? `<div class="pt-alert info o-sent-alert">${ICON.warn}<div>Khách này chưa có tài khoản cổng khách nên chưa tải được file. ${can("customers.view") ? `<a href="#cust/${o.customer_id}">Gắn tài khoản trong hồ sơ khách ›</a>` : "Báo quản lý gắn tài khoản cho khách."}</div></div>` : "";
+    const lock = "payFirst" in p && p.payFirst ? (p.locked ? `<div class="pt-alert info o-sent-alert">${ICON.warn}<div>Khách này phải thanh toán trước khi tải. Đơn còn nợ nên khách chỉ thấy tên file, chưa tải được.</div></div>`
+      : `<p class="hint o-sent-pay">Khách phải thanh toán trước khi tải: đơn đã trả đủ, khách tải được.</p>`) : "";
+    host.innerHTML = `<div class="card-head-row"><h2 class="h-caps">File gửi khách</h2><span class="chip">${sent.length} file</span></div>
+      ${where ? `<p class="hint o-sent-where">${esc(where)}</p>` : ""}${noAcc}${lock}
+      ${sent.length ? `<ul class="o-sent-list">${sent.map((f) => `<li><span class="ic">${ICON.sent}</span><span class="tx"><a class="fn" href="${base}/${esc(f.fid)}" download="${esc(f.name)}" title="Tải ${esc(f.name)}">${esc(f.name)}</a><small>${esc(D8.size(f.size))} · ${esc(D8.fmtDate(f.at, true))}${f.by ? " · " + esc(name(f.by)) : ""}</small></span>${send ? `<button class="btn small" type="button" data-recall="${esc(f.fid)}" data-name="${esc(f.name)}">Thu hồi</button>` : ""}</li>`).join("")}</ul>`
+        : `<p class="muted o-sent-none">Chưa gửi file nào cho khách.${send ? " Tải file thiết kế xong lên đây, hoặc bấm nút gửi trên một file trong chat nội bộ." : ""}</p>`}
+      ${send ? `<div class="o-sent-up"><label class="btn small btn-primary">${ICON.up}<span>Tải lên và gửi khách</span><input type="file" multiple hidden id="osFile"></label><p class="hint o-sent-prog" hidden></p></div>` : ""}`;
+    host.querySelectorAll("[data-recall]").forEach((b) => ws().armed(b, async () => {
+      await api(`${base}/${b.dataset.recall}/send`, { method: "POST", body: { on: false } });
+      D8.toast("Đã thu hồi " + b.dataset.name + " khỏi cổng khách.");
+      await refreshSent(o.id);
+      const ch = $("oChat"); if (ch) ch.dispatchEvent(new CustomEvent("d8:reload"));
+    }));
+    const inp = $("osFile");
+    if (inp) inp.addEventListener("change", async () => {
+      const files = [...inp.files].filter((f) => { if (f.size > 300 * 1024 * 1024) { D8.toast("File " + f.name + " quá lớn (tối đa 300 MB)."); return false; } return true; }).slice(0, 10);
+      inp.value = "";
+      if (!files.length) return;
+      const lab = inp.closest("label"), prog = host.querySelector(".o-sent-prog");
+      lab.classList.add("is-busy"); inp.disabled = true; prog.hidden = false;
+      try {
+        const metas = await D8.uploadParts(base, files, { onProgress: (x) => { prog.textContent = x.text; } });
+        await api(base, { method: "POST", body: { files: metas, text: "", final: true } });
+        // the picture of a 3D file, drawn here from the file we have (as the chat does)
+        files.forEach((f, i) => {
+          const mt = metas[i];
+          if (!mt || !D8.view3d || !D8.view3d.is(f.name) || f.size > 120 * 1048576) return;
+          const u = `${base}/${mt.fid}`;
+          D8.view3d.thumb(u, { file: f, name: f.name, save: (blob) => api(u + "/thumb", { method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" } }) }).catch(() => {});
+        });
+        D8.toast(files.length > 1 ? `Đã gửi ${files.length} file cho khách.` : "Đã gửi " + files[0].name + " cho khách.");
+        await refreshSent(o.id);
+        const ch = $("oChat"); if (ch) ch.dispatchEvent(new CustomEvent("d8:reload"));
+      } catch (err) { lab.classList.remove("is-busy"); inp.disabled = false; prog.textContent = err.message; }
+    });
   }
 
   /* ------------------------------------------------------------ team chat by order code */
@@ -656,7 +714,7 @@
       return c.toDataURL("image/jpeg", 0.82);
     } finally { URL.revokeObjectURL(url); }
   }
-  D8.orderChat = function (host, orderId) {
+  D8.orderChat = function (host, orderId, opts = {}) {
     host.innerHTML = `<div class="ochat"><div class="ochat-list" id="ocList-${orderId}" role="log" aria-live="polite">${D8.skel.rows(2)}</div>
       <form class="ochat-form"><label class="sr-only" for="ocText-${orderId}">Tin nhắn nội bộ</label>
         <textarea class="input" id="ocText-${orderId}" rows="2" maxlength="4000" placeholder="Nhắn gì cho KTV / QC?"></textarea>
@@ -669,8 +727,16 @@
         <p class="error" hidden></p></form></div>`;
     const list = host.querySelector(".ochat-list"), form = host.querySelector("form"), box = form.querySelector("textarea"), err = form.querySelector(".error");
     const prevBox = form.querySelector(".ochat-img"), prevImg = prevBox.querySelector("img"), fileBox = form.querySelector(".ochat-files"), prog = form.querySelector(".ochat-prog");
-    let msgs = [], last = 0, img = "", files = [], timer = null, loading = false;
+    let msgs = [], last = 0, img = "", files = [], timer = null, loading = false, finals = new Set();
     const FILE_MAX = 300 * 1024 * 1024;
+    // a file sent to the customer is marked for everyone; the KTV of the order (or whoever may deliver) sends or takes it back
+    const canSend = !!opts.canSend;
+    const sendCtl = (f, cls) => {
+      const on = finals.has(f.fid);
+      if (!canSend) return on ? `<span class="${cls} is-sent" title="Đã gửi khách">${ICON.sent}${cls === "of-send" ? "<span>Đã gửi khách</span>" : ""}</span>` : "";
+      const t = on ? `Đã gửi khách. Bấm 2 lần để thu hồi ${f.name}` : `Gửi ${f.name} cho khách (bấm 2 lần)`;
+      return `<button type="button" class="${cls}${on ? " is-sent" : ""}" data-send="${esc(f.fid)}" data-name="${esc(f.name)}" aria-pressed="${on}" title="${esc(t)}" aria-label="${esc(t)}">${on ? ICON.sent : ICON.send}${cls === "of-send" ? `<span>${on ? "Đã gửi khách" : "Gửi khách"}</span>` : ""}</button>`;
+    };
     const drawFiles = () => {
       fileBox.hidden = !files.length;
       fileBox.innerHTML = files.map((f, i) => `<li>${ICON.clip}<span>${esc(f.name)}</span><small>${esc(D8.size(f.size))}</small><button class="iconbtn" type="button" data-rmf="${i}" aria-label="Bỏ ${esc(f.name)}">${ICON.x}</button></li>`).join("");
@@ -736,7 +802,7 @@
         b.classList.add("has");
       });
     };
-    const tile = (x, f) => `<figure class="ochat-thumb" data-url="${esc(fileUrl(f))}"><button type="button" class="ot-pic" data-mid="${esc(String(x.id))}" data-url="${esc(fileUrl(f))}" aria-pressed="false" title="Xem 3D ${esc(f.name)}" aria-label="Xem 3D ${esc(f.name)}"><span class="ot-ph">${CUBE}</span></button><figcaption><span class="fn" title="${esc(f.name)}">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span><a class="ot-dl" href="${esc(fileUrl(f))}" download="${esc(f.name)}" title="Tải ${esc(f.name)}" aria-label="Tải ${esc(f.name)}">${DL}</a></figcaption></figure>`;
+    const tile = (x, f) => `<figure class="ochat-thumb${finals.has(f.fid) ? " sent" : ""}" data-url="${esc(fileUrl(f))}"><button type="button" class="ot-pic" data-mid="${esc(String(x.id))}" data-url="${esc(fileUrl(f))}" aria-pressed="false" title="Xem 3D ${esc(f.name)}" aria-label="Xem 3D ${esc(f.name)}"><span class="ot-ph">${CUBE}</span></button>${finals.has(f.fid) ? '<span class="ot-badge">Đã gửi khách</span>' : ""}<figcaption><span class="fn" title="${esc(f.name)}">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span>${sendCtl(f, "ot-send")}<a class="ot-dl" href="${esc(fileUrl(f))}" download="${esc(f.name)}" title="Tải ${esc(f.name)}" aria-label="Tải ${esc(f.name)}">${DL}</a></figcaption></figure>`;
     const viewText = (x) => (opened.has(x.id) ? "Đóng khung 3D" : `Xem ${Math.min(models3d(x).length, D8.view3d.MAX_SHOWN)} file cùng lúc`);
     const block3d = (x) => {
       const m3 = models3d(x);
@@ -768,6 +834,29 @@
       if (v) markOn(x, v.sel());
       return v;
     };
+    // send a file to the customer, or take it back: two clicks (the first only arms the button for 4 s)
+    list.addEventListener("click", async (e) => {
+      const s = e.target.closest("button[data-send]");
+      if (!s || s.disabled) return;
+      e.preventDefault();
+      const fid = s.dataset.send, on = !finals.has(fid);
+      if (!s.classList.contains("armed")) {
+        list.querySelectorAll("button[data-send].armed").forEach((b) => b.classList.remove("armed"));
+        s.classList.add("armed");
+        setTimeout(() => s.classList.remove("armed"), 4000);
+        D8.toast(on ? `Bấm lần nữa để gửi ${s.dataset.name} cho khách.` : `Bấm lần nữa để thu hồi ${s.dataset.name} khỏi cổng khách.`);
+        return;
+      }
+      s.disabled = true;
+      try {
+        await api(`/api/orders/${orderId}/files/${fid}/send`, { method: "POST", body: { on } });
+        if (on) finals.add(fid); else finals.delete(fid);
+        D8.toast(on ? `Đã gửi ${s.dataset.name} cho khách.` : `Đã thu hồi ${s.dataset.name}.`);
+        draw();
+        host.dispatchEvent(new CustomEvent("d8:sent"));
+        load();
+      } catch (err) { s.disabled = false; s.classList.remove("armed"); D8.toast(err.message); }
+    });
     list.addEventListener("click", (e) => {
       const pic = e.target.closest(".ot-pic"), all = e.target.closest(".ochat-3dall");
       if (!pic && !all) return;
@@ -783,7 +872,7 @@
       if (!draw.done) msgs.forEach((x) => firstIds.add(x.id));
       const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
       list.innerHTML = msgs.map((x) => x.kind === "sys" ? `<div class="sys">${esc(D8.fmtDate(x.at, true))} · ${esc(x.name || name(x.by) || "")}: ${esc(x.text)}</div>`
-        : `<div class="bub ${x.by === me ? "me" : "them"}">${x.by === me ? "" : `<b>${esc(x.name || name(x.by))}</b>`}${x.text ? `<div class="bub-text">${esc(x.text)}</div>` : ""}${x.img ? `<a class="ochat-photo" data-mid="${x.id}" href="#" aria-label="Mở ảnh"><img alt="Ảnh" data-mid="${x.id}"></a>` : ""}${(x.files || []).filter((f) => !is3d(f)).map((f) => `<a class="ochat-file" href="/api/orders/${orderId}/files/${esc(f.fid)}" download="${esc(f.name)}">${ICON.clip}<span class="fn">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span></a>`).join("")}${block3d(x)}<small>${esc(D8.fmtDate(x.at, true))}</small></div>`).join("");
+        : `<div class="bub ${x.by === me ? "me" : "them"}">${x.by === me ? "" : `<b>${esc(x.name || name(x.by))}</b>`}${x.text ? `<div class="bub-text">${esc(x.text)}</div>` : ""}${x.img ? `<a class="ochat-photo" data-mid="${x.id}" href="#" aria-label="Mở ảnh"><img alt="Ảnh" data-mid="${x.id}"></a>` : ""}${(x.files || []).filter((f) => !is3d(f)).map((f) => { const a = `<a class="ochat-file" href="/api/orders/${orderId}/files/${esc(f.fid)}" download="${esc(f.name)}">${ICON.clip}<span class="fn">${esc(f.name)}</span><span class="fs">${esc(D8.size(f.size))}</span></a>`, c = sendCtl(f, "of-send"); return c ? `<div class="ochat-frow">${a}${c}</div>` : a; }).join("")}${block3d(x)}<small>${esc(D8.fmtDate(x.at, true))}</small></div>`).join("");
       if (D8.view3d) {
         msgs.forEach((x) => { if (opened.has(x.id)) openView(x); });   // a view that was open is taken over, as it was
         msgs.forEach((x) => models3d(x).forEach((f) => srcFor(f, x).then((src) => applyPic(fileUrl(f), src))));
@@ -803,13 +892,18 @@
       try {
         const r = await api(`/api/orders/${orderId}/chat?after=${last}`);
         if (r.msgs.length) { msgs = [...msgs, ...r.msgs].slice(-400); last = msgs[msgs.length - 1].id; }
-        if (r.msgs.length || !draw.done) draw();
+        // files sent to the customer, also from another screen or by someone else
+        const fin = r.finals || [], changed = fin.length !== finals.size || fin.some((f) => !finals.has(f)), first = !draw.done;
+        if (changed) finals = new Set(fin);
+        if (r.msgs.length || first || changed) draw();
+        if (changed && !first) host.dispatchEvent(new CustomEvent("d8:sent"));
         document.dispatchEvent(new CustomEvent("d8:chat-read", { detail: orderId }));
       } catch (e) { if (!msgs.length) list.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
       loading = false;
     };
     const tick = () => { if (!host.isConnected) { clearInterval(timer); return; } if (!document.hidden) load(); };
     timer = setInterval(tick, 15000);
+    host.addEventListener("d8:reload", () => load());
     load();
     const setImg = async (file) => {
       if (!file || !/^image\//.test(file.type)) return;

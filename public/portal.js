@@ -83,6 +83,7 @@
     const fm = h.match(/^#\/\?f=(all|active|review|done)$/);
     if (fm) filter = fm[1];
     if ((m = h.match(/^#\/case\/([^/]+)$/)) && ID_RE.test(m[1])) return renderCase(m[1]);
+    if ((m = h.match(/^#\/order\/(\d{1,9})$/))) return renderOrder(+m[1]);
     return renderList();
   }
   window.addEventListener("hashchange", () => { stopPoll(); route(); });
@@ -94,6 +95,7 @@
   function rerender() {
     const h = location.hash || "#/";
     if (current && h === "#/case/" + current.id) return drawCase(current);
+    if (curOrder && h === "#/order/" + curOrder.id) return drawOrder(curOrder);
     route();
   }
 
@@ -125,11 +127,22 @@
   }
 
   /* ------------------------------------------------------------ list */
+  // orders the team entered for this customer (WhatsApp, email…): every account linked to the lab or clinic sees them
+  // and downloads the files the designer sent (owner's rule 2026-11-25). Orders from a portal case show as that case.
+  let orders = [];
+  const oSeen = () => store.get("d8-oseen", {});
+  const orderFresh = (o, seen) => o.files > 0 && (seen[o.id] || 0) < o.filesAt;
+  const orderTitle = (o) => o.title || svcLabel(o.service) || T("p.o.untitled");
+  // the bell: orders with files the customer has not opened yet (its own source, so the order page can clear it)
+  const bellOrders = (os) => D8.notify.set("orders", [{ key: "files", n: orders.filter((o) => orderFresh(o, os)).length, text: T("nt.files"), href: "#/?f=all" }]);
   async function renderList() {
-    current = null;
+    current = null; curOrder = null;
     loading();
     let items;
-    try { items = (await D8.api("/api/my/jobs")).items || []; }
+    try {
+      const [a, b] = await Promise.all([D8.api("/api/my/jobs"), D8.api("/api/my/orders").catch(() => ({ items: [] }))]);
+      items = a.items || []; orders = b.items || [];
+    }
     catch (err) { if (err.status === 401) { user = null; return renderSignIn(); } return failed(err.message); }
     caseCount = items.length;
     const known = new Set(items.map((x) => x.id));
@@ -138,18 +151,20 @@
   }
 
   function drawList(items) {
-    const seen = store.get("d8-seen", {});
+    const seen = store.get("d8-seen", {}), os = oSeen();
     const first = String(user.greet || user.name || user.email).slice(0, 48);
+    const ACTIVE = ["received", "needs_info", "in_design", "approved"];
+    const both = [...items, ...orders];
     const counts = {
-      all: items.length,
-      active: items.filter((x) => ["received", "needs_info", "in_design", "approved"].includes(x.status)).length,
-      review: items.filter((x) => x.status === "review").length,
-      done: items.filter((x) => x.status === "delivered").length,
+      all: both.length,
+      active: both.filter((x) => ACTIVE.includes(x.status)).length,
+      review: both.filter((x) => x.status === "review").length,
+      done: both.filter((x) => x.status === "delivered").length,
     };
-    const match = (x) => (filter === "all" || (filter === "active" && ["received", "needs_info", "in_design", "approved"].includes(x.status)) ||
-      (filter === "review" && x.status === "review") || (filter === "done" && x.status === "delivered")) &&
-      (!query || (x.id + " " + x.title).toLowerCase().includes(query.toLowerCase()));
-    const shown = items.filter(match);
+    const inFilter = (x) => filter === "all" || (filter === "active" && ACTIVE.includes(x.status)) || (filter === "review" && x.status === "review") || (filter === "done" && x.status === "delivered");
+    const match = (x) => inFilter(x) && (!query || (x.id + " " + x.title).toLowerCase().includes(query.toLowerCase()));
+    const matchOrder = (o) => inFilter(o) && (!query || [o.code, o.title, o.ref, o.patient].join(" ").toLowerCase().includes(query.toLowerCase()));
+    const shown = items.filter(match), shownOrders = orders.filter(matchOrder);
     // what needs the customer (the bell, and a red dot on the case)
     const needs = (x) => x.status === "review" || x.status === "needs_info" || x.pay === "due" || (x.lastBy === "admin" && (seen[x.id] || 0) < x.updated);
     const nCount = (f) => items.filter(f).length;
@@ -159,24 +174,36 @@
       { key: "due", n: nCount((x) => x.pay === "due"), text: T("nt.due"), href: "#/?f=all" },
       { key: "reply", n: nCount((x) => x.lastBy === "admin" && (seen[x.id] || 0) < x.updated), text: T("nt.reply"), href: "#/?f=all" },
     ]);
-    const rows = shown.map((x) => {
+    bellOrders(os);
+    const orderRow = (o) => {
+      const fresh = orderFresh(o, os);
+      return `<a class="pt-row pt-orow${fresh ? " need" : ""}" href="#/order/${esc(String(o.id))}">
+        <div>${fresh ? '<span class="attn-dot" aria-hidden="true"></span>' : ""}<span class="id">${esc(o.code)}</span><span class="ttl">${esc(orderTitle(o))}</span></div>
+        <span class="meta">${esc(T("p.o.recv").replace("{d}", D8.fmtDate(o.received)))} · ${esc(o.files ? T("p.o.nfiles").replace("{n}", o.files) : T("p.o.nofiles"))}</span>
+        <span class="right">${stChip(o.status)}${o.files ? `<span class="pt-fchip">${ICON.dl}${esc(T("p.o.ready"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.o.newfiles"))}</span>` : ""}</span></a>`;
+    };
+    const caseRow = (x) => {
       const fresh = x.lastBy === "admin" && (seen[x.id] || 0) < x.updated;
       return `<a class="pt-row${needs(x) ? " need" : ""}" href="#/case/${esc(x.id)}">
         <div>${needs(x) ? '<span class="attn-dot" aria-hidden="true"></span>' : ""}<span class="id">${esc(x.order || x.id)}</span><span class="ttl">${esc(x.title)}</span></div>
         <span class="meta">${esc(T("p.sent").replace("{d}", D8.fmtDate(x.created)))} · ${esc(T("p.updated").replace("{t}", D8.ago(x.updated)))}</span>
         <span class="right">${stChip(x.status)}${x.trial ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${x.status === "delivered" && x.pay !== "due" && x.pay !== "check" ? (x.pay === "paid" ? `<span class="pay pay-paid">${esc(T("bill.paid"))}</span>` : x.trial ? "" : `<span class="pay pay-due">${esc(T("bill.unpaid"))}</span>`) : ""}${x.pay === "due" ? `<span class="pay pay-due">${esc(T("bill.due"))}</span>` : x.pay === "check" ? `<span class="pay pay-check">${esc(T("bill.check"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.newreply"))}</span>` : ""}</span></a>`;
-    }).join("");
-    const empty = !items.length
+    };
+    // cases and orders together, newest first (without orders the list stays exactly as the server sent it)
+    const rows = shownOrders.length
+      ? [...shown.map((x) => [x.created || 0, caseRow(x)]), ...shownOrders.map((o) => [o.received || 0, orderRow(o)])].sort((a, b) => b[0] - a[0]).map((r) => r[1]).join("")
+      : shown.map(caseRow).join("");
+    const empty = !both.length
       ? `<div class="pt-empty"><img src="/brand/symbol.svg" alt=""><h2 class="h-caps">${esc(T("p.empty.h"))}</h2><p>${esc(T("p.empty.p"))}</p>
          <a class="btn btn-primary cta-shine" href="#/new">${ICON.plus}${esc(T("p.new"))}</a></div>`
       : `<div class="pt-empty"><p style="margin:0">${esc(T("p.nomatch"))}</p></div>`;
     page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><h1>${esc(T("p.list.h"))}</h1><p class="serif">${esc(T("p.list.hi").replace("{name}", first))}</p></div>
       <a class="btn btn-cream" href="#/new">${ICON.plus}${esc(T("p.new"))}</a>`), `
-      ${items.length < 2 ? trialBanner() : ""}
-      ${items.length ? `<div class="pt-tools"><div class="pt-filters" role="group" aria-label="Filter">${["all", "active", "review", "done"].map((f) =>
+      ${both.length < 2 ? trialBanner() : ""}
+      ${both.length ? `<div class="pt-tools"><div class="pt-filters" role="group" aria-label="Filter">${["all", "active", "review", "done"].map((f) =>
         `<button type="button" data-f="${f}" aria-pressed="${filter === f}">${esc(T("p.f." + f))}<b>${counts[f]}</b></button>`).join("")}</div>
         <input class="input pt-search" type="search" id="q" value="${esc(query)}" placeholder="${esc(T("p.search"))}" aria-label="${esc(T("p.search"))}"></div>` : ""}
-      <div class="pt-list">${shown.length ? rows : empty}</div>`);
+      <div class="pt-list">${shown.length || shownOrders.length ? rows : empty}</div>`);
     view.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { filter = b.dataset.f; drawList(items); }));
     const q = document.getElementById("q");
     if (q) q.addEventListener("input", () => { query = q.value; const pos = q.selectionStart; drawList(items); const n = document.getElementById("q"); n.focus(); n.setSelectionRange(pos, pos); });
@@ -187,7 +214,7 @@
   // leaving a case: stop the live poll and the typing ping
   function stopPoll() { if (live) live.stop(); live = null; if (typingH) typingH.detach(); typingH = null; typingNow = null; }
   async function renderCase(id) {
-    stopPoll();
+    stopPoll(); curOrder = null;
     if (!current || current.id !== id) { current = null; loading("case"); }
     try { [current] = await Promise.all([D8.api("/api/jobs/" + id).then((r) => r.job), D8.config().then((c) => { payCfg = (c && c.pay) || {}; })]); }
     catch (err) {
@@ -272,6 +299,16 @@
         <a class="iconbtn" href="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}" download="${esc(f.name)}" aria-label="${esc(T("p.fl.dl"))} ${esc(f.name)}" title="${esc(T("p.fl.dl"))}">${ICON.dl}</a>
         ${canDel ? `<button class="iconbtn del" type="button" data-del="${esc(f.fid)}" aria-label="${esc(T("p.fl.del"))} ${esc(f.name)}" title="${esc(T("p.fl.del"))}">${ICON.trash}</button>` : ""}</li>`;
     };
+    // final files the designer sent from the team's order (owner's rule 2026-11-25); with "pay first" they wait for payment
+    const sent = j.sent || [], sentLocked = !!j.sentLocked;
+    const sentRow = (f) => {
+      const ext = (f.name.split(".").pop() || "").slice(0, 4);
+      return `<li class="out"><span class="ext${f.thumb ? " pic" : ""}">${f.thumb ? `<img src="${esc(f.thumb)}" alt="" width="64" height="48" loading="lazy" decoding="async">` : esc(ext)}</span>
+        <div class="nm"><b title="${esc(f.name)}">${esc(f.name)}</b><small>${esc(D8.size(f.size))} · ${esc(D8.fmtDate(f.at))} · ${esc(T("p.fl.keep"))}</small></div>
+        ${sentLocked ? `<span class="iconbtn is-locked" title="${esc(T("p.o.lockshort"))}" aria-label="${esc(T("p.o.lockshort"))}">${ICON.lock}</span>`
+          : `<a class="iconbtn" href="${esc(f.url)}" download="${esc(f.name)}" aria-label="${esc(T("p.fl.dl"))} ${esc(f.name)}" title="${esc(T("p.fl.dl"))}">${ICON.dl}</a>`}</li>`;
+    };
+    const nZip = files.length + (sentLocked ? 0 : sent.length);
     const canUpload = CLIENT_UPLOAD.includes(st);
 
     const readLang = D8.lang === "vi" ? "vi" : "en";
@@ -327,9 +364,10 @@
           </section>
           <section class="card" aria-labelledby="flH">
             <div class="card-head-row"><h2 class="h-caps" id="flH">${esc(T("p.fl.h"))}</h2>
-              ${files.length > 1 ? `<button class="btn small" type="button" id="zipAll">${ICON.dl}${esc(T("zip.btn"))}</button>` : ""}</div>
+              ${nZip > 1 ? `<button class="btn small" type="button" id="zipAll">${ICON.dl}${esc(T("zip.btn"))}</button>` : ""}</div>
             ${htmlOuts.map((f) => `<iframe class="case-frame" src="/api/jobs/${esc(j.id)}/files/${esc(f.fid)}?view=1" title="${esc(f.name)}" loading="lazy"></iframe>`).join("")}
-            ${outs.length ? `<p class="grp">${esc(T("p.fl.out"))}</p><ul class="files">${outs.map(fileRow).join("")}</ul>` : ""}
+            ${outs.length || sent.length ? `<p class="grp">${esc(T("p.fl.out"))}</p><ul class="files">${outs.map(fileRow).join("")}${sent.map(sentRow).join("")}</ul>` : ""}
+            ${sent.length && sentLocked ? `<p class="hint pt-lockline">${ICON.lock}<span>${esc(T("p.o.lockcase"))}</span></p>` : ""}
             <p class="grp">${esc(T("p.fl.in"))}</p>
             ${ins.length ? `<ul class="files">${ins.map(fileRow).join("")}</ul>` : `<p class="muted" style="margin:0 0 6px">${esc(T("p.fl.none"))}</p>`}
             ${canUpload ? `<div style="margin-top:16px">${dropZone("addFiles")}<ul class="picked" id="addList"></ul>
@@ -395,7 +433,8 @@
     if (zip) zip.addEventListener("click", async () => {
       zip.disabled = true;
       try {
-        await D8.downloadZip((j.files || []).map((f) => ({ name: f.name, url: `/api/jobs/${j.id}/files/${f.fid}` })), j.id + ".zip",
+        await D8.downloadZip([...(j.files || []).map((f) => ({ name: f.name, url: `/api/jobs/${j.id}/files/${f.fid}` })),
+          ...(j.sentLocked ? [] : (j.sent || []).map((f) => ({ name: f.name, url: f.url })))], j.id + ".zip",
           (i, n) => { zip.textContent = T("zip.busy").replace("{i}", i).replace("{n}", n); });
       } catch (err) { D8.toast(err.message); }
       zip.disabled = false; zip.innerHTML = ICON.dl + esc(T("zip.btn"));
@@ -488,6 +527,94 @@
         const c = document.getElementById("composer"); c && c.focus();
         D8.done(document.getElementById("sendMsg"), T("p.ms.sent"));
       } catch (ex) { D8.busy(send, false); err.textContent = ex.message; err.hidden = false; }
+    });
+  }
+
+  /* ------------------------------------------------------------ order (entered by the team) */
+  // The final files the designer sent, the status and the details. No chat, no designer, no price; with "pay first" on the
+  // customer record the files download once the order is paid (the names and pictures still show).
+  let curOrder = null, v3dP = null;
+  const loadViewer = () => v3dP || (v3dP = D8.view3d ? Promise.resolve(D8.view3d) : new Promise((res, rej) => {
+    const s = document.createElement("script"); s.src = "/viewer3d.js?v=2026-11-25.1"; s.async = true;
+    s.onload = () => (D8.view3d ? res(D8.view3d) : rej(new Error("3D viewer"))); s.onerror = () => { v3dP = null; rej(new Error(T("p.err.load"))); };
+    document.head.appendChild(s);
+  }));
+  const is3dName = (n) => /\.(stl|ply|obj)$/i.test(n || "");
+  const fmtCur = (n, c) => (!c || c === "USD" ? money(n) : c === "VND" ? Math.round(n).toLocaleString("vi-VN") + " ₫" : Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + c);
+  async function renderOrder(id) {
+    current = null;
+    if (!curOrder || curOrder.id !== id) { curOrder = null; loading("case"); }
+    try { curOrder = (await D8.api("/api/my/orders/" + id)).order; }
+    catch (err) {
+      if (err.status === 401) { user = null; return renderSignIn(); }
+      return failed(err.status === 404 ? T("p.o.nf") : err.message);
+    }
+    if (curOrder.case && ID_RE.test(curOrder.case)) { location.replace("#/case/" + curOrder.case); return; }
+    drawOrder(curOrder);
+  }
+  function drawOrder(o) {
+    const s = oSeen(); s[o.id] = o.filesAt || 0; const ks = Object.keys(s); if (ks.length > 300) delete s[ks[0]]; store.set("d8-oseen", s);
+    if (orders.length) bellOrders(s);
+    const st = o.status, base = `/api/my/orders/${o.id}/files/`;
+    const idx = st === "needs_info" ? 0 : STEPS.indexOf(st);
+    const steps = STEPS.map((k, i) => {
+      const cls = st === "cancelled" ? "" : i < idx || (i === idx && k === "delivered") ? "done" : i === idx ? "cur" : "";
+      return `<li class="${cls}"><span class="dot">${cls === "done" ? ICON.check.replace('width="16" height="16"', 'width="12" height="12"') : ""}</span><span class="lbl">${esc(D8.statusLabel(k))}</span></li>`;
+    }).join("");
+    const files = o.files || [], locked = !!o.locked, n3d = files.filter((f) => is3dName(f.name)).length;
+    const alerts = [];
+    if (locked) alerts.push(`<div class="pt-alert info">${ICON.lock.replace('width="14" height="14"', 'width="20" height="20"')}<div>${esc(T("p.o.locked"))}${typeof o.due === "number" && o.due > 0 ? ` <b>${esc(T("p.o.due").replace("{amt}", fmtCur(o.due, o.currency)))}</b>` : ""}
+      <br><a href="${esc(D8.waLink(T("p.o.paywa").replace("{c}", o.code)))}" target="_blank" rel="noopener">${esc(T("p.o.payask"))}</a></div></div>`);
+    else if (files.length) alerts.push(`<div class="pt-alert ok">${ICON.check}<div>${esc(T("p.o.ready.p"))}</div></div>`);
+    if (st === "needs_info") alerts.push(`<div class="pt-alert warn">${ICON.warn}<div>${esc(T("p.o.hold"))}</div></div>`);
+    const row = (f) => {
+      const ext = (f.name.split(".").pop() || "").slice(0, 4);
+      return `<li class="out"><span class="ext${f.th ? " pic" : ""}">${f.th ? `<img src="${esc(base + f.fid)}/thumb" alt="" width="64" height="48" loading="lazy" decoding="async">` : esc(ext)}</span>
+        <div class="nm"><b title="${esc(f.name)}">${esc(f.name)}</b><small>${esc(D8.size(f.size))} · ${esc(D8.fmtDate(f.at, true))}</small></div>
+        ${locked ? `<span class="iconbtn is-locked" title="${esc(T("p.o.lockshort"))}" aria-label="${esc(T("p.o.lockshort"))}">${ICON.lock}</span>`
+          : `<a class="iconbtn" href="${esc(base + f.fid)}" download="${esc(f.name)}" aria-label="${esc(T("p.fl.dl"))} ${esc(f.name)}" title="${esc(T("p.fl.dl"))}">${ICON.dl}</a>`}</li>`;
+    };
+    const det = [["p.dt.order", o.code], ["p.dt.service", svcLabel(o.service)], ["p.o.ref", o.ref], ["p.o.patient", o.patient], ["p.o.doctor", o.doctor], ["p.o.clinic", o.clinic],
+      ["p.dt.teeth", o.teeth], ["p.dt.material", o.material], ["p.dt.shade", o.shade], ["p.o.received", o.received ? D8.fmtDate(o.received) : ""], ["p.o.delivered", o.delivered ? D8.fmtDate(o.delivered, true) : ""]]
+      .filter((r) => r[1]).map(([k, v]) => `<div><dt>${esc(T(k))}</dt><dd>${esc(v)}</dd></div>`).join("");
+    page(band(`<div><a class="pt-back" href="#/">${ICON.back}${esc(T("p.back"))}</a>
+        <h1>${esc(orderTitle(o))}</h1><p class="muted" style="margin:8px 0 0;color:var(--on-brand-2)">${esc(T("p.order").replace("{c}", o.code))}${o.received ? " · " + esc(T("p.o.recv").replace("{d}", D8.fmtDate(o.received))) : ""}</p></div>
+        <div>${stChip(st)}</div>`), `
+      ${st === "cancelled" ? "" : `<ol class="pt-steps" aria-label="Progress">${steps}</ol>`}
+      ${alerts.join("")}
+      <div class="pt-grid">
+        <div>
+          <section class="card" aria-labelledby="ofH" id="oFiles">
+            <div class="card-head-row"><h2 class="h-caps" id="ofH">${esc(T("p.fl.out"))}</h2>
+              ${files.length > 1 && !locked ? `<button class="btn small" type="button" id="oZip">${ICON.dl}${esc(T("zip.btn"))}</button>` : ""}</div>
+            ${files.length ? `<ul class="files">${files.map(row).join("")}</ul>` : `<p class="sub">${esc(T("p.o.nofiles.p"))}</p>`}
+            ${n3d && !locked ? `<div class="po-3d"><button class="btn small" type="button" id="o3dBtn" aria-expanded="false">${ICON.cube.replace('width="22" height="22"', 'width="16" height="16"')}${esc(T(n3d > 1 ? "p.o.v3dn" : "p.o.v3d").replace("{n}", Math.min(n3d, 4)))}</button><div id="o3dHost" hidden></div></div>` : ""}
+          </section>
+        </div>
+        <aside>
+          <section class="card" aria-labelledby="odH"><h2 class="h-caps" id="odH" style="margin-bottom:16px">${esc(T("p.o.dt"))}</h2><dl class="dl">${det}</dl></section>
+          <section class="card"><h2 class="h-caps">${esc(T("p.o.ask.h"))}</h2><p class="sub" style="margin:10px 0 14px">${esc(T("p.o.ask.p"))}</p>
+            <a class="btn small" href="${esc(D8.waLink(T("p.o.wamsg").replace("{c}", o.code)))}" target="_blank" rel="noopener">${D8.ICON_CHAT.replace("<svg ", '<svg width="16" height="16" ')}WhatsApp · Danny Do</a></section>
+        </aside>
+      </div>`);
+    const zip = document.getElementById("oZip");
+    if (zip) zip.addEventListener("click", async () => {
+      zip.disabled = true;
+      try { await D8.downloadZip(files.map((f) => ({ name: f.name, url: base + f.fid })), o.code + ".zip", (i, n) => { zip.textContent = T("zip.busy").replace("{i}", i).replace("{n}", n); }); }
+      catch (err) { D8.toast(err.message); }
+      zip.disabled = false; zip.innerHTML = ICON.dl + esc(T("zip.btn"));
+    });
+    const vb = document.getElementById("o3dBtn"), vh = document.getElementById("o3dHost");
+    if (vb) vb.addEventListener("click", async () => {
+      const label = (open) => { vb.innerHTML = ICON.cube.replace('width="22" height="22"', 'width="16" height="16"') + esc(open ? T("p.o.v3dclose") : T(n3d > 1 ? "p.o.v3dn" : "p.o.v3d").replace("{n}", Math.min(n3d, 4))); };
+      if (!vh.hidden) { if (D8.view3d) D8.view3d.close(vh); vh.hidden = true; vb.setAttribute("aria-expanded", "false"); label(false); return; }
+      D8.busy(vb, true);
+      try {
+        const v = await loadViewer();
+        D8.busy(vb, false);
+        vh.hidden = false; vb.setAttribute("aria-expanded", "true"); label(true);
+        v.gallery(vh, files.filter((f) => is3dName(f.name)).map((f) => ({ url: base + f.fid, name: f.name, size: f.size })), { all: true, go: true });
+      } catch (err) { D8.busy(vb, false); D8.toast(err.message); }
     });
   }
 

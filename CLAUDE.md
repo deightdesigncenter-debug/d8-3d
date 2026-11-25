@@ -86,6 +86,18 @@ The owner wants the site to run without errors or jank, and every new feature ch
   `customer_traits` (schema v8), `/api/customers/<id>/traits[/<tid>]` (read: customers.view, change: customers.edit, ≤ 60 per
   customer, deleted with the customer). Never copied into an order or a case, never shown to the customer. Tests: `traits.test.mjs`,
   `traits_ui.py`.
+- Files sent to the customer (owner's rule 2026-11-25): `order_files.final` / `final_at` / `final_by` and `customers.pay_first`
+  (schema v10). The KTV of the order, or `cases.deliver` (`canSendFiles`; never QC alone), sends a team-chat file
+  (`POST /api/orders/<id>/files/<fid>/send {on}`, two clicks in the chat) or uploads with `final: true` from the order page's
+  "File gửi khách" card; "Thu hồi" takes it back. It shows in the portal at once (no QC wait). Every account in
+  `customer_logins` of that customer sees all its orders: `/api/my/orders` (list; an order from a portal case is left out
+  only for the account that sent that case), `/api/my/orders/<id>` (status, details, sent files; no chat, staff, price),
+  `/files/<fid>` (download, 402 while locked) and `/files/<fid>/thumb`. "Pay first" on the customer record (customers.edit
+  or billing.edit): book orders lock while total − paid > 0 (charge orders), portal-case orders while the case pay is due /
+  check (`filesLocked`). A portal case shows its order's sent files (`jobView` `sent`, `sentLocked`), and sending one marks
+  the case updated by D.EIGHT. Order page `portal` = {accounts, canSend, payFirst/locked only for money viewers}.
+  Portal page `#/order/<id>`; the 3D viewer is loaded there only when asked and speaks EN/VI (`L()` in `viewer3d.js`,
+  the workspace stays Vietnamese). Tests: `sent.test.mjs` (also R2), `sent_ui.py` (light and dark).
 - Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
   the server; the prefix follows the kind. Price levels: list price (MAX) = prices.customer_id 0, MID = -2, MIN = -3; `customers.tier`
   ('' / mid / min, schema v3). Lookup: customer's own price → their level → list price. `/api/pricelist` imports the owner's Excel layout

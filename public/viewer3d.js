@@ -7,14 +7,17 @@
   const D8 = (window.D8 = window.D8 || {});
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const IS3D = /\.(stl|ply|obj)$/i;
-  const mb = (n) => (n / 1048576).toFixed(n < 10485760 ? 1 : 0).replace(".", ",") + " MB";
-  const nfmt = (n) => Number(n).toLocaleString("vi-VN");
+  // the workspace is always Vietnamese (D8.lang "vi"); the customer portal follows the visitor's language
+  const L = (vi, en) => (D8.lang === "en" ? en : vi);
+  const dec = (s) => (D8.lang === "en" ? s : s.replace(".", ","));
+  const mb = (n) => (n < 1048576 ? Math.max(1, Math.round(n / 1024)) + " KB" : dec((n / 1048576).toFixed(n < 10485760 ? 1 : 0)) + " MB");
+  const nfmt = (n) => Number(n).toLocaleString(D8.lang === "en" ? "en-US" : "vi-VN");
   const yieldUI = () => new Promise((r) => setTimeout(r, 0));
 
   /* ---------------------------------------------------------------- reading the file */
   async function fetchBuf(url, onProg, signal) {
     const r = await fetch(url, { credentials: "same-origin", headers: D8.authHeaders ? D8.authHeaders() : {}, signal });
-    if (!r.ok) throw new Error(r.status === 410 ? "File đã hết hạn lưu." : "Không tải được file (" + r.status + ").");
+    if (!r.ok) throw new Error(r.status === 410 ? L("File đã hết hạn lưu.", "This file is no longer stored.") : r.status === 402 ? L("File chờ thanh toán.", "Available after payment.") : L("Không tải được file (", "Couldn't load the file (") + r.status + ").");
     const total = +r.headers.get("content-length") || 0;
     if (!r.body || !r.body.getReader) return r.arrayBuffer();
     const reader = r.body.getReader(), parts = [];
@@ -226,12 +229,12 @@
   function Viewer(wrap) {
     const canvas = document.createElement("canvas");
     canvas.className = "v3d-canvas";
-    canvas.setAttribute("aria-label", "Bản xem 3D: kéo để xoay, cuộn hoặc chụm hai ngón để phóng to, kéo chuột phải hoặc hai ngón để di chuyển");
+    canvas.setAttribute("aria-label", L("Bản xem 3D: kéo để xoay, cuộn hoặc chụm hai ngón để phóng to, kéo chuột phải hoặc hai ngón để di chuyển", "3D view: drag to rotate, scroll or pinch to zoom, right-drag or two fingers to move"));
     canvas.tabIndex = 0;
     wrap.appendChild(canvas);
     const opts = { antialias: true, alpha: true, preserveDrawingBuffer: true };
     const gl = canvas.getContext("webgl2", opts) || canvas.getContext("webgl", opts) || canvas.getContext("experimental-webgl", opts);
-    if (!gl) throw new Error("Trình duyệt này không hỗ trợ xem 3D (WebGL).");
+    if (!gl) throw new Error(L("Trình duyệt này không hỗ trợ xem 3D (WebGL).", "This browser can't show 3D (WebGL)."));
     const gl2 = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
     const uint = gl2 || !!gl.getExtension("OES_element_index_uint");
     const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
@@ -367,21 +370,21 @@
     plus: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 5v10M5 10h10"/></svg>',
     minus: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 10h10"/></svg>',
   };
-  const facts = (bytes, m) => [mb(bytes), nfmt(m.tris) + " tam giác", m.size.map((x) => x.toFixed(1).replace(".", ",")).join(" × ") + " mm"].join(" · ");
+  const facts = (bytes, m) => [mb(bytes), nfmt(m.tris) + L(" tam giác", " triangles"), m.size.map((x) => dec(x.toFixed(1))).join(" × ") + " mm"].join(" · ");
   let rowSeq = 0;
   // The box with its toolbar. set(files) puts one or several files in the view: new ones load one after the other,
   // the ones left out are dropped. One file: its name and facts under the view. Several (multi): a row per file with
   // its colour, a see-through switch and its download. Test hooks: data-models (models drawn), data-tris (their triangles).
   function scene(host, { onClose, big } = {}) {
-    host.innerHTML = `<div class="v3d${big ? " big" : ""}"><div class="v3d-stage"><div class="v3d-msg" role="status">Đang tải bản 3D…</div></div>
+    host.innerHTML = `<div class="v3d${big ? " big" : ""}"><div class="v3d-stage"><div class="v3d-msg" role="status">${L("Đang tải bản 3D…", "Loading 3D…")}</div></div>
       <div class="v3d-bar"><div class="v3d-info"></div>
         <div class="v3d-tools">
-          <button type="button" data-v="top" title="Mặt nhai" aria-label="Nhìn mặt nhai">${ICON.top}</button><button type="button" data-v="front" title="Phía trước" aria-label="Nhìn phía trước">${ICON.front}</button>
-          <button type="button" data-v="side" title="Bên cạnh" aria-label="Nhìn bên cạnh">${ICON.side}</button><button type="button" data-z="in" title="Phóng to" aria-label="Phóng to">${ICON.plus}</button>
-          <button type="button" data-z="out" title="Thu nhỏ" aria-label="Thu nhỏ">${ICON.minus}</button><button type="button" data-v="reset" title="Đặt lại góc nhìn" aria-label="Đặt lại góc nhìn">${ICON.reset}</button>
-          <button type="button" data-full title="Toàn màn hình" aria-label="Toàn màn hình">${ICON.full}</button>
-          <a data-dl href="#" download title="Tải file" aria-label="Tải file" hidden>${ICON.dl}</a>
-          ${onClose ? `<button type="button" data-close title="Đóng" aria-label="Đóng">${ICON.x}</button>` : ""}</div></div></div>`;
+          <button type="button" data-v="top" title="${L("Mặt nhai", "Occlusal")}" aria-label="${L("Nhìn mặt nhai", "Occlusal view")}">${ICON.top}</button><button type="button" data-v="front" title="${L("Phía trước", "Front")}" aria-label="${L("Nhìn phía trước", "Front view")}">${ICON.front}</button>
+          <button type="button" data-v="side" title="${L("Bên cạnh", "Side")}" aria-label="${L("Nhìn bên cạnh", "Side view")}">${ICON.side}</button><button type="button" data-z="in" title="${L("Phóng to", "Zoom in")}" aria-label="${L("Phóng to", "Zoom in")}">${ICON.plus}</button>
+          <button type="button" data-z="out" title="${L("Thu nhỏ", "Zoom out")}" aria-label="${L("Thu nhỏ", "Zoom out")}">${ICON.minus}</button><button type="button" data-v="reset" title="${L("Đặt lại góc nhìn", "Reset view")}" aria-label="${L("Đặt lại góc nhìn", "Reset view")}">${ICON.reset}</button>
+          <button type="button" data-full title="${L("Toàn màn hình", "Full screen")}" aria-label="${L("Toàn màn hình", "Full screen")}">${ICON.full}</button>
+          <a data-dl href="#" download title="${L("Tải file", "Download")}" aria-label="${L("Tải file", "Download")}" hidden>${ICON.dl}</a>
+          ${onClose ? `<button type="button" data-close title="${L("Đóng", "Close")}" aria-label="${L("Đóng", "Close")}">${ICON.x}</button>` : ""}</div></div></div>`;
     const root = host.querySelector(".v3d"), stage = root.querySelector(".v3d-stage"), msg = root.querySelector(".v3d-msg"),
       info = root.querySelector(".v3d-info"), dl = root.querySelector("[data-dl]");
     const shown = new Map();   // url → { k, file, state: wait | load | ok | err, text, m, it, tint, ctl }
@@ -413,9 +416,9 @@
       } else {
         info.innerHTML = list.length ? `<ul class="v3d-legend">${list.map((e) => `<li data-k="${e.k}"${e.state === "err" ? ' class="err"' : ""}>` +
           `<span class="v3d-dot ${e.state === "ok" && e.m.col ? "scan" : "t" + (e.tint || 0)}" aria-hidden="true"></span>` +
-          `<b title="${esc(e.file.name)}">${esc(e.file.name)}</b><small>${esc(e.text || "Chờ tải…")}</small>` +
-          (e.state === "ok" ? `<button type="button" data-ghost aria-pressed="${e.it.alpha < 1 ? "true" : "false"}" title="Làm mờ để nhìn xuyên qua" aria-label="Làm mờ ${esc(e.file.name)}">Mờ</button>` : "") +
-          `<a href="${esc(e.file.url)}" download="${esc(e.file.name)}" title="Tải file" aria-label="Tải ${esc(e.file.name)}">${ICON.dl}</a></li>`).join("")}</ul>` : "";
+          `<b title="${esc(e.file.name)}">${esc(e.file.name)}</b><small>${esc(e.text || L("Chờ tải…", "Waiting…"))}</small>` +
+          (e.state === "ok" ? `<button type="button" data-ghost aria-pressed="${e.it.alpha < 1 ? "true" : "false"}" title="${L("Làm mờ để nhìn xuyên qua", "See-through")}" aria-label="${L("Làm mờ", "See-through")} ${esc(e.file.name)}">${L("Mờ", "See-through")}</button>` : "") +
+          `<a href="${esc(e.file.url)}" download="${esc(e.file.name)}" title="${L("Tải file", "Download")}" aria-label="${L("Tải", "Download")} ${esc(e.file.name)}">${ICON.dl}</a></li>`).join("")}</ul>` : "";
         info.querySelectorAll("[data-ghost]").forEach((b) => b.addEventListener("click", () => {
           const e = list.find((x) => String(x.k) === b.closest("li").dataset.k);
           if (!e || !e.it || !v) return;
@@ -427,27 +430,27 @@
       // the toolbar's download is for the one file shown; several files: each row has its own
       const one = !multi && list.length === 1 ? list[0].file : null;
       dl.hidden = !one;
-      if (one) { dl.href = one.url; dl.download = one.name; dl.setAttribute("aria-label", "Tải " + one.name); }
+      if (one) { dl.href = one.url; dl.download = one.name; dl.setAttribute("aria-label", L("Tải ", "Download ") + one.name); }
       msg.classList.remove("err"); delete root.dataset.error;
       if (ok.length) { msg.hidden = true; return; }
       msg.hidden = false;
       const loading = list.find((e) => e.state === "load" || e.state === "wait"), bad = list.find((e) => e.state === "err");
-      if (loading) msg.textContent = loading.text || "Đang tải bản 3D…";
+      if (loading) msg.textContent = loading.text || L("Đang tải bản 3D…", "Loading 3D…");
       else if (bad) { msg.textContent = bad.text; msg.classList.add("err"); root.dataset.error = "1"; }
-      else msg.textContent = "Chọn file để xem.";
+      else msg.textContent = L("Chọn file để xem.", "Choose a file to view.");
     }
     // one file at a time: a phone does not have to hold two downloads and two meshes being built at once
     async function pump() {
       if (busy || dead) return;
       const e = [...shown.values()].find((x) => x.state === "wait");
       if (!e) return;
-      busy = true; e.state = "load"; e.text = "Đang tải bản 3D…"; paint();
+      busy = true; e.state = "load"; e.text = L("Đang tải bản 3D…", "Loading 3D…"); paint();
       const live = () => !dead && shown.get(e.file.url) === e;
       try {
         e.ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
-        const buf = await fetchBuf(e.file.url, (got, total) => { e.text = "Đang tải bản 3D… " + mb(got) + (total ? " / " + mb(total) : ""); if (live()) tell(e); }, e.ctl && e.ctl.signal);
+        const buf = await fetchBuf(e.file.url, (got, total) => { e.text = L("Đang tải bản 3D… ", "Loading 3D… ") + mb(got) + (total ? " / " + mb(total) : ""); if (live()) tell(e); }, e.ctl && e.ctl.signal);
         if (live()) {
-          e.text = "Đang dựng hình…"; tell(e);
+          e.text = L("Đang dựng hình…", "Building the model…"); tell(e);
           await yieldUI();
           const m = await readModel(buf, e.file.name);
           if (live()) {
@@ -457,7 +460,7 @@
             e.state = "ok"; e.text = facts(buf.byteLength, m);
           }
         }
-      } catch (err) { if (live()) { e.state = "err"; e.text = err.message || "Không xem được file này."; } }
+      } catch (err) { if (live()) { e.state = "err"; e.text = err.message || L("Không xem được file này.", "This file can't be shown."); } }
       busy = false;
       if (!dead) { paint(); pump(); }
     }
@@ -531,19 +534,20 @@
     if (!g.sel.length) g.sel = opts.pick && list.some((f) => f.url === opts.pick) ? [opts.pick] : opts.all ? list.slice(0, MAX_SHOWN).map((f) => f.url) : [list[0].url];
     const H = host.classList.contains("card") ? "h2" : "h3";
     if (!host.querySelector(".v3d-slot")) {
-      host.innerHTML = `<div class="card-head-row"><${H} class="h-caps">Xem trước 3D</${H}><span class="chip" data-n></span></div><div class="v3d-pick"></div><div class="v3d-slot"></div>`;
+      host.innerHTML = `<div class="card-head-row"><${H} class="h-caps">${L("Xem trước 3D", "3D preview")}</${H}><span class="chip" data-n></span></div><div class="v3d-pick"></div><div class="v3d-slot"></div>`;
     }
-    host.querySelector("[data-n]").textContent = list.length + " file";
+    host.querySelector("[data-n]").textContent = list.length + (D8.lang === "en" && list.length !== 1 ? " files" : " file");
     const pick = host.querySelector(".v3d-pick"), slot = host.querySelector(".v3d-slot");
     pick.innerHTML = list.length > 1 ? `<div class="v3d-chips"></div><p class="hint v3d-hint" role="status"></p>` : "";
     const chips = pick.querySelector(".v3d-chips"), hint = pick.querySelector(".v3d-hint");
-    const MULTI_HINT = `Bấm tên file để hiện hoặc ẩn trong khung xem (tối đa ${MAX_SHOWN} file cùng lúc). File của cùng một lần quét (hàm trên, hàm dưới, khớp cắn) nằm đúng vị trí với nhau.`;
+    const MULTI_HINT = L(`Bấm tên file để hiện hoặc ẩn trong khung xem (tối đa ${MAX_SHOWN} file cùng lúc). File của cùng một lần quét (hàm trên, hàm dưới, khớp cắn) nằm đúng vị trí với nhau.`,
+      `Tap a file name to show or hide it (up to ${MAX_SHOWN} files at once). Files from the same scan (upper, lower, bite) line up with each other.`);
     const tell = () => { if (g.onChange) try { g.onChange([...g.sel]); } catch { /* the page's own business */ } };
     const drawChips = () => {
       if (!chips) return;
       chips.className = "v3d-chips multi";
       chips.setAttribute("role", "group");
-      chips.setAttribute("aria-label", "File trong khung xem");
+      chips.setAttribute("aria-label", L("File trong khung xem", "Files in the view"));
       chips.innerHTML = list.map((f, i) => {
         const on = g.sel.includes(f.url);
         return `<button type="button" class="v3d-chip${on ? " on" : ""}" data-f="${i}" title="${esc(f.name)}" aria-pressed="${on}">${esc(f.name)}</button>`;
@@ -555,7 +559,7 @@
       const picked = g.sel.map((u) => list.find((f) => f.url === u)).filter(Boolean);
       // a large file is not downloaded by itself: one click to load it
       if (auto && !g.sc && picked.length === 1 && picked[0].size > 40 * 1048576) {
-        slot.innerHTML = `<div class="v3d v3d-wait"><button class="btn small" type="button" data-load>Xem 3D ${esc(picked[0].name)} (${esc(mb(picked[0].size))})</button></div>`;
+        slot.innerHTML = `<div class="v3d v3d-wait"><button class="btn small" type="button" data-load>${L("Xem 3D", "View in 3D")} ${esc(picked[0].name)} (${esc(mb(picked[0].size))})</button></div>`;
         slot.querySelector("[data-load]").addEventListener("click", () => show(false));
         return;
       }
@@ -568,7 +572,7 @@
       let res;
       if (!g.multi) { g.sel = [u]; res = "on"; }
       else if (g.sel.includes(u)) { g.sel = g.sel.filter((x) => x !== u); res = "off"; }
-      else if (g.sel.length >= MAX_SHOWN) { if (hint) hint.textContent = `Khung xem đã có ${MAX_SHOWN} file. Bỏ bớt một file rồi thêm file khác.`; return "full"; }
+      else if (g.sel.length >= MAX_SHOWN) { if (hint) hint.textContent = L(`Khung xem đã có ${MAX_SHOWN} file. Bỏ bớt một file rồi thêm file khác.`, `The view already has ${MAX_SHOWN} files. Hide one before adding another.`); return "full"; }
       else { g.sel = [...g.sel, u]; res = "on"; }
       drawChips(); show(false); tell();
       return res;
