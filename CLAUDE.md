@@ -108,7 +108,7 @@ The owner wants the site to run without errors or jank, and every new feature ch
   gives every price a number found nowhere else and reads ~38 workspace pages as the KTV, the QC and another KTV, and the
   portal pages as the customer, before and after "show prices": keep it green and add new pages to its list.
 - "View as customer" (owner's request 2026-11-25, to try the portal before showing a customer): customer record button
-  "Xem như khách" opens `/portal?as=<customer id>`. Only staff with customers.view + billing.view (never a KTV or QC: prices).
+  "Xem như khách" (top of the record, next to "+ Đơn mới") opens `/portal?as=<customer id>`. Only staff with customers.view + billing.view (never a KTV or QC: prices).
   `/api/my/preview/<cid>[/orders…|/jobs[/<case>]]` (`previewAs`, GET only) gives exactly what that record's accounts see
   (`myOrders(…, pv)`: all accounts at once; portal cases of any of them), files and pictures through the preview. The portal
   in preview shows a yellow bar, greets the customer, and is read only: no new case or profile, buttons shown switched off,
