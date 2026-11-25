@@ -599,6 +599,9 @@
     document.head.appendChild(s);
   }));
   const is3dName = (n) => /\.(stl|ply|obj)$/i.test(n || "");
+  // "Questions?" on an order goes to the owner's own WhatsApp (owner's request 2026-11-25; 0979 379 247 in Vietnam)
+  const ORDER_WA = "84979379247";
+  const orderWa = (text) => "https://wa.me/" + ORDER_WA + "?text=" + encodeURIComponent(text);
   async function renderOrder(id) {
     current = null;
     if (!curOrder || curOrder.id !== id) { curOrder = null; loading("case"); }
@@ -653,7 +656,7 @@
         <aside>
           <section class="card" aria-labelledby="odH"><h2 class="h-caps" id="odH" style="margin-bottom:16px">${esc(T("p.o.dt"))}</h2><dl class="dl">${det}</dl></section>
           <section class="card"><h2 class="h-caps">${esc(T("p.o.ask.h"))}</h2><p class="sub" style="margin:10px 0 14px">${esc(T("p.o.ask.p"))}</p>
-            <a class="btn small" href="${esc(D8.waLink(T("p.o.wamsg").replace("{c}", o.code)))}" target="_blank" rel="noopener">${D8.ICON_CHAT.replace("<svg ", '<svg width="16" height="16" ')}WhatsApp · Danny Do</a></section>
+            <a class="btn small" id="oAskWa" href="${esc(orderWa(T("p.o.wamsg").replace("{c}", o.code)))}" target="_blank" rel="noopener">${D8.ICON_CHAT.replace("<svg ", '<svg width="16" height="16" ')}WhatsApp · D.EIGHT</a></section>
         </aside>
       </div>`);
     const zip = document.getElementById("oZip");

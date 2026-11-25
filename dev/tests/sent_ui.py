@@ -144,6 +144,8 @@ with sync_playwright() as p:
     with ap.expect_download() as dl: ap.click('#oFiles a.iconbtn[download="crown-21.stl"]')
     ok(open(dl.value.path(), "rb").read() == STL1, "the customer downloads the file byte for byte")
     ok(ap.query_selector("#oZip") is not None, "download all (.zip) is offered")
+    wa = ap.get_attribute("#oAskWa", "href") or ""
+    ok(wa.startswith("https://wa.me/84979379247?text=") and OCODE in wa and "D.EIGHT" in text(ap, "#oAskWa"), "Questions?: the owner's WhatsApp, with the order code")
     ap.click("#o3dBtn"); ap.wait_for_timeout(2500)
     ok(ap.query_selector("#o3dHost canvas") is not None and ap.is_visible("#o3dHost"), "View in 3D opens the viewer")
     ok(ap.evaluate(FITS), "order page: no sideways scroll")

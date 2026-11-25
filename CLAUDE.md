@@ -82,6 +82,8 @@ The owner wants the site to run without errors or jank, and every new feature ch
   Tests: `dev/tests/filecopy.test.mjs` + `filecopy_ui.py` (run.sh, R2 block; `/__test/exec` writes one row in the emulator only).
   Never add an R2 lifecycle rule for `jf:`.
 - People on the site: Danny Do = client contact (WhatsApp, email, contact form); Nhut Hoa = design technician (About › team).
+  Exception (owner's request 2026-11-25): the portal order page's "Questions?" card goes to the owner's own WhatsApp
+  (`ORDER_WA` in `portal.js`, labelled "WhatsApp · D.EIGHT"); every other WhatsApp link stays `D8.waLink` (Danny Do).
 - Customer traits "Đặc tính khách" (owner's rule 2026-11-01): a card of its own on the customer record (`#cust/<id>`), D1
   `customer_traits` (schema v8), `/api/customers/<id>/traits[/<tid>]` (read: customers.view, change: customers.edit, ≤ 60 per
   customer, deleted with the customer). Never copied into an order or a case, never shown to the customer. Tests: `traits.test.mjs`,
