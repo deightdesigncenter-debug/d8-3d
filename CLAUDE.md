@@ -98,6 +98,15 @@ The owner wants the site to run without errors or jank, and every new feature ch
   the case updated by D.EIGHT. Order page `portal` = {accounts, canSend, payFirst/locked only for money viewers}.
   Portal page `#/order/<id>`; the 3D viewer is loaded there only when asked and speaks EN/VI (`L()` in `viewer3d.js`,
   the workspace stays Vietnamese). Tests: `sent.test.mjs` (also R2), `sent_ui.py` (light and dark).
+- Price walls (owner's rule 2026-11-25): a KTV or QC never sees what a customer pays (own prices, list / MID / MIN, totals,
+  payments, balances); a customer never sees what a KTV is paid, list or level prices. A KTV sees only their own pay.
+  "Show prices" per customer (`customers.show_prices`, schema v11, default off, switched with billing.edit only, the field only
+  for money viewers): the portal then shows `charges` on the order page and the portal case (`orderCharges`: services in
+  English with the customer's unit price, qty, amount, surcharge %, adjustment, total, paid, due; never codes, item notes or
+  tech cost) and on the list each order's `money` plus `balance` (`customerBalance`, the same sums as the staff's customer
+  stats). No price-list page for customers yet (owner: later, when there are more customers). `dev/tests/prices.test.mjs`
+  gives every price a number found nowhere else and reads ~38 workspace pages as the KTV, the QC and another KTV, and the
+  portal pages as the customer, before and after "show prices": keep it green and add new pages to its list.
 - Customer codes (owner's rule): `DR` (doctor / clinic) or `LAB` + year + running number shared by both (DR202601, LAB202602), given by
   the server; the prefix follows the kind. Price levels: list price (MAX) = prices.customer_id 0, MID = -2, MIN = -3; `customers.tier`
   ('' / mid / min, schema v3). Lookup: customer's own price → their level → list price. `/api/pricelist` imports the owner's Excel layout

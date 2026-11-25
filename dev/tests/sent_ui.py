@@ -182,6 +182,32 @@ with sync_playwright() as p:
     ok(ap.query_selector("#oFiles a.iconbtn[download]") is not None, "paid: the downloads are back")
     key(f"/api/customers/{CID}/payfirst", {"on": False})
 
+    # ---------- "show prices" on the customer record: the customer sees the charges and their balance; the KTV still sees none
+    xp.goto(B + f"/admin#cust/{CID}"); xp.wait_for_selector("#cuShowPrices", state="attached", timeout=15000); xp.wait_for_timeout(800)
+    ok(not xp.is_checked("#cuShowPrices"), "customer record: prices are hidden from the customer by default")
+    xp.click("#cuPortal label:has(#cuShowPrices) span"); xp.wait_for_timeout(1500)
+    ok(xp.is_checked("#cuShowPrices") and "đơn giá riêng" in text(xp, "#cuPortal"), "show prices switched on")
+    xp.screenshot(path=f"{OUT}/staff-customer-prices.png", full_page=True)
+    ap.goto(B + "/portal#/"); ap.wait_for_selector(".pt-list", timeout=15000); ap.wait_for_timeout(800)
+    bal = text(ap, ".pt-balance")
+    ok("US$40.00" in bal and "Balance due" in bal, "portal list: the account balance")
+    row = ap.query_selector(f'.pt-list a[href="#/order/{OID}"]')
+    ok(row is not None and "Paid in full" in (row.text_content() or ""), "portal list: the order says paid in full")
+    ap.screenshot(path=f"{OUT}/portal-list-balance.png", full_page=True)
+    ap.goto(B + f"/portal#/order/{OID}"); ap.wait_for_selector(".pt-charges", timeout=15000); ap.wait_for_timeout(800)
+    chg = text(ap, ".pt-charges")
+    ok("Sent UI crown" in chg and chg.count("US$40.00") >= 3 and "US$0.00" in chg, "order page: the service, unit price, total, paid and nothing left")
+    ok(ap.evaluate(FITS), "order page with charges: no sideways scroll")
+    ap.screenshot(path=f"{OUT}/portal-order-charges.png", full_page=True)
+    bp.goto(B + f"/portal#/order/{OID}"); bp.reload(); bp.wait_for_selector(".pt-charges", timeout=15000); bp.wait_for_timeout(800)
+    ok(bp.evaluate(FITS), "phone: the charges fit the screen")
+    bp.screenshot(path=f"{OUT}/portal-order-charges-phone.png", full_page=True)
+    kc2 = ctx(); kp2 = page(kc2, KTV, "KTV Gửi File")
+    kp2.goto(B + f"/admin#orders/{OID}"); kp2.wait_for_selector("#oSent", timeout=15000); kp2.wait_for_timeout(1200)
+    kt = kp2.text_content("body") or ""
+    ok("40.00" not in kt and "40,00" not in kt and "cổng khách (đơn giá" not in kt, "the KTV's order page still shows no price")
+    kc2.close()
+
     # ---------- a portal case: the files sent from its order show on the case page
     sc, cj = ap.evaluate("""async () => { const r = await fetch('/api/my/jobs', {method:'POST', headers:{'Content-Type':'application/json','X-D8':'1'}, body: JSON.stringify({title:'', service:'Crown & bridge', teeth:'36'})}); return [r.status, await r.json()]; }""")
     JID = cj["job"]["id"]

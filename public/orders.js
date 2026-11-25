@@ -662,8 +662,9 @@
     const noAcc = !o.job_id && !p.accounts ? `<div class="pt-alert info o-sent-alert">${ICON.warn}<div>Khách này chưa có tài khoản cổng khách nên chưa tải được file. ${can("customers.view") ? `<a href="#cust/${o.customer_id}">Gắn tài khoản trong hồ sơ khách ›</a>` : "Báo quản lý gắn tài khoản cho khách."}</div></div>` : "";
     const lock = "payFirst" in p && p.payFirst ? (p.locked ? `<div class="pt-alert info o-sent-alert">${ICON.warn}<div>Khách này phải thanh toán trước khi tải. Đơn còn nợ nên khách chỉ thấy tên file, chưa tải được.</div></div>`
       : `<p class="hint o-sent-pay">Khách phải thanh toán trước khi tải: đơn đã trả đủ, khách tải được.</p>`) : "";
+    const prices = p.showPrices ? `<p class="hint o-sent-pay">Khách thấy giá đơn này (đơn giá riêng, tổng, đã trả, còn nợ) trên cổng khách.</p>` : "";
     host.innerHTML = `<div class="card-head-row"><h2 class="h-caps">File gửi khách</h2><span class="chip">${sent.length} file</span></div>
-      ${where ? `<p class="hint o-sent-where">${esc(where)}</p>` : ""}${noAcc}${lock}
+      ${where ? `<p class="hint o-sent-where">${esc(where)}</p>` : ""}${noAcc}${lock}${prices}
       ${sent.length ? `<ul class="o-sent-list">${sent.map((f) => `<li><span class="ic">${ICON.sent}</span><span class="tx"><a class="fn" href="${base}/${esc(f.fid)}" download="${esc(f.name)}" title="Tải ${esc(f.name)}">${esc(f.name)}</a><small>${esc(D8.size(f.size))} · ${esc(D8.fmtDate(f.at, true))}${f.by ? " · " + esc(name(f.by)) : ""}</small></span>${send ? `<button class="btn small" type="button" data-recall="${esc(f.fid)}" data-name="${esc(f.name)}">Thu hồi</button>` : ""}</li>`).join("")}</ul>`
         : `<p class="muted o-sent-none">Chưa gửi file nào cho khách.${send ? " Tải file thiết kế xong lên đây, hoặc bấm nút gửi trên một file trong chat nội bộ." : ""}</p>`}
       ${send ? `<div class="o-sent-up"><label class="btn small btn-primary">${ICON.up}<span>Tải lên và gửi khách</span><input type="file" multiple hidden id="osFile"></label><p class="hint o-sent-prog" hidden></p></div>` : ""}`;

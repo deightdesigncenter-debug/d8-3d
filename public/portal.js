@@ -133,6 +133,40 @@
   const oSeen = () => store.get("d8-oseen", {});
   const orderFresh = (o, seen) => o.files > 0 && (seen[o.id] || 0) < o.filesAt;
   const orderTitle = (o) => o.title || svcLabel(o.service) || T("p.o.untitled");
+  // Money, only when the customer record shows prices (owner's rule 2026-11-25): the customer's own unit prices, the
+  // surcharge, the total, what is paid and what is left; and on the list, the account balance as the staff see it.
+  const cur$ = (n, c) => (!c || c === "USD" ? money(n) : c === "VND" ? Math.round(n).toLocaleString("vi-VN") + " ₫" : Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + c);
+  const moneyChip = (m) => !m ? "" : m.charge !== "charge" ? `<span class="pay pay-paid">${esc(T("p.m.nocharge"))}</span>`
+    : m.due > 0 ? `<span class="pay pay-due">${esc(T("p.m.duechip").replace("{amt}", cur$(m.due, m.currency)))}</span>`
+    : m.total > 0 ? `<span class="pay pay-paid">${esc(T("p.m.settled"))}</span>` : "";
+  const chargesCard = (ch, hid) => {
+    if (!ch) return "";
+    const c = ch.currency, nm = (x) => (D8.lang === "vi" ? x.name_vi || x.name : x.name || x.name_vi);
+    const line = (k, v, cls) => `<tr class="${cls || ""}"><th scope="row" colspan="3">${k}</th><td class="num">${esc(v)}</td></tr>`;
+    const foot = ch.charge !== "charge" ? "" : [
+      ch.adj_pct || ch.adj_amount ? line(esc(T("p.m.subtotal")), cur$(ch.subtotal, c)) : "",
+      ch.adj_pct ? line(esc(T("p.m.surcharge").replace("{p}", ch.adj_pct)), cur$(ch.adj_pct_amount, c)) : "",
+      ch.adj_amount ? line(esc(T("p.m.adjust")), cur$(ch.adj_amount, c)) : "",
+      line(esc(T("p.m.total")), cur$(ch.total, c), "tot"),
+      line(esc(T("p.m.paid")), cur$(ch.paid, c)),
+      line(esc(T("p.m.due")), cur$(ch.due, c), ch.due > 0 ? "due" : "")].join("");
+    return `<section class="card pt-charges" aria-labelledby="${hid}"><div class="card-head-row"><h2 class="h-caps" id="${hid}">${esc(T("p.m.h"))}</h2>${moneyChip(ch)}</div>
+      ${ch.items.length ? `<div class="pt-chtbl"><table><thead><tr><th scope="col">${esc(T("p.m.service"))}</th><th scope="col" class="num">${esc(T("p.m.qty"))}</th><th scope="col" class="num">${esc(T("p.m.unit"))}</th><th scope="col" class="num">${esc(T("p.m.amount"))}</th></tr></thead>
+        <tbody>${ch.items.map((x) => `<tr><td>${esc(nm(x))}${x.teeth ? `<small>${esc(T("p.dt.teeth"))}: ${esc(x.teeth)}</small>` : ""}</td><td class="num">${esc(String(x.qty))}</td><td class="num">${esc(cur$(x.price, c))}</td><td class="num">${esc(cur$(x.amount, c))}</td></tr>`).join("")}</tbody>
+        ${foot ? `<tfoot>${foot}</tfoot>` : ""}</table></div>` : ""}
+      ${ch.charge === "free" ? `<p class="sub">${esc(T("p.m.free"))}</p>` : ch.charge === "warranty" ? `<p class="sub">${esc(T("p.m.warranty"))}</p>` : ""}
+      ${ch.charge === "charge" && ch.due > 0 && !ch.nolink ? `<p class="sub pt-paylink"><a href="${esc(D8.waLink(T("p.o.paywa").replace("{c}", ch.code || "")))}" target="_blank" rel="noopener">${esc(T("p.o.payask"))}</a></p>` : ""}
+    </section>`;
+  };
+  const balanceCard = (bal) => {
+    const list = (bal || []).filter((b) => b.billed || b.paid || b.credit);
+    if (!list.length) return "";
+    return `<section class="card pt-balance" aria-labelledby="balH"><h2 class="h-caps" id="balH">${esc(T("p.b.h"))}</h2>
+      ${list.map((b) => `<dl class="pt-balrow"><div><dt>${esc(T("p.b.billed"))}</dt><dd>${esc(cur$(b.billed, b.currency))}</dd></div><div><dt>${esc(T("p.b.paid"))}</dt><dd>${esc(cur$(b.paid, b.currency))}</dd></div>
+        <div class="${b.due > 0 ? "due" : ""}"><dt>${esc(T("p.b.due"))}</dt><dd>${esc(cur$(b.due, b.currency))}</dd></div>${b.credit ? `<div><dt>${esc(T("p.b.credit"))}</dt><dd>${esc(cur$(b.credit, b.currency))}</dd></div>` : ""}</dl>`).join("")}
+      <p class="hint">${esc(T("p.b.note"))}</p></section>`;
+  };
+  let balance = null;
   // the bell: orders with files the customer has not opened yet (its own source, so the order page can clear it)
   const bellOrders = (os) => D8.notify.set("orders", [{ key: "files", n: orders.filter((o) => orderFresh(o, os)).length, text: T("nt.files"), href: "#/?f=all" }]);
   async function renderList() {
@@ -141,7 +175,7 @@
     let items;
     try {
       const [a, b] = await Promise.all([D8.api("/api/my/jobs"), D8.api("/api/my/orders").catch(() => ({ items: [] }))]);
-      items = a.items || []; orders = b.items || [];
+      items = a.items || []; orders = b.items || []; balance = b.balance || null;
     }
     catch (err) { if (err.status === 401) { user = null; return renderSignIn(); } return failed(err.message); }
     caseCount = items.length;
@@ -180,7 +214,7 @@
       return `<a class="pt-row pt-orow${fresh ? " need" : ""}" href="#/order/${esc(String(o.id))}">
         <div>${fresh ? '<span class="attn-dot" aria-hidden="true"></span>' : ""}<span class="id">${esc(o.code)}</span><span class="ttl">${esc(orderTitle(o))}</span></div>
         <span class="meta">${esc(T("p.o.recv").replace("{d}", D8.fmtDate(o.received)))} · ${esc(o.files ? T("p.o.nfiles").replace("{n}", o.files) : T("p.o.nofiles"))}</span>
-        <span class="right">${stChip(o.status)}${o.files ? `<span class="pt-fchip">${ICON.dl}${esc(T("p.o.ready"))}</span>` : ""}${fresh ? `<span class="new">${esc(T("p.o.newfiles"))}</span>` : ""}</span></a>`;
+        <span class="right">${stChip(o.status)}${o.files ? `<span class="pt-fchip">${ICON.dl}${esc(T("p.o.ready"))}</span>` : ""}${moneyChip(o.money)}${fresh ? `<span class="new">${esc(T("p.o.newfiles"))}</span>` : ""}</span></a>`;
     };
     const caseRow = (x) => {
       const fresh = x.lastBy === "admin" && (seen[x.id] || 0) < x.updated;
@@ -200,6 +234,7 @@
     page(band(`<div><span class="eyebrow">${esc(T("p.eyebrow"))}</span><h1>${esc(T("p.list.h"))}</h1><p class="serif">${esc(T("p.list.hi").replace("{name}", first))}</p></div>
       <a class="btn btn-cream" href="#/new">${ICON.plus}${esc(T("p.new"))}</a>`), `
       ${both.length < 2 ? trialBanner() : ""}
+      ${balanceCard(balance)}
       ${both.length ? `<div class="pt-tools"><div class="pt-filters" role="group" aria-label="Filter">${["all", "active", "review", "done"].map((f) =>
         `<button type="button" data-f="${f}" aria-pressed="${filter === f}">${esc(T("p.f." + f))}<b>${counts[f]}</b></button>`).join("")}</div>
         <input class="input pt-search" type="search" id="q" value="${esc(query)}" placeholder="${esc(T("p.search"))}" aria-label="${esc(T("p.search"))}"></div>` : ""}
@@ -322,7 +357,8 @@
       ["p.dt.rev", rv.open ? T("p.dt.revopen") : T("p.dt.revv").replace("{u}", rv.used).replace("{n}", rv.free)],
     ].filter((r) => r[1]).map(([k, v]) => [T(k), v]).concat(D8.rxRows(j.rx))
       .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
-    // Customers never see a price list or the case price, only a free trial or the amount they are asked to pay.
+    // Customers never see a price list; the case price only as the amount they are asked to pay, or in the charges card
+    // when their customer record shows prices (owner's rule 2026-11-25).
     const paidLine = j.pay === "paid" && j.paid ? T("pay.paidline").replace("{amt}", money(j.paid.amount)).replace("{via}", D8.t("pay.via." + j.paid.via, j.paid.via)).replace("{d}", D8.fmtDate(j.paid.at)) : "";
     const bill = j.trial || ["due", "check", "paid"].includes(j.pay)
       ? `<div><dt>${esc(T("bill.pay"))}</dt><dd>${j.trial && !["due", "check", "paid"].includes(j.pay) ? `<span class="badge-trial">${esc(T("bill.trial"))}</span>` : ""}${
@@ -376,6 +412,7 @@
               <div style="margin-top:12px" id="addBtnWrap" hidden><button class="btn btn-primary small" type="button" id="addBtn"></button></div></div>`
               : `<p class="hint">${esc(T("p.fl.closed"))}</p>`}
           </section>
+          ${chargesCard(j.charges && { ...j.charges, code: j.order || j.id }, "chH")}
           ${D8.chatBub.html(T("p.ms.h"))}
           <section class="card chat-panel" aria-labelledby="chatH" id="chatPanel">
             ${D8.chatBub.head(T("p.ms.h"), T("chat.close"))}
@@ -540,7 +577,6 @@
     document.head.appendChild(s);
   }));
   const is3dName = (n) => /\.(stl|ply|obj)$/i.test(n || "");
-  const fmtCur = (n, c) => (!c || c === "USD" ? money(n) : c === "VND" ? Math.round(n).toLocaleString("vi-VN") + " ₫" : Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + c);
   async function renderOrder(id) {
     current = null;
     if (!curOrder || curOrder.id !== id) { curOrder = null; loading("case"); }
@@ -563,7 +599,7 @@
     }).join("");
     const files = o.files || [], locked = !!o.locked, n3d = files.filter((f) => is3dName(f.name)).length;
     const alerts = [];
-    if (locked) alerts.push(`<div class="pt-alert info">${ICON.lock.replace('width="14" height="14"', 'width="20" height="20"')}<div>${esc(T("p.o.locked"))}${typeof o.due === "number" && o.due > 0 ? ` <b>${esc(T("p.o.due").replace("{amt}", fmtCur(o.due, o.currency)))}</b>` : ""}
+    if (locked) alerts.push(`<div class="pt-alert info">${ICON.lock.replace('width="14" height="14"', 'width="20" height="20"')}<div>${esc(T("p.o.locked"))}${typeof o.due === "number" && o.due > 0 ? ` <b>${esc(T("p.o.due").replace("{amt}", cur$(o.due, o.currency)))}</b>` : ""}
       <br><a href="${esc(D8.waLink(T("p.o.paywa").replace("{c}", o.code)))}" target="_blank" rel="noopener">${esc(T("p.o.payask"))}</a></div></div>`);
     else if (files.length) alerts.push(`<div class="pt-alert ok">${ICON.check}<div>${esc(T("p.o.ready.p"))}</div></div>`);
     if (st === "needs_info") alerts.push(`<div class="pt-alert warn">${ICON.warn}<div>${esc(T("p.o.hold"))}</div></div>`);
@@ -590,6 +626,7 @@
             ${files.length ? `<ul class="files">${files.map(row).join("")}</ul>` : `<p class="sub">${esc(T("p.o.nofiles.p"))}</p>`}
             ${n3d && !locked ? `<div class="po-3d"><button class="btn small" type="button" id="o3dBtn" aria-expanded="false">${ICON.cube.replace('width="22" height="22"', 'width="16" height="16"')}${esc(T(n3d > 1 ? "p.o.v3dn" : "p.o.v3d").replace("{n}", Math.min(n3d, 4)))}</button><div id="o3dHost" hidden></div></div>` : ""}
           </section>
+          ${chargesCard(o.charges && { ...o.charges, code: o.code, nolink: locked }, "ocH")}
         </div>
         <aside>
           <section class="card" aria-labelledby="odH"><h2 class="h-caps" id="odH" style="margin-bottom:16px">${esc(T("p.o.dt"))}</h2><dl class="dl">${det}</dl></section>

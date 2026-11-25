@@ -30,6 +30,26 @@
   .po-3d { margin-top: 18px; }
   #o3dHost { margin-top: 14px; }
   #o3dHost[hidden] { display: none; }
+  /* charges and balance, only for customers whose record shows prices */
+  .pt-chtbl { overflow-x: auto; margin-top: 14px; }
+  .pt-chtbl table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .pt-chtbl th, .pt-chtbl td { padding: 9px 0 9px 12px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .pt-chtbl th:first-child, .pt-chtbl td:first-child { padding-left: 0; }
+  .pt-chtbl thead th { border-top: 0; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+  .pt-chtbl .num { text-align: right; white-space: nowrap; }
+  .pt-chtbl td small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .pt-chtbl tfoot th { font-weight: 500; color: var(--muted); text-align: right; }
+  .pt-chtbl tfoot tr.tot th, .pt-chtbl tfoot tr.tot td { color: var(--ink); font-weight: 700; border-top: 2px solid var(--line); }
+  .pt-chtbl tfoot tr.due th, .pt-chtbl tfoot tr.due td { color: var(--err-fg); font-weight: 700; }
+  .pt-charges .card-head-row .pay { margin-left: auto; }
+  .pt-paylink { margin: 12px 0 0; }
+  .pt-balance { margin-bottom: 18px; }
+  .pt-balrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 14px 0 0; }
+  .pt-balrow > div { padding: 12px 14px; border-radius: 12px; background: var(--paper); }
+  .pt-balrow dt { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+  .pt-balrow dd { margin: 4px 0 0; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pt-balrow .due dd { color: var(--err-fg); }
+  .pt-balance .hint { margin: 10px 0 0; }
 </style>
 <script>
 window.D8_DICT = {
@@ -89,6 +109,28 @@ window.D8_DICT = {
   "p.o.ask.h": ["Questions?", "Cần hỏi?"],
   "p.o.ask.p": ["Message Danny Do about this order. Quote the order number so we find it fast.", "Nhắn Danny Do về đơn này. Ghi mã đơn để chúng tôi tìm nhanh."],
   "p.o.wamsg": ["Hi Danny, about order {c}: ", "Chào Danny, về đơn {c}: "],
+  "p.m.h": ["Charges", "Chi phí"],
+  "p.m.service": ["Service", "Dịch vụ"],
+  "p.m.qty": ["Qty", "SL"],
+  "p.m.unit": ["Unit price", "Đơn giá"],
+  "p.m.amount": ["Amount", "Thành tiền"],
+  "p.m.subtotal": ["Subtotal", "Tạm tính"],
+  "p.m.surcharge": ["Surcharge ({p}%)", "Phụ phí ({p}%)"],
+  "p.m.adjust": ["Adjustment", "Điều chỉnh"],
+  "p.m.total": ["Total", "Tổng cộng"],
+  "p.m.paid": ["Paid", "Đã thanh toán"],
+  "p.m.due": ["Balance due", "Còn phải trả"],
+  "p.m.free": ["No charge for this order.", "Đơn này không tính phí."],
+  "p.m.warranty": ["Covered by warranty, no charge.", "Bảo hành, không tính phí."],
+  "p.m.nocharge": ["No charge", "Miễn phí"],
+  "p.m.settled": ["Paid in full", "Đã thanh toán đủ"],
+  "p.m.duechip": ["Due {amt}", "Còn {amt}"],
+  "p.b.h": ["Your account", "Tài khoản của bạn"],
+  "p.b.billed": ["All orders", "Tổng các đơn"],
+  "p.b.paid": ["Paid", "Đã thanh toán"],
+  "p.b.due": ["Balance due", "Còn phải trả"],
+  "p.b.credit": ["Credit", "Tiền trả trước"],
+  "p.b.note": ["All your orders except cancelled ones.", "Tất cả các đơn của bạn, trừ đơn đã huỷ."],
   "bill.unpaid": ["Unpaid", "Chưa thanh toán"],
   "p.c.assigned": ["A designer has taken this case. You can review the files and message us right here.", "Ca đã có KTV nhận. Bạn có thể xem file và trao đổi ngay tại đây."],
   "p.search": ["Search cases", "Tìm ca"],
@@ -257,7 +299,7 @@ window.D8_DICT = {
 };
 </script>
 <script src="/shell.js?v=2026-10-31.1" defer></script>
-<script src="/portal.js?v=2026-11-25.1" defer></script>
+<script src="/portal.js?v=2026-11-25.2" defer></script>
 </head>
 <body data-page="portal" data-title-key="title">
 <div id="d8-header"></div>

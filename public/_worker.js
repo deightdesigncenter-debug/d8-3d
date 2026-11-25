@@ -21,7 +21,7 @@ const QUOTA_BYTES = 1024 * 1024 * 1024; // KV free plan storage (1 GB)
 const ALLOWED_DAYS = [7, 14, 30];
 const DEFAULT_DAYS = 30;
 const DAY_MS = 86400000;
-const ASSET_VERSION = "2026-11-25.1"; // bump with brand.css changes
+const ASSET_VERSION = "2026-11-25.2"; // bump with brand.css changes
 const MSG_DAILY_CAP = 30;      // contact messages stored per day (protects the 1,000 KV writes/day free quota)
 const MSG_KEEP_DAYS = 180;     // contact messages are deleted automatically after this
 const MSG_ID_RE = /^[0-9]{13}[A-Za-z0-9]{6}$/;
@@ -1423,9 +1423,12 @@ async function jobView(env, job, who = null) {
   if (job.orderId && env.DB) try {
     const DB = await bookDb(env), base = "/api/my/orders/" + job.orderId + "/files/";
     const [fl, pf] = await DB.batch([DB.prepare(MY_ORDER_FILES).bind(job.orderId),
-      DB.prepare("SELECT c.pay_first AS pay_first FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ?").bind(job.orderId)]);
+      DB.prepare("SELECT o.*, c.pay_first AS pay_first, c.show_prices AS show_prices FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ?").bind(job.orderId)]);
+    const ord = (pf.results || [])[0] || {};
     rest.sent = (fl.results || []).map((f) => ({ fid: f.fid, name: f.name, size: f.size, at: f.final_at, url: base + f.fid, ...(f.th ? { thumb: base + f.fid + "/thumb" } : {}) }));
-    rest.sentLocked = !!((pf.results || [])[0] || {}).pay_first && (job.pay === "due" || job.pay === "check");
+    rest.sentLocked = !!ord.pay_first && (job.pay === "due" || job.pay === "check");
+    // the money of the case's order, when the customer record shows prices (same card as an order of the book)
+    if (ord.show_prices && ord.status !== "cancelled") rest.charges = await orderCharges(DB, ord);
   } catch (err) { console.error("sent files", err && err.message); }
   delete rest.orderId;
   const amount = (job.pay === "paid" || job.pay === "check") && job.paid ? job.paid.amount : job.pay === "due" ? amountDue(job) || null : null;
@@ -1969,7 +1972,7 @@ async function caseRequest(request, env, url, who, m, memo) {
 // The tables are created automatically the first time the database is used.
 // Free plan limits kept in mind: 50 queries per request (bulk work uses json_each), 100 bound values per query.
 
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 const VN_MS = 7 * 3600 * 1000;
 const vnDay = (ms) => new Date(ms + VN_MS).toISOString().slice(0, 10);
 const dayStart = (day) => Date.parse(day + "T00:00:00Z") - VN_MS;      // 00:00 in Vietnam, as ms
@@ -2122,6 +2125,14 @@ async function migrateV9(DB) {
 const SCHEMA_V10 = [`ALTER TABLE order_files ADD COLUMN final INTEGER NOT NULL DEFAULT 0`, `ALTER TABLE order_files ADD COLUMN final_at INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE order_files ADD COLUMN final_by TEXT NOT NULL DEFAULT ''`, `ALTER TABLE customers ADD COLUMN pay_first INTEGER NOT NULL DEFAULT 0`,
   `CREATE INDEX IF NOT EXISTS f_final ON order_files (order_id, final)`];
+// v11 (owner's rule 2026-11-25): a customer record can let its portal accounts see the money of their orders
+const SCHEMA_V11 = [`ALTER TABLE customers ADD COLUMN show_prices INTEGER NOT NULL DEFAULT 0`];
+async function migrateV11(DB) {
+  for (const sql of SCHEMA_V11) {
+    try { await DB.prepare(sql).run(); }
+    catch (err) { if (!/duplicate column|already exists/i.test(String(err && err.message))) throw err; }
+  }
+}
 async function migrateV10(DB) {
   for (const sql of SCHEMA_V10) {
     try { await DB.prepare(sql).run(); }
@@ -2166,6 +2177,7 @@ async function bookDb(env) {
     if (v < 8) await migrateV8(env.DB);
     if (v < 9) await migrateV9(env.DB);
     if (v < 10) await migrateV10(env.DB);
+    if (v < 11) await migrateV11(env.DB);
     if (v < DB_VERSION) await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)").bind(String(DB_VERSION)).run();
     DB_SCHEMA_OK = DB_VERSION;
   }
@@ -2267,18 +2279,44 @@ const myOrderRow = (o) => ({ id: o.id, code: o.code, title: o.ref || o.patient |
   status: MY_ORDER_STATUS[o.status] || "received", received: o.received_at, delivered: o.delivered_at || 0,
   updated: Math.max(o.updated_at || 0, o.files_at || 0), files: o.files || 0, filesAt: o.files_at || 0 });
 const MY_ORDER_FILES = "SELECT fid, name, size, final_at, thumb != '' AS th FROM order_files WHERE order_id = ? AND final = 1 ORDER BY final_at, id";
+// The money of an order as the customer sees it, only when their customer record says "show prices" (owner's rule
+// 2026-11-25): their services, quantities and unit prices, the surcharge and adjustment, the total, what is paid and what is
+// left. Built field by field: never the KTV's pay, product codes or item notes.
+const myMoney = (o) => ({ total: o.total, paid: o.paid, due: o.charge === "charge" ? rnd(Math.max(0, o.total - o.paid), o.currency) : 0, currency: o.currency, charge: o.charge || "charge" });
+async function orderCharges(DB, o) {
+  const items = await rows(DB.prepare(`SELECT i.qty, i.price, i.amount, i.teeth, i.name AS name_vi, COALESCE(p.name_en, '') AS name_en
+    FROM order_items i LEFT JOIN products p ON p.code = i.product WHERE i.order_id = ? ORDER BY i.sort, i.id`).bind(o.id));
+  return { ...myMoney(o), subtotal: o.subtotal, adj_pct: o.adj_pct || 0, adj_pct_amount: rnd(o.subtotal * (o.adj_pct || 0) / 100, o.currency), adj_amount: o.adj_amount || 0,
+    items: items.map((x) => ({ name: x.name_en || x.name_vi, name_vi: x.name_vi, teeth: x.teeth || "", qty: x.qty, price: x.price, amount: x.amount })) };
+}
+// the account as the staff see it on the customer record: billed, paid, left to pay, credit (per currency)
+async function customerBalance(DB, cid) {
+  const [st, pays] = await DB.batch([
+    DB.prepare("SELECT currency, COUNT(*) AS n, SUM(total) AS billed, SUM(paid) AS paid_in FROM orders WHERE customer_id = ? AND status != 'cancelled' GROUP BY currency").bind(cid),
+    DB.prepare("SELECT currency, SUM(amount) AS a FROM payments WHERE customer_id = ? GROUP BY currency").bind(cid)]);
+  const out = (st.results || []).map((s) => {
+    const inn = ((pays.results || []).find((p) => p.currency === s.currency) || {}).a || 0;
+    return { currency: s.currency, orders: s.n, billed: s.billed, paid: s.paid_in, due: rnd(Math.max(0, s.billed - s.paid_in), s.currency), credit: rnd(Math.max(0, inn - s.paid_in), s.currency) };
+  });
+  for (const p of pays.results || []) if (!out.some((s) => s.currency === p.currency)) out.push({ currency: p.currency, orders: 0, billed: 0, paid: 0, due: 0, credit: rnd(p.a, p.currency) });
+  return out;
+}
 async function myOrders(request, env, url, who) {
   const path = url.pathname, email = String(who.email || "").toLowerCase();
   if (request.method !== "GET") return json({ error: "Method not allowed." }, 405);
   if (path === "/api/my/orders") {
     if (!email || !env.DB) return json({ items: [] });
     const DB = await bookDb(env);
+    const cust = await DB.prepare("SELECT c.id, c.show_prices FROM customer_logins l JOIN customers c ON c.id = l.customer_id WHERE l.email = ?").bind(email).first();
+    if (!cust) return json({ items: [] });
     const list = await rows(DB.prepare(`SELECT o.id, o.code, o.status, o.patient, o.ref, o.service, o.received_at, o.updated_at, o.delivered_at,
+        o.total, o.paid, o.currency, o.charge,
         (SELECT COUNT(*) FROM order_files f WHERE f.order_id = o.id AND f.final = 1) AS files,
         (SELECT COALESCE(MAX(f.final_at), 0) FROM order_files f WHERE f.order_id = o.id AND f.final = 1) AS files_at
-      FROM orders o WHERE o.customer_id IN (SELECT customer_id FROM customer_logins WHERE email = ?) AND (o.job_id = '' OR o.login != ?) AND o.status != 'cancelled'
-      ORDER BY o.received_at DESC, o.id DESC LIMIT 300`).bind(email, email));
-    return json({ items: list.map(myOrderRow) });
+      FROM orders o WHERE o.customer_id = ? AND (o.job_id = '' OR o.login != ?) AND o.status != 'cancelled'
+      ORDER BY o.received_at DESC, o.id DESC LIMIT 300`).bind(cust.id, email));
+    if (!cust.show_prices) return json({ items: list.map(myOrderRow) });
+    return json({ items: list.map((o) => ({ ...myOrderRow(o), money: myMoney(o) })), balance: await customerBalance(DB, cust.id) });
   }
   const m = path.match(/^\/api\/my\/orders\/(\d+)(?:\/files\/([A-Za-z0-9]{10})(\/thumb)?)?$/);
   if (!m) return json({ error: "Not found." }, 404);
@@ -2286,7 +2324,7 @@ async function myOrders(request, env, url, who) {
   if (!email || !env.DB) return nf();
   const DB = await bookDb(env), id = +m[1];
   // the order is theirs: their customer record (any linked account), or the account that sent it as a portal case
-  const o = await DB.prepare(`SELECT o.*, c.pay_first AS pay_first FROM orders o JOIN customers c ON c.id = o.customer_id
+  const o = await DB.prepare(`SELECT o.*, c.pay_first AS pay_first, c.show_prices AS show_prices FROM orders o JOIN customers c ON c.id = o.customer_id
     WHERE o.id = ? AND (o.customer_id IN (SELECT customer_id FROM customer_logins WHERE email = ?) OR (o.login != '' AND o.login = ?))`).bind(id, email, email).first();
   if (!o) return nf();
   if (!m[2]) {
@@ -2297,7 +2335,8 @@ async function myOrders(request, env, url, who) {
     // case: the portal case this order came from, when this account sent it (its page has the files, chat and approval)
     return json({ order: { ...row, doctor: o.doctor, clinic: o.clinic, teeth: o.teeth, material: o.material, shade: o.shade, case: o.job_id && o.login === email ? o.job_id : "",
       files: files.map((f) => ({ fid: f.fid, name: f.name, size: f.size, at: f.final_at, ...(f.th ? { th: 1 } : {}) })), locked,
-      ...(locked && !o.job_id ? { due: rnd(o.total - o.paid, o.currency), currency: o.currency } : {}) } });
+      ...(locked && !o.job_id ? { due: rnd(o.total - o.paid, o.currency), currency: o.currency } : {}),
+      ...(o.show_prices ? { charges: await orderCharges(DB, o) } : {}) } });
   }
   const f = await DB.prepare("SELECT fid, name, parts, gz, st, thumb FROM order_files WHERE order_id = ? AND fid = ? AND final = 1").bind(id, m[2]).first();
   if (!f) return json({ error: "File not found." }, 404);
@@ -2738,6 +2777,15 @@ async function handleBook(request, env, url, who) {
     return json({ ok: true, changed: changed.map(({ id, from, code }) => ({ id, from, code })) });
   }
   // "pay first": the customer downloads an order's files only once it is paid (owner's choice per customer, 2026-11-25)
+  // "show prices": the customer's portal accounts see the money of their orders (owner's choice per customer, 2026-11-25).
+  // It is money, so only those who may change money switch it.
+  if ((m = path.match(/^\/api\/customers\/(\d+)\/showprices$/)) && method === "POST") {
+    if (!who.can("billing.edit")) return deny();
+    const on = (await body()).on === true;
+    const r = await DB.prepare("UPDATE customers SET show_prices = ?, updated_at = ? WHERE id = ?").bind(on ? 1 : 0, now, +m[1]).run();
+    if (!r.meta || !r.meta.changes) return json({ error: "Không tìm thấy khách hàng." }, 404);
+    return json({ ok: true, show_prices: on });
+  }
   if ((m = path.match(/^\/api\/customers\/(\d+)\/payfirst$/)) && method === "POST") {
     if (!(who.can("customers.edit") || who.can("billing.edit"))) return deny();
     const on = (await body()).on === true;
@@ -2816,7 +2864,7 @@ async function handleBook(request, env, url, who) {
         return { currency: s.currency, orders: s.n, units: s.units, ...(canMoney(who) ? { billed: s.billed, paid: s.paid_in, due: rnd(s.billed - s.paid_in, s.currency), credit: rnd(Math.max(0, inn - s.paid_in), s.currency) } : {}) };
       });
       for (const p of pays.results || []) if (canMoney(who) && !stats.some((s) => s.currency === p.currency)) stats.push({ currency: p.currency, orders: 0, units: 0, billed: 0, paid: 0, due: 0, credit: rnd(p.a, p.currency) });
-      return json({ customer: { ...custOut(c, who, []), pay_first: !!c.pay_first }, logins: lg.results || [], stats });
+      return json({ customer: { ...custOut(c, who, []), pay_first: !!c.pay_first, ...(canMoney(who) ? { show_prices: !!c.show_prices } : {}) }, logins: lg.results || [], stats });
     }
     if (method === "DELETE") {
       if (!who.can("customers.edit")) return deny();
@@ -3018,7 +3066,7 @@ async function handleBook(request, env, url, who) {
         DB.prepare("SELECT id, code, kind, status, day, parent_id FROM orders WHERE code = ? OR code LIKE ? ORDER BY cday, seq, code").bind(root, root + "%"),
         DB.prepare("SELECT at FROM order_reads WHERE email = ? AND order_id = ?").bind(who.email, id),
         DB.prepare("SELECT fid, name, size, final_at, final_by, thumb != '' AS th FROM order_files WHERE order_id = ? AND final = 1 ORDER BY final_at, id").bind(id),
-        DB.prepare("SELECT (SELECT COUNT(*) FROM customer_logins WHERE customer_id = ?1) AS accounts, (SELECT pay_first FROM customers WHERE id = ?1) AS pay_first").bind(o.customer_id),
+        DB.prepare("SELECT (SELECT COUNT(*) FROM customer_logins WHERE customer_id = ?1) AS accounts, (SELECT pay_first FROM customers WHERE id = ?1) AS pay_first, (SELECT show_prices FROM customers WHERE id = ?1) AS show_prices").bind(o.customer_id),
       ]);
       const related = (rel.results || []).filter((x) => x.code === root || /^[RC]/.test(x.code.slice(root.length)));
       const out = { order: orderOut(o, who), items: (it.results || []).map((x) => itemOut(x, canMoney(who))), related, readAt: (rd.results[0] || {}).at || 0 };
@@ -3027,7 +3075,7 @@ async function handleBook(request, env, url, who) {
       out.sent = (sf.results || []).map((f) => ({ fid: f.fid, name: f.name, size: f.size, at: f.final_at, by: f.final_by, ...(f.th ? { th: 1 } : {}) }));
       // (whether it is paid is money: only for those who see money, never for a KTV)
       out.portal = { accounts: p.accounts || 0, canSend: !!(who.can("cases.notes") && canSendFiles(who, o)),
-        ...(canMoney(who) ? { payFirst: !!p.pay_first, locked: await filesLocked(env, o, !!p.pay_first) } : {}) };
+        ...(canMoney(who) ? { payFirst: !!p.pay_first, showPrices: !!p.show_prices, locked: await filesLocked(env, o, !!p.pay_first) } : {}) };
       if (who.can("customers.view")) out.customer = await DB.prepare("SELECT id, code, name, kind, country, currency, contact, email, phone FROM customers WHERE id = ?").bind(o.customer_id).first();
       if (canMoney(who)) out.payments = await rows(DB.prepare("SELECT id, day, amount, currency, method, ref, note FROM payments WHERE order_id = ? ORDER BY day").bind(id));
       return json(out);

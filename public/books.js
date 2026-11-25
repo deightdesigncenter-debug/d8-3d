@@ -183,6 +183,8 @@
           ${can("customers.edit") ? `<form class="add-row" id="clAdd" style="margin-top:10px"><input class="input" type="email" id="clEmail" placeholder="Email Google của khách là gì?" required><button class="btn small" type="submit">Gắn</button></form>` : ""}
           ${"pay_first" in c && (can("billing.view") || can("customers.edit")) ? `<label class="switch cu-payfirst"><input type="checkbox" id="cuPayFirst"${c.pay_first ? " checked" : ""}${can("customers.edit") || can("billing.edit") ? "" : " disabled"}><span></span><b>Phải thanh toán trước khi tải file</b></label>
           <p class="hint cu-payfirst-hint">${c.pay_first ? "Khách thấy tên file ngay, nhưng chỉ tải được khi đơn đã trả đủ." : "Đang tắt: khách tải file ngay khi KTV gửi, kể cả đơn chưa thanh toán."}</p>` : ""}
+          ${"show_prices" in c ? `<label class="switch cu-payfirst"><input type="checkbox" id="cuShowPrices"${c.show_prices ? " checked" : ""}${can("billing.edit") ? "" : " disabled"}><span></span><b>Khách xem được giá trên cổng khách</b></label>
+          <p class="hint cu-payfirst-hint">${c.show_prices ? "Khách thấy từng dịch vụ theo đơn giá riêng của họ, phụ phí, tổng đơn, đã trả, còn nợ và số dư tài khoản. Không bao giờ thấy công KTV, giá niêm yết hay giá mức khác." : "Đang tắt: cổng khách không hiện giá đơn (chỉ hiện số tiền khi yêu cầu thanh toán)."}</p>` : ""}
           ${can("customers.edit") && !d.stats.some((s) => s.orders || s.paid || s.credit) ? `<button class="btn small btn-danger" type="button" id="cuDel" style="margin-top:16px">Xóa khách này</button>` : ""}</section>
       </aside></div>`;
     host.querySelectorAll("tr[data-href]").forEach((tr) => tr.addEventListener("click", (e) => { if (!e.target.closest("a")) location.hash = tr.dataset.href; }));
@@ -233,6 +235,15 @@
         D8.toast(pfs.checked ? "Khách " + c.code + " phải thanh toán trước khi tải file." : "Khách " + c.code + " tải file ngay khi KTV gửi.");
         drawCustomer(id);
       } catch (err) { pfs.checked = !pfs.checked; pfs.disabled = false; D8.toast(err.message); }
+    });
+    const sps = $("cuShowPrices");
+    if (sps) sps.addEventListener("change", async () => {
+      sps.disabled = true;
+      try {
+        await api(`/api/customers/${c.id}/showprices`, { method: "POST", body: { on: sps.checked } });
+        D8.toast(sps.checked ? "Khách " + c.code + " xem được giá đơn trên cổng khách." : "Đã ẩn giá đơn với khách " + c.code + ".");
+        drawCustomer(id);
+      } catch (err) { sps.checked = !sps.checked; sps.disabled = false; D8.toast(err.message); }
     });
     const la = $("clAdd");
     if (la) la.addEventListener("submit", async (e) => { e.preventDefault(); try { await api(`/api/customers/${c.id}/logins`, { method: "POST", body: { email: $("clEmail").value.trim() } }); D8.toast("Đã gắn tài khoản."); drawCustomer(id); } catch (err) { D8.toast(err.message); } });
