@@ -7,12 +7,23 @@
   const esc = (s) => D8.esc(s);
   const OPEN = "<scr" + "ipt>", CLOSE = "</scr" + "ipt>";
   // Runs inside the exocad file: keeps the WebGL picture readable, waits for the meshes, answers "snap-take".
+  // The picture is taken from the WebGL canvas itself. exocad lays a see-through 2D canvas of the same on-screen
+  // size over it (pick points); with the browser zoomed out (devicePixelRatio < 1) that one has more pixels than the
+  // WebGL canvas, and "the biggest canvas" used to be the empty overlay: a picture with no design (2026-11-26).
+  // The frame also reports a devicePixelRatio of at least 1, so the design is drawn at full size for the picture.
   function capturer() {
-    var gc = HTMLCanvasElement.prototype.getContext;
+    var gc = HTMLCanvasElement.prototype.getContext, gls = [];
     HTMLCanvasElement.prototype.getContext = function (type, attrs) {
-      if (/webgl/i.test(String(type))) { var a = {}; for (var k in attrs || {}) a[k] = attrs[k]; a.preserveDrawingBuffer = true; return gc.call(this, type, a); }
+      if (/webgl/i.test(String(type))) {
+        var a = {}; for (var k in attrs || {}) a[k] = attrs[k]; a.preserveDrawingBuffer = true;
+        var x = gc.call(this, type, a); if (x && gls.indexOf(this) < 0) gls.push(this); return x;
+      }
       return gc.apply(this, arguments);
     };
+    try {
+      var dd = Object.getOwnPropertyDescriptor(window, "devicePixelRatio") || Object.getOwnPropertyDescriptor(Window.prototype, "devicePixelRatio");
+      if (dd && dd.get && dd.configurable !== false) Object.defineProperty(window, "devicePixelRatio", { configurable: true, enumerable: true, get: function () { var v = dd.get.call(window); return v > 0 && v < 1 ? 1 : v; } });
+    } catch (e) {}
     var post = function (m) { try { parent.postMessage(m, "*"); } catch (e) {} };
     post({ d8: "snap", type: "hello" });
     var started = Date.now(), last = "", stable = 0;
@@ -29,12 +40,30 @@
       if (Date.now() - started > 90000) { post({ d8: "snap", type: "ready", exocad: !!window.DentalWebGL, timeout: true }); return; }
       setTimeout(tick, 400);
     }
+    function shown(c) { return c.isConnected && c.width > 0 && c.height > 0 && c.getClientRects().length > 0 && c.clientWidth * c.clientHeight > 0 && getComputedStyle(c).visibility !== "hidden"; }
+    // one colour everywhere = the design is not drawn yet (or hidden): such a picture is never saved
+    function plain(c) {
+      try {
+        var t = document.createElement("canvas"); t.width = 96; t.height = 50;
+        var g = t.getContext("2d"); g.drawImage(c, 0, 0, 96, 50);
+        var d = g.getImageData(0, 0, 96, 50).data;
+        for (var i = 4; i < d.length; i += 4) if (Math.abs(d[i] - d[0]) > 8 || Math.abs(d[i + 1] - d[1]) > 8 || Math.abs(d[i + 2] - d[2]) > 8 || Math.abs(d[i + 3] - d[3]) > 8) return false;
+        return true;
+      } catch (e) { return false; }
+    }
     function shot() {
-      var cs = Array.prototype.slice.call(document.getElementsByTagName("canvas")).filter(function (c) { return c.width * c.height > 40000 && c.offsetParent !== null; });
-      cs.sort(function (a, b) { return b.width * b.height - a.width * a.height; });
-      if (!cs[0]) { post({ d8: "snap", type: "shot", error: "nocanvas" }); return; }
-      try { post({ d8: "snap", type: "shot", url: cs[0].toDataURL("image/png"), w: cs[0].width, h: cs[0].height }); }
-      catch (e) { post({ d8: "snap", type: "shot", error: String(e && e.message || e) }); }
+      // the WebGL canvas that is on screen and biggest on screen; any big canvas only when there is no WebGL one
+      var cs = gls.filter(shown);
+      if (!cs.length) cs = Array.prototype.slice.call(document.getElementsByTagName("canvas")).filter(function (c) { return shown(c) && c.width * c.height > 40000; });
+      cs.sort(function (a, b) { return (b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight) || (b.width * b.height - a.width * a.height); });
+      var c = cs[0];
+      if (!c) { post({ d8: "snap", type: "shot", error: "nocanvas" }); return; }
+      try {
+        if (plain(c)) { post({ d8: "snap", type: "shot", error: "blank" }); return; }
+        var url = c.toDataURL("image/png");
+        if (!/^data:image\/png;base64,./.test(url)) { post({ d8: "snap", type: "shot", error: "empty" }); return; }
+        post({ d8: "snap", type: "shot", url: url, w: c.width, h: c.height });
+      } catch (e) { post({ d8: "snap", type: "shot", error: String(e && e.message || e) }); }
     }
     window.addEventListener("message", function (e) { if (e.data && e.data.d8 === "snap-take") shot(); });
     if (document.readyState === "complete") setTimeout(tick, 300); else window.addEventListener("load", function () { setTimeout(tick, 300); });
@@ -118,7 +147,21 @@
     }
     return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.45));
   }
-  D8.snap = { open, compose };
+  // A picture from the open design. exocad can still be putting the design on screen (textures, a big photo):
+  // a plain picture (background only) is tried again every 1.5 s until `ms` has passed, never saved.
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function take(ctl, ms) {
+    const end = Date.now() + ms;
+    for (;;) {
+      const s = await ctl.capture();
+      if (s.url || !ctl.iframe.isConnected || Date.now() + 1500 > end || (s.error !== "blank" && s.error !== "nocanvas")) return s;
+      await wait(1500);
+    }
+  }
+  const WHY = { blank: "khung 3D mới có màu nền, mô hình chưa hiện", nocanvas: "chưa thấy khung 3D", empty: "trình duyệt không đọc được hình",
+    timeout: "khung 3D không trả lời", noframe: "khung 3D đã đóng" };
+  const why = (s) => WHY[s && s.error] || (s && s.error) || "không rõ lý do";
+  D8.snap = { open, compose, take, why };
 
   /* ------------------------------------------------------------ link maker (order page and 3D links page) */
   const ROUND = ["First design", "Second design", "Third design", "Fourth design", "Fifth design"];
@@ -186,15 +229,15 @@
         snap = D8.snap.open(file, q(".lm-stage"));
         const r = await snap.ready;
         if (!r.exocad) { say("File không phải bản xem trước exocad: dùng ảnh mặc định của D.EIGHT."); await useShot(""); return; }
-        const s = await snap.capture();
+        const s = await D8.snap.take(snap, 30000);
         if (s.url) { await useShot(s.url); say("Đã lưu ảnh xem trước. Muốn góc khác: xoay mô hình rồi bấm Chụp góc này."); }
-        else { await useShot(""); say("Không chụp được 3D (" + (s.error || "") + "), đang dùng ảnh mặc định."); }
+        else { await useShot(""); say("Chưa chụp được 3D (" + D8.snap.why(s) + "), đang dùng ảnh mặc định. Khi mô hình hiện trong khung, bấm Chụp góc này."); }
         q("[data-snap]").disabled = false;
       } catch (ex) { D8.busy(go, false); prog.hidden = true; err.textContent = ex.message; err.hidden = false; }
     });
     q("[data-snap]").addEventListener("click", async (e) => {
       const b = e.currentTarget; D8.busy(b, true);
-      try { const s = await snap.capture(); if (!s.url) throw new Error("Không chụp được (" + (s.error || "") + ")."); await useShot(s.url); D8.done(b, "Đã lưu ảnh"); say("Đã lưu ảnh xem trước theo góc này."); }
+      try { const s = await D8.snap.take(snap, 4500); if (!s.url) throw new Error("Chưa chụp được: " + D8.snap.why(s) + ". Đợi mô hình hiện trong khung rồi bấm lại."); await useShot(s.url); D8.done(b, "Đã lưu ảnh"); say("Đã lưu ảnh xem trước theo góc này."); }
       catch (ex) { D8.busy(b, false); D8.toast(ex.message); }
     });
     q("[data-def]").addEventListener("click", async (e) => {

@@ -98,7 +98,7 @@ Chỉ mục (index) cho các việc hay làm: tìm theo mã đơn, theo ngày nh
 ## Link xem 3D có ảnh xem trước
 
 - Trang bác sĩ `/v/<mã>` có thẻ `og:title`, `og:description`, `og:image` (`/og/<mã>.jpg`) nên Messenger, Zalo, WhatsApp hiện ảnh, tiêu đề kiểu "Patient: … - Second design" và dòng "Code: 26/10/20/03 | Nha khoa | Bác sĩ".
-- Khi tạo link (trang Link xem 3D hoặc trong đơn hàng), file exocad mở trong khung sandbox, chụp góc nhìn 3D (xoay rồi bấm **Chụp góc này** để chọn góc khác), ghép khung D.EIGHT, lưu KV `og:<mã>`. Không chụp được thì dùng ảnh mặc định `public/brand/og-3d.jpg`.
+- Khi tạo link (trang Link xem 3D hoặc trong đơn hàng), file exocad mở trong khung sandbox, chụp góc nhìn 3D (xoay rồi bấm **Chụp góc này** để chọn góc khác), ghép khung D.EIGHT, lưu KV `og:<mã>`. Không chụp được thì dùng ảnh mặc định `public/brand/og-3d.jpg`. Ảnh luôn chụp từ khung 3D của exocad (kể cả khi trình duyệt đang thu nhỏ trang, vd. 80%); ảnh chỉ có màu nền (mô hình chưa hiện xong) thì web chụp lại sau vài giây, không lưu ảnh trống.
 - `robots.txt` cho phép `/v/` và `/og/` để ứng dụng chat đọc được (trang vẫn `noindex`).
 
 ## Cài đặt (`/admin#settings`, cần quyền Nhân sự)

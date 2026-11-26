@@ -1214,16 +1214,17 @@
     say("Đang mở thiết kế để chụp ảnh xem trước…");
     $("snapTake").disabled = true;
     const ctl = snapCtl = D8.snap.open(f, $("snapStage"));
-    $("snapTake").onclick = async (e) => { const b = e.currentTarget; D8.busy(b, true); try { const s = await ctl.capture(); if (!s.url) throw new Error("Không chụp được."); await put(s.url); D8.done(b, "Đã lưu ảnh"); say("Đã lưu ảnh xem trước theo góc này."); } catch (ex) { D8.busy(b, false); D8.toast(ex.message); } };
+    $("snapTake").onclick = async (e) => { const b = e.currentTarget; D8.busy(b, true); try { const s = await D8.snap.take(ctl, 4500); if (!s.url) throw new Error("Chưa chụp được: " + D8.snap.why(s) + ". Đợi mô hình hiện trong khung rồi bấm lại."); await put(s.url); D8.done(b, "Đã lưu ảnh"); say("Đã lưu ảnh xem trước theo góc này."); } catch (ex) { D8.busy(b, false); D8.toast(ex.message); } };
     $("snapDef").onclick = async (e) => { const b = e.currentTarget; D8.busy(b, true); try { await put(""); D8.done(b, "Đã dùng"); say("Đang dùng ảnh mặc định của D.EIGHT."); } catch (ex) { D8.busy(b, false); D8.toast(ex.message); } };
     try {
       const r = await ctl.ready;
       if (snapCtl !== ctl) return;
       if (!r.exocad) { await put(""); say("Không phải bản xem trước exocad: dùng ảnh mặc định."); return; }
-      const s = await ctl.capture();
+      const s = await D8.snap.take(ctl, 30000);
+      if (snapCtl !== ctl) return;
       await put(s.url || "");
       $("snapTake").disabled = false;
-      say(s.url ? "Đã lưu ảnh xem trước. Muốn góc khác: xoay mô hình trong khung rồi bấm Chụp góc này." : "Không chụp được 3D, đang dùng ảnh mặc định.");
+      say(s.url ? "Đã lưu ảnh xem trước. Muốn góc khác: xoay mô hình trong khung rồi bấm Chụp góc này." : "Chưa chụp được 3D (" + D8.snap.why(s) + "), đang dùng ảnh mặc định. Khi mô hình hiện trong khung, bấm Chụp góc này.");
     } catch (ex) { say(ex.message); }
   }
   let ogLooked = "";

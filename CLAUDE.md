@@ -23,7 +23,9 @@ The owner wants the site to run without errors or jank, and every new feature ch
   import, settings), `public/tech.js` (KTV pages `#team`, `#team/<email>`, `#me` "Công của tôi", monthly pay slips),
   `public/snap.js` (3D link preview snapshot; default picture `brand/og-3d.jpg` = the owner's Before/After picture from
   `site/fullco.png`, 1200×630, owner's choice 2026-10-31; every preview JPEG stays under 290 KB because WhatsApp shows no picture
-  over ~300 KB; `ogImage` serves the new default to links that stored a copy of the old one), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format),
+  over ~300 KB; `ogImage` serves the new default to links that stored a copy of the old one; the picture is read from the WebGL canvas the
+  frame made, never "the biggest canvas" (zoomed out, exocad's see-through overlay is bigger and was taken: an empty picture,
+  2026-11-26), the frame reports devicePixelRatio ≥ 1, and a background-only picture is taken again (`D8.snap.take`), never saved), `public/xlsx.js` (Excel read/write in the browser; a cell `{v, t}` has its own format),
   `public/viewer3d.js` (own WebGL viewer for STL / PLY / OBJ: order page "Xem trước 3D" from chat files, case design files, any `[data-v3d]` button).
   One mode only (owner's rule 2026-11-01, no "Từng file / Xem cùng lúc" switch): each chip turns its file on or off, up to 4 files in
   one scene, in their own coordinates (upper, lower and bite scans line up), a colour per STL, "Mờ" (see-through), one file loaded at

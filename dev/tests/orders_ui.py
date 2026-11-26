@@ -30,7 +30,21 @@ EXO = os.path.join(OUT, "scene-exocad.html")
 open(EXO, "w").write("""<!doctype html><html><head><title>exocad scene</title></head><body style="margin:0;background:#473A6D">
 <canvas id="c" width="1200" height="630" style="display:block;width:100vw;height:100vh"></canvas>
 <script>window.DentalWebGL={hasEmbeddedData:function(){return true},m_SceneManager:{m_MeshSort:{m_SortedMeshs:[{IsLoaded:true}]}}};
-var g=document.getElementById('c').getContext('webgl'); if (g) { g.clearColor(0.86,0.74,0.52,1); g.clear(g.COLOR_BUFFER_BIT); }</script></body></html>""")
+var g=document.getElementById('c').getContext('webgl'); if (g) { g.clearColor(0.86,0.74,0.52,1); g.clear(g.COLOR_BUFFER_BIT);
+  g.enable(g.SCISSOR_TEST); g.scissor(480,190,240,250); g.clearColor(0.97,0.96,0.9,1); g.clear(g.COLOR_BUFFER_BIT); g.disable(g.SCISSOR_TEST); }</script></body></html>""")
+# laid out like exocad: the WebGL canvas sized by devicePixelRatio, a see-through 2D canvas of the same on-screen size over it;
+# the design shows only after 5 s (a big photo still loading)
+EXO_LATE = os.path.join(OUT, "scene-exocad-late.html")
+open(EXO_LATE, "w").write("""<!doctype html><html><head><title>exocad scene</title></head><body style="margin:0;background:#473A6D;overflow:hidden">
+<div class="cad-webgl-canvas" style="position:absolute;left:0;top:0;right:0;bottom:0"></div>
+<script>window.DentalWebGL={m_SceneManager:{m_MeshSort:{m_SortedMeshs:[{IsLoaded:true}]}}};
+var host=document.querySelector('.cad-webgl-canvas'), W=innerWidth, H=innerHeight, r=window.devicePixelRatio;
+var c=document.createElement('canvas'); c.width=Math.round(W*r); c.height=Math.round(H*r); c.style.width=W+'px'; c.style.height=H+'px'; c.style.display='block'; host.appendChild(c);
+var g=c.getContext('webgl',{antialias:true});
+var o=document.createElement('canvas'); o.style.position='absolute'; o.style.left='0px'; o.style.top='0px'; o.width=c.clientWidth; o.height=c.clientHeight; host.appendChild(o); o.getContext('2d');
+function draw(m){ g.disable(g.SCISSOR_TEST); g.clearColor(0.28,0.23,0.43,1); g.clear(g.COLOR_BUFFER_BIT); if(!m) return;
+  g.enable(g.SCISSOR_TEST); g.scissor(c.width*0.4|0,c.height*0.3|0,c.width*0.2|0,c.height*0.4|0); g.clearColor(0.95,0.93,0.85,1); g.clear(g.COLOR_BUFFER_BIT); g.disable(g.SCISSOR_TEST); }
+draw(false); setTimeout(function(){ draw(true); }, 5000);</script></body></html>""")
 
 with sync_playwright() as p:
     b = p.chromium.launch()
@@ -567,6 +581,39 @@ with sync_playwright() as p:
         ok(btn is not None and not kp.is_visible("#msgPriceBox") and "Total for this case" not in text(kp, "#msgEn") and "Tổng chi phí" not in text(kp, "#msgVi"), "KTV: no case total box, no total in the message")
     else:
         ok(st_k in (401, 403), "KTV may not make links here (" + str(st_k) + ")")
+
+
+    # the owner's report 2026-11-26 (a preview with no design): with the browser zoomed out (devicePixelRatio < 1) exocad's
+    # see-through overlay had more pixels than its WebGL canvas and was taken instead; and a design still loading gave a
+    # picture of the background only. Now: the WebGL canvas, drawn at full size, and a background-only picture is taken again.
+    zc = b.new_context(viewport={"width": 1366, "height": 900}, device_scale_factor=0.8, reduced_motion="reduce"); zc.route("**/*", block)
+    zc.add_init_script(f"try{{localStorage.setItem('d8-theme','{THEME}')}}catch(e){{}}")
+    zp = zc.new_page(); watch(zp, "zoomed-out")
+    zp.goto(B + "/admin"); zp.evaluate(SIGNIN, ["d.eightdesigncenter@gmail.com", "Danny Do"]); zp.reload(); zp.wait_for_timeout(1200)
+    zp.goto(B + "/admin#links"); zp.wait_for_timeout(1200)
+    zp.set_input_files("#file", EXO_LATE); zp.wait_for_timeout(400)
+    zp.click("#create"); zp.wait_for_timeout(2000)
+    for _ in range(60):
+        zs = text(zp, "#snapSay")
+        if "Đã lưu ảnh" in zs or "Chưa chụp" in zs or "mặc định" in zs: break
+        zp.wait_for_timeout(500)
+    ok("Đã lưu ảnh" in zs, "zoomed-out browser, design shown late: the picture is taken once the design is there: " + zs)
+    zf = [f for f in zp.frames if f != zp.main_frame]
+    gw = zf[-1].evaluate("() => document.getElementsByTagName('canvas')[0].width") if zf else 0
+    ok(gw == 1200, "the frame draws the design at full size when the browser is zoomed out (" + str(gw) + " px wide)")
+    zlid = zp.inner_text("#resUrl").rsplit("/", 1)[-1]
+    from PIL import Image
+    import io
+    zimg = Image.open(io.BytesIO(zp.request.get(B + "/og/" + zlid + ".jpg").body())).convert("RGB")
+    mid, side = zimg.getpixel((600, 335)), zimg.getpixel((150, 335))
+    ok(min(mid) > 200 and max(side) < 150, "the preview picture shows the design, not an empty frame: " + str(mid) + " / " + str(side))
+    zp.click("#snapTake")
+    for _ in range(30):
+        if "theo góc này" in text(zp, "#snapSay"): break
+        zp.wait_for_timeout(300)
+    ok("theo góc này" in text(zp, "#snapSay"), "zoomed out: 'Chụp góc này' saves the design")
+    zp.locator("#snapBox").screenshot(path=f"{OUT}/link-preview-zoomed-out.png")
+    zc.close()
 
     # phone layout
     mc = ctx({"width": 390, "height": 844}, True); mp = mc.new_page(); watch(mp, "mobile")
